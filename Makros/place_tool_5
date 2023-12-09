@@ -1,17 +1,17 @@
+G29 S2 ; stop using meshcompensation; move in front of tool holder
+G0 X55 F10000
+G0 Y645.4 F10000
 
 ; activate jaws
-G0 Z52.7 F800
+G0 Z51.2 F800
 G0 U29.4 ;fahre bis mitnehmer
 
 G0 X0 F10000; move tool above tool holder
 
 G91 ; relative coordinates
-G0 Z5.2 U5.2 F800 ; open grabber
+
+G0 U5.2 F800 ; open grabber
 G90 ; absolute coordinates
 
 G0 X55 F10000 ; move empty grabber away from tools
-
-
-G91 ; relative coordinates
-G0 Z-5.2 U-5.2 F800 ; close grabber
-G90 ; absolute coordinates
+G29 S1 ; start using meshcompensation

@@ -7,20 +7,22 @@ M400
 M913 X55 Y55 U60         ; lower motor power
 M400
 
-; home x
-G91                ; relative positioning
-G1 H2 Z20 F1000     ; lift Z relative to current position
-G1 H1 X+2405 F6000 ; move quickly to X axis endstop and stop there (first pass)
-G1 H2 X5 F6000     ; go back a few mm
-G1 ;H1 X-2405 F6000  ; move slowly to X axis endstop once more (second pass)
-G1 ;H2 Z-5 F6000    ; lower Z again
-G90                ; absolute positioning
 ;home y
 G91                ; relative positioning
+G1 H2 Z20 F1000     ; lift Z relative to current position
 G1 H1 Y-2005 F10000 ; move quickly to Y axis endstop and stop there (first pass)
 G1 H2 Y5 F4000     ; go back a few mm
 ;G1 H1 Y-2005 F3600  ; move slowly to Y axis endstop once more (second pass)
 G90                ; absolute positioning
+
+; home x
+G91                ; relative positioning
+G1 H1 X-2405 F6000 ; move quickly to X axis endstop and stop there (first pass)
+G1 H2 X-5 F6000     ; go back a few mm
+G1 ;H1 X-2405 F6000  ; move slowly to X axis endstop once more (second pass)
+G1 ;H2 Z-5 F6000    ; lower Z again
+G90                ; absolute positioning
+
 ;home u
 G91                ; relative positioning
 ;G1 H2 Z5 F6000     ; lift Z relative to current position

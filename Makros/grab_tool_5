@@ -1,0 +1,9 @@
+G29 S2 ; stop using meshcompensation;new
+G0 X55 ; move forward to avoid tools
+
+G0 Y645.4 F10000 ; move in front of the third tool
+
+G0 Z50.70 F800 ; go to the correct Z height
+
+M98 P"/macros/close_grabber"
+G29 S1 ; start using meshcompensation

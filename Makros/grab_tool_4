@@ -1,0 +1,25 @@
+G29 S2 ; stop using meshcompensation;new
+G0 X55 ; move forward to avoid tools
+
+G0 Y567.3 F10000 ; move in front of the third tool
+
+G0 Z50.70 F800 ; go to the correct Z height
+
+G0 U29.4 ; move grabbing axis until the jaws open
+
+G91 ; relative coordinates
+G0 U5.2 ; open grabber
+
+G90; absolute coordinates
+G0 X0 F 10000;move to position
+
+G91 ; relative coordinates
+G0 Z-5.2 U-5.2 ; close grabber
+
+G0 Z10 ;lift
+
+G90 ;  coordinates
+G0 X55 F10000 ; move away from the tools
+G0 U0 ; move U axis out of the way
+G90
+G29 S1 ; start using meshcompensation

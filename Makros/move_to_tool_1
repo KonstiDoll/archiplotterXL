@@ -1,0 +1,8 @@
+G0 Y319.5 F10000
+G0 X2277.5 
+G0 Z51.00
+G1 U29.4 ;fahre bis mitnehmer
+;open grabber
+G91
+G0 U5.2 F800
+G90
