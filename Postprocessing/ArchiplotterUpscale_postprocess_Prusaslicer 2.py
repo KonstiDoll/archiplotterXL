@@ -38,8 +38,14 @@ with open(file_name, 'r+') as f:
     
     for line in content:
         #print(line)
-        pref_list = [ 'G0 ', 'G1 ', 'G2 ', 'G3 ', 'M226', 'G90', 'G91', 'M98']   #considered beginnings of line
-        if line.startswith(tuple(pref_list)):       #
+        pref_list = [ 'G0 ', 'G1 ', 'G2 ', 'G3 ', 'M226', 'M98']   #considered beginnings of line
+        
+	    # just copy the line to the new code	
+        if line.startswith('M98'):
+            newLine = line
+            new_code += newLine
+
+        elif line.startswith(tuple(pref_list)):       #
             contentMove = line.strip('/n').split()  #Array of line with each axis as one element
             
             if pump_distance != 0:    
@@ -93,10 +99,6 @@ with open(file_name, 'r+') as f:
                     
             newLine = ''
 
-	    # just copy the line to the new code	
-        if element.startswith('M98'):
-            newLine = element
-            new_code += newLine + '\n'
 
             for element in contentMove:             
                 if 'E' not in element:# and 'Z' not in element:      #use everthing but ExtruderMoves and Z Axis
@@ -110,7 +112,7 @@ with open(file_name, 'r+') as f:
         
 with open(new_file, 'w') as nf:
     nf.seek(0)
-    nf.write(new_code + 'G1 F6000 X0 Y0')
+    nf.write(new_code + 'G1 F6000 Y0') #X0 entfernt weil sonst Crash mit Werkzeughalter
     #print(new_code)
 
 
