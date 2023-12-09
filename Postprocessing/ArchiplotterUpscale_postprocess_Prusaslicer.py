@@ -19,6 +19,8 @@ Y = 0.0
 X = 0.0
 first_number = False
 drawing = False
+lastZValue = 0.0
+isAfterM98 = False
 
 with open(file_name, 'r+') as f:
     homing = ""
@@ -35,6 +37,7 @@ with open(file_name, 'r+') as f:
         if line.startswith('M98'):
             newLine = line
             new_code += newLine
+            isAfterM98 = True
 
         elif line.startswith(tuple(pref_list)):       #
             contentMove = line.strip('/n').split()  #Array of line with each axis as one element
@@ -43,6 +46,7 @@ with open(file_name, 'r+') as f:
                 for element in contentMove:
                     if element.startswith('Z'):
                         Z = float(element.strip('Z'))
+                        lastZValue = Z
                     if element.startswith('Y'):
                         Y = float(element.strip('Y'))
                     if element.startswith('X'):
@@ -83,8 +87,13 @@ with open(file_name, 'r+') as f:
                     if upscale == True:
                         if element.startswith('X'):
                             element = 'X' + str(float(element.strip('X'))*factor) # multiply value with upscaleFactor and convert back to string with axis
+                            isAfterM98 = False
                         if element.startswith('Y'):
                             element = 'Y' + str(float(element.strip('Y'))*factor)
+                            isAfterM98 = False
+                        if element.startswith('Z'):
+                            if isAfterM98 == True:
+                                continue
                     newLine += element + ' '            
             new_code += newLine + '\n'
         
