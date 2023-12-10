@@ -21,6 +21,8 @@ first_number = False
 drawing = False
 lastZValue = 0.0
 isAfterM98 = False
+uValueDown = 11
+uValueUp = 20
 
 with open(file_name, 'r+') as f:
     homing = ""
@@ -92,6 +94,10 @@ with open(file_name, 'r+') as f:
                             element = 'Y' + str(float(element.strip('Y'))*factor)
                             isAfterM98 = False
                         if element.startswith('Z'):
+                            if(float(element.strip('Z')) <= 0.4):
+                                element = 'U' + uValueDown
+                            elif(float(element.strip('Z')) >= 8.4):
+                                element = 'U' + uValueUp
                             if isAfterM98 == True:
                                 continue
                     newLine += element + ' '            
