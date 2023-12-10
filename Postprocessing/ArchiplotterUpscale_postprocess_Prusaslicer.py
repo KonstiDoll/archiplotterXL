@@ -33,13 +33,16 @@ with open(file_name, 'r+') as f:
     content = f.readlines()                             #gcode as a list where each element is a line 
     
     for line in content:
-        pref_list = [ 'G0 ', 'G1 ', 'G2 ', 'G3 ', 'M226', 'M98']   #considered beginnings of line
+        pref_list = [ 'G0 ', 'G1 ', 'G2 ', 'G3 ', 'M226', 'M98', 'M73']   #considered beginnings of line
         
 	    # just copy the line to the new code for Makrocalls
         if line.startswith('M98'):
             newLine = line
             new_code += newLine
             isAfterM98 = True
+        if line.startswith('M73'):
+            newLine = line
+            new_code += newLine
 
         elif line.startswith(tuple(pref_list)):       #
             contentMove = line.strip('/n').split()  #Array of line with each axis as one element
