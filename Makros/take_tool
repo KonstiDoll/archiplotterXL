@@ -1,0 +1,20 @@
+;G0 Z38
+;G0 U6.3 ;fahre bis mitnehmer
+
+G0 Z46.20 F1500 ; go to the correct Z height
+
+G0 U29.4 F5000; move grabbing axis until the jaws open
+
+G91 ; relative coordinates
+G0 Z5.2 U5.2 F1500; open grabber
+G90; absolute coordinates
+
+G0 X0 F 10000;move to position
+
+G91
+G0 Z-5.2 U-5.2 F1500 ; close grabber
+G0 Z10 ;lift
+G90
+
+G0 X55 F10000 ; move away from the tools
+G0 U0 ; avoid zouching pen on base after job starts
