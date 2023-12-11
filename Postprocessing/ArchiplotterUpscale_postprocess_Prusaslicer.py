@@ -21,8 +21,8 @@ first_number = False
 drawing = False
 lastZValue = 0.0
 isAfterM98 = False
-uValueDown = 11
-uValueUp = 20
+uValueDown = 0
+uValueUp = 0
 
 with open(file_name, 'r+') as f:
     homing = ""
@@ -31,7 +31,13 @@ with open(file_name, 'r+') as f:
         homing = "G28 X0 Y0 Z0\nG92 "+"\n"              #Add second ZAxis to homing #needs to be tested
     new_code = "G90\nG21\n" + homing                    #G90..absolute Coords; G21..metric;M201..acceleration
     content = f.readlines()                             #gcode as a list where each element is a line 
-    
+    for line in content:
+        if line.startswith(';uValueUp'):
+            uValueUp = line.strip('/n').split('=')[1]
+        if line.startswith(';uValueDown'):
+            uValueDown = line.strip('/n').split('=')[1]
+            break
+
     for line in content:
         pref_list = [ 'G0 ', 'G1 ', 'G2 ', 'G3 ', 'M226', 'M98', 'M73']   #considered beginnings of line
         
@@ -40,7 +46,8 @@ with open(file_name, 'r+') as f:
             newLine = line
             new_code += newLine
             isAfterM98 = True
-        if line.startswith('M73'):
+
+        elif line.startswith('M73'):
             newLine = line
             new_code += newLine
 
@@ -97,11 +104,11 @@ with open(file_name, 'r+') as f:
                             element = 'Y' + str(float(element.strip('Y'))*factor)
                             isAfterM98 = False
                         if element.startswith('Z'):
-                            if(float(element.strip('Z')) <= 0.4):
-                                element = 'U' + uValueDown
-                            elif(float(element.strip('Z')) >= 8.4):
-                                element = 'U' + uValueUp
-                            if isAfterM98 == True:
+                            if(float(element.strip('Z')) == 0.4):
+                                element = 'U' + str(uValueDown)
+                            elif(float(element.strip('Z')) == 8.4):
+                                element = 'U' + str(uValueUp)
+                            if isAfterM98 == True and not element.strip('Z') != '10':
                                 continue
                     newLine += element + ' '            
             new_code += newLine + '\n'
