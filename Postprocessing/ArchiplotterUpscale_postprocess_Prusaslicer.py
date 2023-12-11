@@ -108,7 +108,7 @@ with open(file_name, 'r+') as f:
                                 element = 'U' + str(uValueDown)
                             elif(float(element.strip('Z')) == 8.4):
                                 element = 'U' + str(uValueUp)
-                            if isAfterM98 == True and not element.strip('Z') != '10':
+                            if isAfterM98:
                                 continue
                     newLine += element + ' '            
             new_code += newLine + '\n'
