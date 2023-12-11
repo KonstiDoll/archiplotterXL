@@ -27,7 +27,7 @@ M350 X256 Y256 Z256 U16 I1            ; configure microstepping with interpolati
 M92 X682.67 Y711.1 Z17066.67 U88.96        ; set steps per mm
 M566 X900.00 Y900.00 Z100.00 U600   ; set maximum instantaneous speed changes (mm/min)
 M203 X20000.00 Y20000.00 Z1500.00 U20000; set maximum speeds (mm/min)
-M201 X200.00 Y200.00 Z100.00 U 400  ; set accelerations (mm/s^2)
+M201 X200.00 Y200.00 Z100.00 U400  ; set accelerations (mm/s^2)
 M906 X2500 Y2500 Z1000 U1700 I30     ; set motor currents (mA) and motor idle factor in per cent
 M84 S30                        ; Set idle timeout
 
@@ -39,7 +39,7 @@ M208 X1450 Y1864 Z70 U35.1 S0        ; set axis maxima
 M574 X1 S3                    ; configure endstop for low end on X
 M574 Y1 S3                    ; configure endstop for low end on Y
 M574 Z1 S3                    ; configure Z-probe endstop for low end on Z
-M574 U1 S3 					  ; configure endstop for low end on Z
+M574 U2 S3 					  ; configure endstop for high end on Z
 
 ; Sensorless homing
 M915 X S3 R0 F0               ; set up sensorless homing on X
