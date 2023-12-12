@@ -20,7 +20,6 @@ X = 0.0
 first_number = False
 drawing = False
 lastZValue = 0.0
-isAfterM98 = False
 uValueDown = 0
 uValueUp = 0
 
@@ -45,7 +44,7 @@ with open(file_name, 'r+') as f:
         if line.startswith('M98'):
             newLine = line
             new_code += newLine
-            isAfterM98 = True
+            
 
         elif line.startswith('M73'):
             newLine = line
@@ -99,17 +98,15 @@ with open(file_name, 'r+') as f:
                     if upscale == True:
                         if element.startswith('X'):
                             element = 'X' + str(float(element.strip('X'))*factor) # multiply value with upscaleFactor and convert back to string with axis
-                            isAfterM98 = False
+                    
                         if element.startswith('Y'):
                             element = 'Y' + str(float(element.strip('Y'))*factor)
-                            isAfterM98 = False
+                            
                         if element.startswith('Z'):
-                            if(float(element.strip('Z')) == 0.4):
+                            if(float(element.strip('Z')) <= 0.4):
                                 element = 'U' + str(uValueDown)
-                            elif(float(element.strip('Z')) == 8.4):
+                            elif(float(element.strip('Z')) >= 8.4):
                                 element = 'U' + str(uValueUp)
-                            if isAfterM98:
-                                continue
                     newLine += element + ' '            
             new_code += newLine + '\n'
         
