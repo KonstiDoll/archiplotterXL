@@ -1,17 +1,17 @@
 
 G0 Z52.7 F1500 ;go to correct Z-heigt (different with closed grabber than with opened grabber)
-G0 U29.4 F5000;fahre bis mitnehmer
+G0 U5.2 F5000;fahre bis mitnehmer
 
 G0 X0 F10000; move tool above tool holder
 G0 Z46.5 F1500 ; lower grabber
 
 G91 ; relative coordinates
-G0 Z5.2 U5.2 F1500 ; open grabber
+G0 Z5.2 U-5.2 F1500 ; open grabber
 G90 ; absolute coordinates
 
 G0 X55 F10000 ; move empty grabber away from tools
 
 
 G91 ; relative coordinates
-G0 Z-5.2 U-5.2 F1500 ; close grabber
+G0 Z-5.2 U5.2 F1500 ; close grabber
 G90 ; absolute coordinates
