@@ -25,9 +25,9 @@ M569 P2 S0 D3                  ; Z physical drive 2 goes backwards, sensorless h
 M584 X0:5 Y1 Z2 U3                ; set drive mapping
 M350 X256 Y256 Z256 U16 I1            ; configure microstepping with interpolation
 M92 X682.67 Y711.1 Z17066.67 U88.96        ; set steps per mm
-M566 X900.00 Y900.00 Z100.00 U600   ; set maximum instantaneous speed changes (mm/min)
+M566 X800.00 Y800.00 Z100.00 U600   ; set maximum instantaneous speed changes (mm/min)
 M203 X20000.00 Y20000.00 Z1000.00 U20000; set maximum speeds (mm/min)
-M201 X200.00 Y200.00 Z45.00 U400  ; set accelerations (mm/s^2)
+M201 X200.00 Y200.00 Z45.00 U1000  ; set accelerations (mm/s^2)
 M906 X2500 Y2500 Z1000 U1700 I30     ; set motor currents (mA) and motor idle factor in per cent
 M84 S30                        ; Set idle timeout
 

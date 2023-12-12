@@ -20,9 +20,8 @@ X = 0.0
 first_number = False
 drawing = False
 lastZValue = 0.0
-isAfterM98 = False
-uValueDown = 11
-uValueUp = 20
+uValueDown = 0
+uValueUp = 0
 
 with open(file_name, 'r+') as f:
     homing = ""
@@ -31,15 +30,25 @@ with open(file_name, 'r+') as f:
         homing = "G28 X0 Y0 Z0\nG92 "+"\n"              #Add second ZAxis to homing #needs to be tested
     new_code = "G90\nG21\n" + homing                    #G90..absolute Coords; G21..metric;M201..acceleration
     content = f.readlines()                             #gcode as a list where each element is a line 
-    
     for line in content:
-        pref_list = [ 'G0 ', 'G1 ', 'G2 ', 'G3 ', 'M226', 'M98']   #considered beginnings of line
+        if line.startswith(';uValueUp'):
+            uValueUp = float(line.strip('/n').split('=')[1])
+        if line.startswith(';uValueDown'):
+            uValueDown = float(line.strip('/n').split('=')[1])
+            break
+
+    for line in content:
+        pref_list = [ 'G0 ', 'G1 ', 'G2 ', 'G3 ', 'M226', 'M98', 'M73']   #considered beginnings of line
         
 	    # just copy the line to the new code for Makrocalls
         if line.startswith('M98'):
             newLine = line
             new_code += newLine
-            isAfterM98 = True
+            
+
+        elif line.startswith('M73'):
+            newLine = line
+            new_code += newLine
 
         elif line.startswith(tuple(pref_list)):       #
             contentMove = line.strip('/n').split()  #Array of line with each axis as one element
@@ -84,22 +93,21 @@ with open(file_name, 'r+') as f:
             newLine = ''
 
 
-            for element in contentMove:             
+            for element in contentMove: 
+                # new_code += ';' + element + '\n' #debugging
                 if 'E' not in element:# and 'Z' not in element:      #use everthing but ExtruderMoves and Z Axis
                     if upscale == True:
                         if element.startswith('X'):
                             element = 'X' + str(float(element.strip('X'))*factor) # multiply value with upscaleFactor and convert back to string with axis
-                            isAfterM98 = False
+                    
                         if element.startswith('Y'):
                             element = 'Y' + str(float(element.strip('Y'))*factor)
-                            isAfterM98 = False
+                            
                         if element.startswith('Z'):
                             if(float(element.strip('Z')) <= 0.4):
-                                element = 'U' + uValueDown
+                                element = 'U' + str(uValueDown)
                             elif(float(element.strip('Z')) >= 8.4):
-                                element = 'U' + uValueUp
-                            if isAfterM98 == True:
-                                continue
+                                element = 'U' + str(uValueUp)
                     newLine += element + ' '            
             new_code += newLine + '\n'
         
