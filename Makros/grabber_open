@@ -3,8 +3,8 @@
 
 G0 Z46.20 F800 ; go to the correct Z height
 
-G0 U29.4 ; move grabbing axis until the jaws open
+G0 U5.2 ; move grabbing axis until the jaws open
 
 G91 ; relative coordinates
-G0 Z5.2 U5.2 ; open grabber
+G0 Z5.2 U-5.2 ; open grabber
 G90; absolute coordinates

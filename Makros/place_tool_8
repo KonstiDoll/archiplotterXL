@@ -1,6 +1,6 @@
 G29 S2 ; stop using meshcompensation; move in front of tool holder
 M98 P/macros/move_in_front_of_tools
-G0 Y878.7 F10000
+G0 Y879.2 F10000
 
 M98 P/macros/place_tool
 G29 S1 ; start using meshcompensation
