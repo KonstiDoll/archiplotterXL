@@ -32,9 +32,9 @@ with open(file_name, 'r+') as f:
     content = f.readlines()                             #gcode as a list where each element is a line 
     for line in content:
         if line.startswith(';uValueUp'):
-            uValueUp = line.strip('/n').split('=')[1]
+            uValueUp = float(line.strip('/n').split('=')[1])
         if line.startswith(';uValueDown'):
-            uValueDown = line.strip('/n').split('=')[1]
+            uValueDown = float(line.strip('/n').split('=')[1])
             break
 
     for line in content:
@@ -93,7 +93,8 @@ with open(file_name, 'r+') as f:
             newLine = ''
 
 
-            for element in contentMove:             
+            for element in contentMove: 
+                # new_code += ';' + element + '\n' #debugging
                 if 'E' not in element:# and 'Z' not in element:      #use everthing but ExtruderMoves and Z Axis
                     if upscale == True:
                         if element.startswith('X'):
