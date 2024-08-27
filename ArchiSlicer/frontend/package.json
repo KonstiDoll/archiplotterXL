@@ -11,6 +11,7 @@
   "dependencies": {
     "@heroicons/vue": "^2.1.1",
     "@types/three": "^0.163.0",
+    "gsap": "^3.12.5",
     "lil-gui": "^0.19.1",
     "pinia": "^2.1.7",
     "three": "^0.163.0",

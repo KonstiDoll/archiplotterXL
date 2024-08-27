@@ -39,12 +39,11 @@
                 </button>
             </div>
             <div class="flex flex-row">
-                <ThreejsScene/>
+                <ThreejsScene :activeToolIndex = "activeToolIndex"/>
                 <textarea class="h-[512px] w-[512px] ml-4 bg-slate-100" v-model="gCode" name="" id=""></textarea>
-
+                <List_order></List_order>
             </div>
         </div>
-
     </div>
 </template>
 
@@ -56,10 +55,12 @@ import * as THREE from 'three';
 import { getThreejsObjectFromSvg } from '../utils/threejs_services';
 import { useMainStore } from '../store';
 import { createGcodeFromLineGroup } from '../utils/gcode_services';
+import List_order from './list_order.vue';
 const store = useMainStore();
 const loadedFile = ref<File>()
 const uploadedFile = ref<File[]>([])
 const gCode = ref<string>('')
+const selected = ref(0)
 const pens = [
     { name: 'STABILO'},
     { name: 'POSCA'},
@@ -78,6 +79,7 @@ const tools = [
 ]
 const activePenIndex = ref(0);
 const activeToolIndex=ref(1)
+// 
 const setActivePenIndex=(index:number)=>{
     activePenIndex.value = index;
 }
