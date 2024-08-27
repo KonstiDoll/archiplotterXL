@@ -1,3 +1,5 @@
+//deprecated and not used for now
+//can handle connections between frontend and main.py
 export const uploadImage = async (files: File[]) => {
 
     const formData = new FormData();
