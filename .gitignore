@@ -1,2 +1,8 @@
 
 Gcodes/
+.DS_Store
+*.pyc
+env/
+node_modules/
+.vscode/
+dist/

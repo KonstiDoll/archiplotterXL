@@ -20,8 +20,8 @@ X = 0.0
 first_number = False
 drawing = False
 lastZValue = 0.0
-uValueDown = 0
-uValueUp = 0
+uValueDown = 0 #set uValueDown in prusaSlicer in Printer Settings -> Custom G-Code -> Start G-Code e.g.:  ;uValueDown=13
+uValueUp = 0 #same as uValueDown e.g.:  ;uValueUp=25
 
 with open(file_name, 'r+') as f:
     homing = ""

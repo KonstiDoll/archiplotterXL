@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="76.074768mm"
+   height="37.93745mm"
+   viewBox="0 0 76.074768 37.93745"
+   version="1.1"
+   id="svg668"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview670"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     showgrid="false" />
+  <defs
+     id="defs665" />
+  <g
+     inkscape:label="Ebene 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-1.6643259,-1.5898385)">
+    <path
+       style="fill:#d2ddf1;stroke:#000000;stroke-width:0.153;stroke-dasharray:none;stroke-opacity:1"
+       d="M 1.7163385,1.8066721 20.325061,19.060391"
+       id="path843"
+       inkscape:export-filename="test.svg"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96" />
+    <rect
+       style="fill:#d2ddf1;stroke:#000000;stroke-width:0.253;stroke-dasharray:none;stroke-opacity:1"
+       id="rect1451"
+       width="15.447046"
+       height="17.344051"
+       x="22.854403"
+       y="1.7163384"
+       inkscape:export-filename="test.svg"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96" />
+    <path
+       style="fill:#d2ddf1;stroke:#000000;stroke-width:0.253;stroke-dasharray:none;stroke-opacity:1"
+       d="M 8.3106915,22.222067 35.862442,22.673735 29.629422,39.385451 13.27904,36.675443 17.073051,26.738746 Z"
+       id="path1668"
+       inkscape:export-filename="path1668.svg"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96" />
+    <path
+       style="fill:#d2ddf1;stroke:#000000;stroke-width:0.253;stroke-dasharray:none;stroke-opacity:1"
+       d="M 44.361002,7.3292091 43.203759,30.666954 c 0,0 9.601212,3.182327 15.815662,-4.4361 6.21445,-7.618427 3.085983,-18.3230232 3.085983,-18.3230232 l 15.622789,1.3501175"
+       id="path1695"
+       sodipodi:nodetypes="cczcc"
+       inkscape:export-filename="path1695.svg"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96" />
+  </g>
+</svg>
