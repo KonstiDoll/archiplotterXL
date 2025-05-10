@@ -1,12 +1,17 @@
 import { defineStore } from 'pinia'
 import * as THREE from 'three';
+import { InfillOptions, defaultInfillOptions, InfillPatternType } from './utils/threejs_services';
 
 // Interface für SVG-Geometrien mit Werkzeug-Informationen
 interface SVGItem {
   geometry: THREE.Group;
-  toolNumber: number;
+  toolNumber: number;       // Werkzeug für die Konturen
+  infillToolNumber: number; // Werkzeug für das Infill (kann anders als für Konturen sein)
   fileName: string;
-  penType: string;  // Stifttyp hinzugefügt
+  penType: string;
+  feedrate: number;  // Geschwindigkeit (mm/min)
+  infillOptions: InfillOptions;  // Infill-Optionen für dieses SVG
+  infillGroup?: THREE.Group;    // Optional: Generierte Infill-Gruppe
 }
 
 export const useMainStore = defineStore('main', {
@@ -23,12 +28,28 @@ export const useMainStore = defineStore('main', {
     },
     
     // Neue Methode zum Hinzufügen einer SVG mit Werkzeug
-    addSVGItem(geometry: THREE.Group, toolNumber: number, fileName: string, penType: string = 'stabilo') {
+    addSVGItem(
+      geometry: THREE.Group, 
+      toolNumber: number, 
+      fileName: string, 
+      penType: string = 'stabilo',
+      infillOptions: InfillOptions = { ...defaultInfillOptions },
+      feedrate: number = 3000,  // Standard-Geschwindigkeit
+      infillToolNumber: number = null  // Standardmäßig das gleiche Werkzeug wie für Konturen
+    ) {
+      // Wenn kein separates Infill-Werkzeug angegeben, verwende das Hauptwerkzeug
+      if (infillToolNumber === null) {
+        infillToolNumber = toolNumber;
+      }
+      
       this.svgItems.push({
         geometry,
         toolNumber,
+        infillToolNumber,
         fileName,
-        penType
+        penType,
+        feedrate,
+        infillOptions
       });
       
       // Update auch lineGeometry für Kompatibilität
@@ -46,6 +67,20 @@ export const useMainStore = defineStore('main', {
     updateSVGItemPenType(index: number, penType: string) {
       if (index >= 0 && index < this.svgItems.length) {
         this.svgItems[index].penType = penType;
+      }
+    },
+    
+    // Methode zum Aktualisieren der Infill-Optionen eines SVG-Items
+    updateSVGItemInfill(index: number, infillOptions: InfillOptions) {
+      if (index >= 0 && index < this.svgItems.length) {
+        this.svgItems[index].infillOptions = { ...infillOptions };
+      }
+    },
+    
+    // Methode zum Setzen der generierten Infill-Gruppe
+    setSVGItemInfillGroup(index: number, infillGroup: THREE.Group | null) {
+      if (index >= 0 && index < this.svgItems.length) {
+        this.svgItems[index].infillGroup = infillGroup;
       }
     },
     
@@ -85,6 +120,20 @@ export const useMainStore = defineStore('main', {
     clearSVGItems() {
       this.svgItems = [];
       this.lineGeometry = null;
+    },
+    
+    // Methode zum Aktualisieren der Feedrate eines SVG-Items
+    updateSVGItemFeedrate(index: number, feedrate: number) {
+      if (index >= 0 && index < this.svgItems.length) {
+        this.svgItems[index].feedrate = feedrate;
+      }
+    },
+    
+    // Methode zum Aktualisieren des Infill-Werkzeugs eines SVG-Items
+    updateSVGItemInfillTool(index: number, infillToolNumber: number) {
+      if (index >= 0 && index < this.svgItems.length) {
+        this.svgItems[index].infillToolNumber = infillToolNumber;
+      }
     }
   }
 });
