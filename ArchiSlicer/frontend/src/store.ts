@@ -9,7 +9,8 @@ interface SVGItem {
   infillToolNumber: number; // Werkzeug für das Infill (kann anders als für Konturen sein)
   fileName: string;
   penType: string;
-  feedrate: number;  // Geschwindigkeit (mm/min)
+  feedrate: number;         // Geschwindigkeit (mm/min)
+  drawingHeight: number;    // Z-Höhe für verschiedene Materialstärken (mm)
   infillOptions: InfillOptions;  // Infill-Optionen für dieses SVG
   infillGroup?: THREE.Group;    // Optional: Generierte Infill-Gruppe
 }
@@ -35,7 +36,8 @@ export const useMainStore = defineStore('main', {
       penType: string = 'stabilo',
       infillOptions: InfillOptions = { ...defaultInfillOptions },
       feedrate: number = 3000,  // Standard-Geschwindigkeit
-      infillToolNumber: number = null  // Standardmäßig das gleiche Werkzeug wie für Konturen
+      infillToolNumber: number = null,  // Standardmäßig das gleiche Werkzeug wie für Konturen
+      drawingHeight: number = 0  // Standard-Zeichenhöhe (0 = Plattform)
     ) {
       // Wenn kein separates Infill-Werkzeug angegeben, verwende das Hauptwerkzeug
       if (infillToolNumber === null) {
@@ -49,6 +51,7 @@ export const useMainStore = defineStore('main', {
         fileName,
         penType,
         feedrate,
+        drawingHeight,
         infillOptions
       });
       
@@ -133,6 +136,13 @@ export const useMainStore = defineStore('main', {
     updateSVGItemInfillTool(index: number, infillToolNumber: number) {
       if (index >= 0 && index < this.svgItems.length) {
         this.svgItems[index].infillToolNumber = infillToolNumber;
+      }
+    },
+    
+    // Methode zum Aktualisieren der Zeichenhöhe eines SVG-Items
+    updateSVGItemDrawingHeight(index: number, drawingHeight: number) {
+      if (index >= 0 && index < this.svgItems.length) {
+        this.svgItems[index].drawingHeight = drawingHeight;
       }
     }
   }

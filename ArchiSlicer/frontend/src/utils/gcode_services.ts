@@ -13,7 +13,7 @@ const travelSpeed = 15000;
 // Erweitere das Stift-Dictionary um mehrere Stifttypen mit verschiedenen Höhen
 const penDrawingHeightDict: { [key: string]: Pen } = { 
     'stabilo': { penDown: 13, penUp: 33 },
-    'posca': { penDown: 10, penUp: 35 },
+    'posca': { penDown: 13, penUp: 33 },
     'fineliner': { penDown: 15, penUp: 35 },
     'brushpen': { penDown: 8, penUp: 33 },
     'marker': { penDown: 11, penUp: 36 }
@@ -27,7 +27,8 @@ export function createGcodeFromLineGroup(
     toolNumber: number = 1, 
     penType: string = 'stabilo', 
     customFeedrate: number = 3000,
-    infillToolNumber: number = null
+    infillToolNumber: number = null,
+    drawingHeight: number = 0
 ): string {
     // Wenn kein separates Infill-Werkzeug angegeben, verwende das Hauptwerkzeug
     if (infillToolNumber === null) {
@@ -44,9 +45,18 @@ export function createGcodeFromLineGroup(
     }
     
     const penUp = penDrawingHeightDict[penType].penUp;
-    const moveUUp = 'G1 U' + penUp + ' F6000\n'
     const penDown = penDrawingHeightDict[penType].penDown;
-    const moveUDown = 'G1 U' + penDown + ' F6000\n'
+    
+    // Wichtig: U und Z sind getrennte Achsen und sollten in separaten Befehlen gesteuert werden
+    // Z-Achse ist für die Materialdicke (Höhenanpassung)
+    // U-Achse ist nur für die Stift auf/ab Bewegung
+    const moveUUp = `G1 U${penUp} F6000\n`;
+    const moveUDown = `G1 U${penDown} F6000\n`;
+    // Z-Offset für die Materialdicke, wird nach dem moveToDrawingHeight Makro angewendet
+    // Verwendet relativen Modus (G91), um zur bestehenden Z-Höhe zu addieren
+    const adjustMaterialHeight = drawingHeight > 0 
+        ? `G91\nG1 Z${drawingHeight.toFixed(2)} F6000\nG90\n` 
+        : '';
     
     // Analyse der SVG-Maße
     let minX = Infinity, maxX = -Infinity;
@@ -107,11 +117,17 @@ export function createGcodeFromLineGroup(
     console.log('SVG Abmessungen für G-Code (inklusive Infill):');
     console.log(`X: Min=${minX.toFixed(2)}, Max=${maxX.toFixed(2)}, Breite=${(maxX - minX).toFixed(2)}`);
     console.log(`Y: Min=${minY.toFixed(2)}, Max=${maxY.toFixed(2)}, Höhe=${(maxY - minY).toFixed(2)}`);
+    console.log(`Z-Höhe: ${drawingHeight.toFixed(2)}mm (Materialstärke)`);
     console.log(`Gesamtanzahl Linien: ${allLines.length + infillLines.length} (davon Infill: ${infillLines.length})`);
     
     let gCode = '';
     const startingGcode = 'G90\nG21\n'
     gCode += startingGcode;
+    
+    // Kommentar für die Zeichenhöhe
+    if (drawingHeight > 0) {
+        gCode += `; Material-/Zeichenhöhe: ${drawingHeight.toFixed(2)}mm\n`;
+    }
     
     // Zuerst die äußeren Konturen zeichnen mit Werkzeug 1
     if (allLines.length > 0) {
@@ -121,7 +137,14 @@ export function createGcodeFromLineGroup(
         
         gCode += grabTool;
         gCode += '; Stifttyp: ' + penType + '\n';
-        gCode += moveToDrawingHeight + moveUUp;
+        gCode += moveToDrawingHeight;
+        
+        // Füge den Z-Offset für die Materialstärke nach dem Makro hinzu
+        if (drawingHeight > 0) {
+            gCode += adjustMaterialHeight;
+        }
+        
+        gCode += moveUUp;
         
         gCode += '\n; --- Konturen zeichnen mit Tool #' + toolNumber + ' ---\n';
         allLines.forEach((lineGeo) => {
@@ -143,7 +166,14 @@ export function createGcodeFromLineGroup(
             
             gCode += grabInfillTool;
             gCode += '; Stifttyp für Infill: ' + penType + '\n';
-            gCode += moveToDrawingHeight + moveUUp;
+            gCode += moveToDrawingHeight;
+            
+            // Füge den Z-Offset für die Materialstärke nach dem Makro hinzu
+            if (drawingHeight > 0) {
+                gCode += adjustMaterialHeight;
+            }
+            
+            gCode += moveUUp;
         }
         
         gCode += '\n; --- Infill zeichnen mit Tool #' + infillToolNumber + ' ---\n';
@@ -174,6 +204,7 @@ export function createGcodeFromLineGroup(
     return gCode;
 }
 
+// Helper function for creating G-code from a single line
 function createGcodeFromLine(lineGeo: THREE.Line, moveUDown: string, customFeedrate: number = 3000): string {
     let gcode = '';
     const first = ref(true);
@@ -190,8 +221,8 @@ function createGcodeFromLine(lineGeo: THREE.Line, moveUDown: string, customFeedr
     for (let index = 0; index < positions.length; index += 3) {
         const x = positions[index].toFixed(2);
         const y = positions[index + 1].toFixed(2);
-        // Z-Wert wird nicht verwendet für G-Code
-        const gcodeLine = 'G1 X' + x + ' Y' + y + ' F' + speed + '\n';
+        // Z-Wert wird nicht im Bewegungsbefehl gesetzt, da dieser bereits durch setMaterialHeight gesetzt wurde
+        const gcodeLine = `G1 X${x} Y${y} F${speed}\n`;
         gcode += gcodeLine;
         if (first.value) {
             gcode += moveUDown;

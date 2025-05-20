@@ -1,7 +1,7 @@
 <template>
     <div id="mainContainer" class="relative flex flex-row h-screen w-full overflow-hidden">
         <div id='sidebar'
-            class="flex flex-col w-1/4 h-full bg-slate-200 rounded-xl overflow-auto p-2 space-y-4 shrink-0">
+            class="flex flex-col w-1/6 h-full bg-slate-200 rounded-xl overflow-auto p-2 space-y-4 shrink-0">
             <div class="text-slate-800 font-semibold text-lg text-center p-2">Image-Opencv-Plotter.tech</div>
 
 
@@ -32,10 +32,10 @@
             </div>
 
         </div>
-        <div id="content" class="relative flex flex-col w-3/4 h-full p-6 bg-slate-200/0 rounded-xl overflow-auto">
-            <div class="flex flex-row justify-around">
+        <div id="content" class="relative flex flex-col w-5/6 h-full p-6 bg-slate-200/0 rounded-xl overflow-scroll">
+            <div class="flex flex-row justify-center">
                 <div
-                    class="relative flex flex-col justify-center items-center text-center w-fit !h-28 p-6 mx-2 hover:bg-slate-200/80 outline-dashed outline-2 rounded-lg outline-slate-300 hover:outline-offset-4">
+                    class="relative flex flex-col justify-center items-center text-center w-full !h-28 p-6 mx-2 hover:bg-slate-200/80 outline-dashed outline-2 rounded-lg outline-slate-300 hover:outline-offset-4">
                     <button>Datei
                         hochladen</button>
                     <label class="text-slate-600">oder hier ablegen</label>
@@ -43,166 +43,189 @@
                         accept="*" />
 
                 </div>
-                <div id="controls" class="mb-4">
-                    <button
-                        class="relative flex flex-col justify-center items-center text-center w-fit !h-28 p-6 hover:bg-slate-200/80 outline-dashed outline-2 rounded-lg outline-slate-300 hover:outline-offset-4"
-                        @click="generateGcode">
-                        <PhotoIcon class="h-16" />
-                        <div class="text-sm">gcode<br /> generieren</div>
-                    </button>
-                </div>
-            </div>
-            <!-- Liste der geladenen SVGs -->
-            <div class="my-4 p-3 bg-slate-100 rounded-lg" v-if="store.svgItems.length > 0">
-                <h3 class="font-semibold mb-2">Geladene Dateien ({{ store.svgItems.length }})</h3>
-                <ul class="space-y-3">
-                    <li v-for="(item, index) in store.svgItems" :key="index" class="bg-white rounded shadow-sm">
-                        <!-- Hauptzeile -->
-                        <div class="flex items-center justify-between p-2">
-                            <div class="flex items-center grow">
-                                <span class="truncate max-w-xs">{{ item.fileName }}</span>
-                            </div>
 
-                            <!-- Feedrate Einstellung -->
-                            <div class="mx-2 flex items-center">
-                                <span class="text-sm mr-2">Feedrate:</span>
-                                <input type="number" v-model.number="item.feedrate"
-                                    class="p-1 w-20 border rounded text-sm" min="100" max="30000" step="100"
-                                    @change="updateFeedrate(index, item.feedrate)" />
-                                <span class="text-xs ml-1">mm/min</span>
-                            </div>
-
-                            <!-- Tool-Auswahl für diesen SVG -->
-                            <div class="mx-2 flex items-center">
-                                <span class="text-sm mr-2">Tool:</span>
-                                <select v-model="item.toolNumber" class="p-1 w-16 border rounded text-sm"
-                                    @change="changeToolNumber(index, item.toolNumber)">
-                                    <option v-for="i in 9" :key="i" :value="i">{{ i }}</option>
-                                </select>
-                            </div>
-
-                            <!-- Infill-Optionen Button -->
-                            <button @click="toggleInfillOptions(index)"
-                                class="bg-blue-100 text-blue-800 px-3 py-1 rounded text-sm hover:bg-blue-200 flex items-center"
-                                :class="{ 'bg-blue-200': expandedItems[index] }">
-                                <span v-if="item.infillOptions.patternType !== 'none'">
-                                    {{ item.infillOptions.patternType }}
-                                </span>
-                                <span v-else>Kein Infill</span>
-                                <span class="ml-1">{{ expandedItems[index] ? '▲' : '▼' }}</span>
-                            </button>
-
-                            <!-- Buttons zum Verschieben der Reihenfolge -->
-                            <div class="flex items-center space-x-1 mr-2">
-                                <button @click="store.moveItemUp(index)"
-                                    class="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded text-sm"
-                                    :disabled="index === 0" :class="{ 'opacity-50 cursor-not-allowed': index === 0 }">
-                                    ↑
-                                </button>
-                                <button @click="store.moveItemDown(index)"
-                                    class="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded text-sm"
-                                    :disabled="index === store.svgItems.length - 1"
-                                    :class="{ 'opacity-50 cursor-not-allowed': index === store.svgItems.length - 1 }">
-                                    ↓
-                                </button>
-                            </div>
-
-                            <button @click="removeItem(index)" class="text-red-500 hover:text-red-700 px-2 ml-2">
-                                &times;
-                            </button>
-                        </div>
-
-                        <!-- Infill Optionen -->
-                        <div v-if="expandedItems[index]" class="p-3 bg-gray-50 border-t">
-                            <div class="space-y-3">
-                                <!-- Infill Typ -->
-                                <div class="flex items-center">
-                                    <label class="w-24 text-sm">Infill Typ:</label>
-                                    <select v-model="item.infillOptions.patternType"
-                                        class="p-1 border rounded flex-grow" @change="updatePatternType(index)">
-                                        <option v-for="patternType in infillPatternTypes" :key="patternType"
-                                            :value="patternType">
-                                            {{ patternType }}
-                                        </option>
-                                    </select>
-                                </div>
-
-                                <!-- Infill Tool -->
-                                <div class="flex items-center">
-                                    <label class="w-24 text-sm">Infill Tool:</label>
-                                    <select v-model="item.infillToolNumber" class="p-1 border rounded flex-grow"
-                                        @change="updateInfillTool(index, item.infillToolNumber)">
-                                        <option v-for="i in 9" :key="i" :value="i">{{ i }}</option>
-                                    </select>
-                                </div>
-
-                                <!-- Dichte -->
-                                <div class="flex items-center">
-                                    <label class="w-24 text-sm">Dichte (mm):</label>
-                                    <div class="flex-grow flex items-center">
-
-                                        <!-- Slider für visuelle Anpassung -->
-                                        <input type="range" v-model.number="item.infillOptions.density"
-                                            :min="getSliderMin(index)" :max="getSliderMax(index)" :step="0.1"
-                                            class="flex-grow" @change="updateInfill(index)">
-                                        <!-- Wert-Eingabefeld -->
-                                        <input type="number" v-model.number="item.infillOptions.density"
-                                            class="w-16 mr-2 p-1 border rounded text-sm"
-                                            @change="updateDensityRange(index)" />
-                                    </div>
-                                </div>
-
-                                <!-- Winkel -->
-                                <div class="flex items-center">
-                                    <label class="w-24 text-sm">Winkel (°):</label>
-                                    <div class="flex-grow flex items-center">
-                                        <input type="range" v-model.number="item.infillOptions.angle" min="0" max="180"
-                                            step="5" class="w-full" @change="updateInfill(index)">
-                                        <span class="ml-2 text-sm w-12 text-right">{{ item.infillOptions.angle }}</span>
-                                    </div>
-                                </div>
-
-                                <!-- Rand-Offset -->
-                                <div class="flex items-center">
-                                    <label class="w-24 text-sm">Rand (mm):</label>
-                                    <div class="flex-grow flex items-center">
-                                        <input type="range" v-model.number="item.infillOptions.outlineOffset" min="0"
-                                            max="5" step="0.1" class="w-full" @change="updateInfill(index)">
-                                        <span class="ml-2 text-sm w-12 text-right">{{
-                                            item.infillOptions.outlineOffset.toFixed(1) }}</span>
-                                    </div>
-                                </div>
-
-                                <!-- Vorschau Button -->
-                                <div class="flex justify-end">
-                                    <button @click="removeInfill(index)"
-                                        class="bg-red-100 hover:bg-red-200 text-red-800 px-3 py-1 rounded text-sm mr-2">
-                                        Infill löschen
-                                    </button>
-                                    <button @click="generatePreview(index)"
-                                        class="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1 rounded text-sm">
-                                        Vorschau generieren
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </li>
-                </ul>
-                <div class="flex justify-end mt-3 ">
-                    <button @click="store.clearSVGItems()"
-                        class="bg-red-100 text-red-800 px-3 py-1 rounded hover:bg-red-200">
-                        Alle löschen
-                    </button>
-                </div>
             </div>
 
-            <div class="flex flex-row flex-grow h-full mt-20">
-                <div class="w-1/2 h-full">
+            <div class="flex flex-row h-full w-full mt-10">
+                
+                <div class="h-full  w-1/4">
+                    <!-- Liste der geladenen SVGs -->
+                    <div class="my-4 p-3 bg-slate-100 rounded-lg w-full" v-if="store.svgItems.length > 0">
+                        <h3 class="font-semibold mb-2">Geladene Dateien ({{ store.svgItems.length }})</h3>
+                        <ul class="space-y-3 flex w-full flex-row">
+                            <li v-for="(item, index) in store.svgItems" :key="index" class="bg-white rounded shadow-sm w-full flex flex-col">
+                                <!-- Hauptzeile -->
+                                <div class="flex items-start justify-between w-full p-2 flex-col">
+                                    <div class="flex items-center grow">
+                                        <span class="truncate max-w-xs">{{ item.fileName }}</span>
+                                    </div>
+
+                                    <!-- Feedrate Einstellung -->
+                                    <div class="mx-2 flex items-center p-2">
+                                        <span class="text-sm mr-2">Feedrate:</span>
+                                        <input type="number" v-model.number="item.feedrate"
+                                            class="p-1 w-20 border rounded text-sm" min="100" max="30000" step="100"
+                                            @change="updateFeedrate(index, item.feedrate)" />
+                                        <span class="text-xs ml-1">mm/min</span>
+                                    </div>
+
+                                    <!-- Tool-Auswahl für diesen SVG -->
+                                    <div class="mx-2 flex items-center p-2">
+                                        <span class="text-sm mr-2">Tool:</span>
+                                        <select v-model="item.toolNumber" class="p-1 w-16 border rounded text-sm"
+                                            @change="changeToolNumber(index, item.toolNumber)">
+                                            <option v-for="i in 9" :key="i" :value="i">{{ i }}</option>
+                                        </select>
+                                    </div>
+                                    <div class="flex flex-row w-full justify-between p-2">
+                                    <!-- Infill-Optionen Button -->
+                                    <button @click="toggleInfillOptions(index)"
+                                        class="bg-blue-100 text-blue-800 px-3 py-1 rounded text-sm hover:bg-blue-200 flex items-center"
+                                        :class="{ 'bg-blue-200': expandedItems[index] }">
+                                        <span v-if="item.infillOptions.patternType !== 'none'">
+                                            {{ item.infillOptions.patternType }}
+                                        </span>
+                                        <span v-else>Kein Infill</span>
+                                        <span class="ml-1">{{ expandedItems[index] ? '▲' : '▼' }}</span>
+                                    </button>
+
+                                    <!-- Buttons zum Verschieben der Reihenfolge -->
+                                    <div class="flex items-center space-x-1 mr-2">
+                                        <button @click="store.moveItemUp(index)"
+                                            class="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded text-sm"
+                                            :disabled="index === 0"
+                                            :class="{ 'opacity-50 cursor-not-allowed': index === 0 }">
+                                            ↑
+                                        </button>
+                                        <button @click="store.moveItemDown(index)"
+                                            class="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded text-sm"
+                                            :disabled="index === store.svgItems.length - 1"
+                                            :class="{ 'opacity-50 cursor-not-allowed': index === store.svgItems.length - 1 }">
+                                            ↓
+                                        </button>
+                                    </div>
+
+                                    <button @click="removeItem(index)"
+                                        class="text-red-500 hover:text-red-700 px-2 ml-2">
+                                        &times;
+                                    </button>
+                                </div>
+                                </div>
+
+                                <!-- Infill Optionen -->
+                                <div v-if="expandedItems[index]" class="p-3 bg-gray-50 border-t">
+                                    <div class="space-y-3">
+                                        <!-- Infill Typ -->
+                                        <div class="flex items-center">
+                                            <label class="w-24 text-sm">Infill Typ:</label>
+                                            <select v-model="item.infillOptions.patternType"
+                                                class="p-1 border rounded flex-grow" @change="updatePatternType(index)">
+                                                <option v-for="patternType in infillPatternTypes" :key="patternType"
+                                                    :value="patternType">
+                                                    {{ patternType }}
+                                                </option>
+                                            </select>
+                                        </div>
+
+                                        <!-- Infill Tool -->
+                                        <div class="flex items-center">
+                                            <label class="w-24 text-sm">Infill Tool:</label>
+                                            <select v-model="item.infillToolNumber" class="p-1 border rounded flex-grow"
+                                                @change="updateInfillTool(index, item.infillToolNumber)">
+                                                <option v-for="i in 9" :key="i" :value="i">{{ i }}</option>
+                                            </select>
+                                        </div>
+
+                                        <!-- Dichte -->
+                                        <div class="flex items-center">
+                                            <label class="w-24 text-sm">Dichte (mm):</label>
+                                            <div class="flex-grow flex items-center">
+
+                                                <!-- Slider für visuelle Anpassung -->
+                                                <input type="range" v-model.number="item.infillOptions.density"
+                                                    :min="getSliderMin(index)" :max="getSliderMax(index)" :step="0.1"
+                                                    class="flex-grow" @change="updateInfill(index)">
+                                                <!-- Wert-Eingabefeld -->
+                                                <input type="number" v-model.number="item.infillOptions.density"
+                                                    class="w-16 mr-2 p-1 border rounded text-sm"
+                                                    @change="updateDensityRange(index)" />
+                                            </div>
+                                        </div>
+
+                                        <!-- Winkel -->
+                                        <div class="flex items-center">
+                                            <label class="w-24 text-sm">Winkel (°):</label>
+                                            <div class="flex-grow flex items-center">
+                                                <input type="range" v-model.number="item.infillOptions.angle" min="0"
+                                                    max="180" step="5" class="w-full" @change="updateInfill(index)">
+                                                <span class="ml-2 text-sm w-12 text-right">{{ item.infillOptions.angle
+                                                    }}</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Rand-Offset -->
+                                        <div class="flex items-center">
+                                            <label class="w-24 text-sm">Rand (mm):</label>
+                                            <div class="flex-grow flex items-center">
+                                                <input type="range" v-model.number="item.infillOptions.outlineOffset"
+                                                    min="0" max="5" step="0.1" class="w-full"
+                                                    @change="updateInfill(index)">
+                                                <span class="ml-2 text-sm w-12 text-right">{{
+                                                    item.infillOptions.outlineOffset.toFixed(1) }}</span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Vorschau Button -->
+                                        <div class="flex justify-end">
+                                            <button @click="removeInfill(index)"
+                                                class="bg-red-100 hover:bg-red-200 text-red-800 px-3 py-1 rounded text-sm mr-2">
+                                                Infill löschen
+                                            </button>
+                                            <button @click="generatePreview(index)"
+                                                class="bg-green-100 hover:bg-green-200 text-green-800 px-3 py-1 rounded text-sm">
+                                                Vorschau generieren
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </li>
+                        </ul>
+                        <div class="flex justify-end mt-3 ">
+                            <button @click="store.clearSVGItems()"
+                                class="bg-red-100 text-red-800 px-3 py-1 rounded hover:bg-red-200">
+                                Alle löschen
+                            </button>
+                        </div>
+                    </div>
+                    <div id="controls" class="mb-4">
+                        <!-- Global Z-Height Setting -->
+                        <div class="bg-slate-800 p-3 rounded-lg mb-3">
+                            <h3 class="text-white text-center mb-2">Globale Einstellungen</h3>
+                            <div class="flex items-center p-2 bg-slate-700 rounded">
+                                <span class="text-white text-sm mr-2">Z-Höhe:</span>
+                                <input type="number" v-model.number="globalDrawingHeight"
+                                    class="p-1 w-20 border rounded text-sm" min="0" max="50" step="0.5" />
+                                <span class="text-white text-xs ml-1">mm</span>
+                            </div>
+                            <div class="mt-2 text-xs text-white p-1 bg-slate-700 rounded">
+                                Die globale Z-Höhe wird für alle SVGs verwendet.
+                            </div>
+                        </div>
+                        
+                        <button
+                            class="relative flex flex-col justify-center items-center text-center w-full !h-28 p-6 hover:bg-slate-200/80 outline-dashed outline-2 rounded-lg outline-slate-300 hover:outline-offset-4"
+                            @click="generateGcode">
+                            <PhotoIcon class="h-16" />
+                            <div class="text-sm">gcode<br /> generieren</div>
+                        </button>
+                    </div>
+                </div>
+                <div class="w-3/4 p-4 h-full">
                     <ThreejsScene :activeToolIndex="activeToolIndex" class="h-full" />
                 </div>
-                <div class="w-1/2 pl-4 h-full">
-                    <textarea class="h-full w-full bg-slate-100 p-2 rounded" v-model="gCode"></textarea>
-                </div>
+            </div>
+            <div class="w-full p-4 !h-fit">
+                <textarea class="h-fit w-full bg-slate-100 p-2 rounded" v-model="gCode"></textarea>
             </div>
         </div>
     </div>
@@ -221,6 +244,7 @@ const loadedFile = ref<File>()
 const uploadedFile = ref<File[]>([])
 const gCode = ref<string>('')
 const selected = ref(0)
+const globalDrawingHeight = ref(0);
 const pens = [
     { name: 'STABILO' },
     { name: 'POSCA' },
@@ -318,6 +342,11 @@ const updateFeedrate = (index: number, feedrate: number) => {
     store.updateSVGItemFeedrate(index, feedrate);
 }
 
+// Zeichenhöhe für ein SVG-Item ändern
+const updateDrawingHeight = (index: number, drawingHeight: number) => {
+    store.updateSVGItemDrawingHeight(index, drawingHeight);
+}
+
 // Werkzeug für ein SVG-Item ändern
 const changeToolNumber = (index: number, toolNumber: number) => {
     store.updateSVGItemTool(index, toolNumber);
@@ -409,41 +438,45 @@ const handleImageUpload = (e: any) => {
                 const contents = event.target.result as string;
                 // Load SVG with original positions
                 const lineGeoGroup = await getThreejsObjectFromSvg(contents);
-
+                
                 // Verwende den Stifttyp, der mit dem aktuellen Werkzeug verknüpft ist
                 const currentPenType = toolPenTypes.value[activeToolIndex.value - 1];
-
+                
                 // Standardeinstellungen für Infill
                 const infillOptions = { ...defaultInfillOptions };
-
+                
                 // Standard-Feedrate
                 const defaultFeedrate = 3000;
-
+                
                 // Verwende standardmäßig das gleiche Werkzeug für Infill wie für Konturen
                 const defaultInfillTool = activeToolIndex.value;
-
+                
+                // Standard-Zeichenhöhe (0 = auf der Plattform)
+                const defaultDrawingHeight = 0;
+                
                 // Speichere die SVG mit dem aktuell ausgewählten Werkzeug, Stifttyp und Infill-Optionen
                 store.addSVGItem(
-                    markRaw(lineGeoGroup),
-                    activeToolIndex.value,
-                    fileName,
-                    currentPenType,
-                    infillOptions,
+                    markRaw(lineGeoGroup), 
+                    activeToolIndex.value, 
+                    fileName, 
+                    currentPenType, 
+                    infillOptions, 
                     defaultFeedrate,
-                    defaultInfillTool
+                    defaultInfillTool,
+                    defaultDrawingHeight
                 );
-
+                
                 console.log(`SVG "${fileName}" mit Tool #${activeToolIndex.value} und Stift "${currentPenType}" geladen`);
-
+                
                 // Neues Item automatisch mit expandierten Infill-Optionen
                 const newIndex = store.svgItems.length - 1;
                 expandedItems.value[newIndex] = true;
-
+                
                 // Initialisiere den Slider-Bereich für das neue SVG
                 initializeSliderRange(newIndex);
             }
-        };
-        reader.readAsText(loadedFile.value);
+        };  
+        reader.readAsText(loadedFile.value);      
     }
 }
 
@@ -453,24 +486,30 @@ const generateGcode = () => {
         alert("Keine Dateien geladen!");
         return;
     }
-
+    
     let combinedGcode = "";
-
+    
+    // Füge einen Header mit globalen Einstellungen hinzu
+    combinedGcode += "; --- GLOBALE EINSTELLUNGEN ---\n";
+    combinedGcode += `; Zeichenhöhe/Materialstärke: ${globalDrawingHeight.value.toFixed(2)}mm\n\n`;
+    
     // G-Code für jede SVG mit entsprechendem Werkzeug in der angezeigten Reihenfolge generieren
     store.svgItems.forEach((item, index) => {
         // Verwende den aktuellen Stifttyp für das Werkzeug
         // Beachte: Tool-Nummern beginnen bei 1, Array-Indizes bei 0
         const currentPenType = toolPenTypes.value[item.toolNumber - 1];
-
+        
         // Verwende die benutzerdefinierte Feedrate für diese SVG
+        // Übergebe die globale Z-Höhe anstelle der individuellen
         const svgGcode = createGcodeFromLineGroup(
-            item.geometry,
-            item.toolNumber,
-            currentPenType,
+            item.geometry, 
+            item.toolNumber, 
+            currentPenType, 
             item.feedrate,
-            item.infillToolNumber
+            item.infillToolNumber,
+            globalDrawingHeight.value
         );
-
+        
         combinedGcode += `\n; --- SVG #${index + 1}: ${item.fileName} ---\n`;
         combinedGcode += `; Kontur mit Tool #${item.toolNumber}, Stift "${currentPenType}"\n`;
         if (item.infillOptions.patternType !== InfillPatternType.NONE) {
@@ -479,7 +518,7 @@ const generateGcode = () => {
         combinedGcode += `; Feedrate ${item.feedrate} mm/min\n`;
         combinedGcode += svgGcode;
     });
-
+    
     gCode.value = combinedGcode;
 }
 

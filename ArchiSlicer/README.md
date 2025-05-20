@@ -2,7 +2,7 @@
 
 ## Description
 
-This project is a TypeScript application bundled with Webpack. It uses `ts-loader` to handle TypeScript files and serves the bundled application on a development server.
+This project is a Vue 3 application built with TypeScript and Vite.
 
 ## Installation
 
@@ -28,10 +28,10 @@ Before running this project, you need to have Node.js and npm installed on your 
 To start the development server, run:
 
 ```bash
-npm run start
+npm run dev
 ```
 
-The server runs on port 9000. You can access the application at http://localhost:9000.
+The server runs on port 5173. You can access the application at http://localhost:5173.
 
 ## Build
 To build the application for production, run:
@@ -39,7 +39,7 @@ To build the application for production, run:
 npm run build
 ```
 
-The bundled application will be in the dist directory.
+The bundled application will be in the `dist` directory.
 
 ## Contributing
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.

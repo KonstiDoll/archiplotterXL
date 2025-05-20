@@ -1,10 +1,10 @@
 <template>
-    <div class="relative h-[512px] w-[512px] overflow-hidden" id="threejs-map" ref="threejsMap">
+    <div class="relative overflow-hidden" id="threejs-map" ref="threejsMap">
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch, markRaw, shallowRef } from 'vue';
+import { ref, onMounted, watch, markRaw } from 'vue';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import * as THREE from 'three';
 import { useMainStore } from '../store';
