@@ -47,9 +47,9 @@ export const defaultInfillOptions: InfillOptions = {
   outlineOffset: 0.5
 };
 
-export function getThreejsObjectFromSvg(svgContent: string, offsetX: number = 0): Promise<THREE.Group> {
+export function getThreejsObjectFromSvg(svgContent: string, _offsetX: number = 0): Promise<THREE.Group> {
     console.log("--- SVG Analyse Start ---");
-    // offsetX parameter is kept for compatibility but not used anymore
+    // _offsetX parameter is kept for compatibility but not used anymore
     
     // SVG Metadaten extrahieren (viewBox, width, height, transform)
     const parser = new DOMParser();
@@ -944,18 +944,6 @@ export function createShapesForClosedPaths(paths: THREE.ShapePath[]): THREE.Mesh
     });
 };
 
-// Hilfsfunktion: Berechnet die Fläche eines Polygons
-function calculatePolygonArea(polygon: THREE.Vector2[]): number {
-    let area = 0;
-    
-    for (let i = 0; i < polygon.length; i++) {
-        const j = (i + 1) % polygon.length;
-        area += polygon[i].x * polygon[j].y;
-        area -= polygon[j].x * polygon[i].y;
-    }
-    
-    return Math.abs(area) / 2;
-}
 
 // Hilfsfunktion: Prüft, ob ein Punkt innerhalb eines Polygons liegt (Ray-Casting-Algorithmus)
 function isPointInPolygon(point: THREE.Vector2, polygon: THREE.Vector2[]): boolean {

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import * as THREE from 'three';
-import { InfillOptions, defaultInfillOptions, InfillPatternType } from './utils/threejs_services';
+import { InfillOptions, defaultInfillOptions } from './utils/threejs_services';
 
 // Interface für SVG-Geometrien mit Werkzeug-Informationen
 interface SVGItem {
@@ -36,14 +36,9 @@ export const useMainStore = defineStore('main', {
       penType: string = 'stabilo',
       infillOptions: InfillOptions = { ...defaultInfillOptions },
       feedrate: number = 3000,  // Standard-Geschwindigkeit
-      infillToolNumber: number = null,  // Standardmäßig das gleiche Werkzeug wie für Konturen
+      infillToolNumber: number = toolNumber,  // Standardmäßig das gleiche Werkzeug wie für Konturen
       drawingHeight: number = 0  // Standard-Zeichenhöhe (0 = Plattform)
     ) {
-      // Wenn kein separates Infill-Werkzeug angegeben, verwende das Hauptwerkzeug
-      if (infillToolNumber === null) {
-        infillToolNumber = toolNumber;
-      }
-      
       this.svgItems.push({
         geometry,
         toolNumber,
@@ -83,7 +78,7 @@ export const useMainStore = defineStore('main', {
     // Methode zum Setzen der generierten Infill-Gruppe
     setSVGItemInfillGroup(index: number, infillGroup: THREE.Group | null) {
       if (index >= 0 && index < this.svgItems.length) {
-        this.svgItems[index].infillGroup = infillGroup;
+        this.svgItems[index].infillGroup = infillGroup ?? undefined;
       }
     },
     

@@ -1,13 +1,11 @@
 import * as THREE from 'three';
 import { ref } from 'vue';
-import { InfillPatternType } from './threejs_services';
 
 type Pen = {
     penUp: number,
     penDown: number
 }
 
-const drawingSpeed = 3000;
 const travelSpeed = 15000;
 
 // Erweitere das Stift-Dictionary um mehrere Stifttypen mit verschiedenen Höhen
@@ -23,17 +21,13 @@ const penDrawingHeightDict: { [key: string]: Pen } = {
 export const availablePens = Object.keys(penDrawingHeightDict);
 
 export function createGcodeFromLineGroup(
-    lineGeoGroup: THREE.Group, 
-    toolNumber: number = 1, 
-    penType: string = 'stabilo', 
+    lineGeoGroup: THREE.Group,
+    toolNumber: number = 1,
+    penType: string = 'stabilo',
     customFeedrate: number = 3000,
-    infillToolNumber: number = null,
+    infillToolNumber: number = toolNumber,
     drawingHeight: number = 0
 ): string {
-    // Wenn kein separates Infill-Werkzeug angegeben, verwende das Hauptwerkzeug
-    if (infillToolNumber === null) {
-        infillToolNumber = toolNumber;
-    }
 
     // Verwende die benutzerdefinierte Feedrate anstelle des Standardwerts
     const drawingSpeed = customFeedrate;
@@ -66,7 +60,7 @@ export function createGcodeFromLineGroup(
     const allLines: THREE.Line[] = [];
     
     // Suche nach den Original-Linien (nicht Infill)
-    lineGeoGroup.children.forEach((child, idx) => {
+    lineGeoGroup.children.forEach((child) => {
         if (child instanceof THREE.Line && child.name.indexOf('Infill_') !== 0) {
             allLines.push(child);
             
@@ -161,9 +155,8 @@ export function createGcodeFromLineGroup(
         // Nur wenn Infill ein anderes Werkzeug verwendet oder noch kein Werkzeug geholt wurde
         if (infillToolNumber !== toolNumber || allLines.length === 0) {
             const grabInfillTool = 'M98 P"/macros/grab_tool_' + infillToolNumber + '"\n'
-            const placeInfillTool = 'M98 P"/macros/place_tool_' + infillToolNumber + '"\n'
             const moveToDrawingHeight = 'M98 P"/macros/move_to_drawingHeight_' + penType + '"\n'
-            
+
             gCode += grabInfillTool;
             gCode += '; Stifttyp für Infill: ' + penType + '\n';
             gCode += moveToDrawingHeight;
