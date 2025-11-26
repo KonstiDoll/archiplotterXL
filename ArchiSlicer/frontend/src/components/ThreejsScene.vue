@@ -1,22 +1,15 @@
 <template>
-    <div class="relative h-[512px] w-[512px] overflow-hidden" id="threejs-map" ref="threejsMap">
+    <div class="relative overflow-hidden" id="threejs-map" ref="threejsMap">
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch, markRaw, shallowRef } from 'vue';
+import { ref, onMounted, watch, markRaw } from 'vue';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import * as THREE from 'three';
 import { useMainStore } from '../store';
+
 const store = useMainStore();
-const addableObject = shallowRef<THREE.Group>();
-watch(() => store.lineGeometry, (newVal) => {
-    if (newVal) {
-        addableObject.value = markRaw(newVal);
-        addableObject.value.rotateX(Math.PI);
-        scene.add(addableObject.value);
-    }
-})
 const threejsMap = ref<HTMLElement>();
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 20, 10000);
@@ -28,11 +21,76 @@ camera.position.set(0, 0, 5000);
 const controller = new OrbitControls(camera, domElement);
 controller.enableDamping = true;
 controller.update();
-const geometry = new THREE.BoxGeometry(100, 100, 100);
-const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-const cube = new THREE.Mesh(geometry, material);
 scene.background = new THREE.Color(0x051935);
-// scene.add(cube);
+
+// Collection of objects added to scene
+const addedObjects = ref<THREE.Group[]>([]);
+
+// Watch for compatibility with old setup
+watch(() => store.lineGeometry, (newVal) => {
+    if (newVal) {
+        // Dieser Code wird nur für Abwärtskompatibilität behalten
+        console.log("Legacy lineGeometry changed - ignoring");
+    }
+});
+
+// Watch for changes to the items array
+watch(() => store.svgItems, (newItems) => {
+    // Entferne alle vorherigen Objekte
+    addedObjects.value.forEach(obj => {
+        scene.remove(obj);
+    });
+    
+    addedObjects.value = [];
+    
+    // Füge alle SVGs aus dem Store zur Szene hinzu
+    newItems.forEach(item => {
+        const obj = markRaw(item.geometry);
+        scene.add(obj);
+        addedObjects.value.push(obj);
+    });
+    
+    console.log(`Szene aktualisiert: ${addedObjects.value.length} SVGs`);
+    
+    // Kamera zurücksetzen, um alle Objekte zu sehen
+    resetCamera();
+}, { deep: true });
+
+// Funktion zum Zurücksetzen der Kamera, um alle Objekte zu sehen
+const resetCamera = () => {
+    if (addedObjects.value.length === 0) return;
+    
+    // Berechne Bounding Box aller Objekte
+    const box = new THREE.Box3();
+    
+    addedObjects.value.forEach(obj => {
+        obj.traverse(child => {
+            if (child instanceof THREE.Line) {
+                box.expandByObject(child);
+            }
+        });
+    });
+    
+    // Kamera so positionieren, dass alle Objekte sichtbar sind
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    
+    // Abstand berechnen
+    const maxDim = Math.max(size.x, size.y);
+    const distance = maxDim * 2;
+    
+    // Kamera positionieren
+    camera.position.set(center.x, center.y, distance);
+    camera.lookAt(center);
+    camera.updateProjectionMatrix();
+    
+    // Controller zurücksetzen
+    controller.target.set(center.x, center.y, 0);
+    controller.update();
+};
 
 onMounted(() => {
     threejsMap.value?.appendChild(domElement);
@@ -40,6 +98,7 @@ onMounted(() => {
     setSize();
     animate();
 });
+
 const divSize = ref({ width: 0, height: 0 });
 const setSize = () => {
     divSize.value.width = threejsMap.value?.clientWidth || 0;
