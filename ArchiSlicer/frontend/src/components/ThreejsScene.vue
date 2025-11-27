@@ -1,13 +1,31 @@
 <template>
-    <div class="relative overflow-hidden" id="threejs-map" ref="threejsMap">
+    <div class="relative overflow-hidden" id="threejs-map" ref="threejsMap"
+        :style="{ background: currentBackground }">
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, markRaw } from 'vue';
+import { ref, onMounted, watch, markRaw, computed } from 'vue';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import * as THREE from 'three';
 import { useMainStore } from '../store';
+import { gradientPresets } from '../utils/background_presets';
+
+// Props für Hintergrund
+const props = defineProps<{
+    activeToolIndex: number;
+    backgroundPreset?: string;
+    customColor?: string;
+}>();
+
+// Berechne den aktuellen Hintergrund
+const currentBackground = computed(() => {
+    const preset = props.backgroundPreset || 'paper';
+    if (preset === 'custom' && props.customColor) {
+        return props.customColor;
+    }
+    return gradientPresets[preset]?.css || gradientPresets['paper'].css;
+});
 
 const store = useMainStore();
 const threejsMap = ref<HTMLElement>();
@@ -16,12 +34,15 @@ const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerH
 const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
+// Transparenter Hintergrund, damit CSS-Gradient sichtbar ist
+renderer.setClearColor(0x000000, 0);
 const domElement = renderer.domElement;
 camera.position.set(0, 0, 5000);
 const controller = new OrbitControls(camera, domElement);
 controller.enableDamping = true;
 controller.update();
-scene.background = new THREE.Color(0x051935);
+// Kein Three.js Hintergrund - CSS übernimmt
+scene.background = null;
 
 // Collection of objects added to scene
 const addedObjects = ref<THREE.Group[]>([]);

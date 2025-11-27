@@ -45,21 +45,27 @@
                         @update-offset="(v) => updateOffset(index, v)"
                         @remove-infill="removeInfill(index)"
                         @generate-preview="generatePreview(index)"
+                        @analyze="store.analyzeColors(index)"
                     />
                 </div>
             </div>
 
+            <!-- Color Assignment Panel -->
+            <ColorAssignmentPanel v-if="store.svgItems.length > 0" />
+
             <!-- Tool Panel -->
             <ToolPanel
                 :active-tool-index="activeToolIndex"
-                :tool-pen-types="toolPenTypes"
+                :tool-configs="toolConfigs"
                 @select-tool="(v) => $emit('select-tool', v)"
-                @update-pen-type="(i, p) => $emit('update-pen-type', i, p)"
+                @update-tool-config="(i, c) => $emit('update-tool-config', i, c)"
             />
 
             <!-- Global Settings -->
             <div class="bg-slate-800 p-3 rounded-lg">
                 <h3 class="text-white text-sm font-semibold mb-3 text-center">Globale Einstellungen</h3>
+
+                <!-- Z-Höhe -->
                 <div class="flex items-center p-2 bg-slate-700 rounded">
                     <span class="text-white text-xs mr-2">Z-Höhe:</span>
                     <input type="number" :value="globalDrawingHeight"
@@ -67,8 +73,30 @@
                         class="p-1 w-16 border rounded text-sm bg-white" min="0" max="50" step="0.5" />
                     <span class="text-white text-xs ml-1">mm</span>
                 </div>
+
+                <!-- Hintergrund-Preset -->
+                <div class="p-2 bg-slate-700 rounded mt-2">
+                    <div class="flex items-center mb-2">
+                        <span class="text-white text-xs mr-2">Hintergrund:</span>
+                        <select :value="backgroundPreset"
+                            @change="$emit('update-background-preset', ($event.target as HTMLSelectElement).value)"
+                            class="flex-grow p-1 text-xs border border-slate-500 rounded bg-slate-600 text-white">
+                            <option v-for="(preset, key) in gradientPresets" :key="key" :value="key">
+                                {{ preset.name }}
+                            </option>
+                        </select>
+                    </div>
+                    <!-- Custom Color Picker (nur wenn 'custom' ausgewählt) -->
+                    <div v-if="backgroundPreset === 'custom'" class="flex items-center">
+                        <input type="color" :value="customBackgroundColor"
+                            @input="$emit('update-custom-color', ($event.target as HTMLInputElement).value)"
+                            class="w-8 h-8 rounded border border-slate-500 cursor-pointer bg-transparent" />
+                        <span class="text-slate-400 text-xs ml-2">{{ customBackgroundColor }}</span>
+                    </div>
+                </div>
+
                 <div class="mt-2 text-xs text-slate-400 p-2 bg-slate-700/50 rounded">
-                    Materialstärke für alle SVGs.
+                    Z-Höhe = Materialstärke
                 </div>
             </div>
         </div>
@@ -80,20 +108,29 @@ import { ref, markRaw } from 'vue';
 import * as THREE from 'three';
 import { useMainStore } from '../store';
 import { getThreejsObjectFromSvg, generateInfillForGroup, InfillPatternType, defaultInfillOptions } from '../utils/threejs_services';
+import { type ToolConfig } from '../utils/gcode_services';
 import ToolPanel from './ToolPanel.vue';
 import SVGItemPanel from './SVGItemPanel.vue';
+import ColorAssignmentPanel from './ColorAssignmentPanel.vue';
 
 const props = defineProps<{
     activeToolIndex: number;
-    toolPenTypes: string[];
+    toolConfigs: ToolConfig[];
     globalDrawingHeight: number;
+    backgroundPreset: string;
+    customBackgroundColor: string;
 }>();
 
 const emit = defineEmits<{
     (e: 'select-tool', index: number): void;
-    (e: 'update-pen-type', index: number, penType: string): void;
+    (e: 'update-tool-config', index: number, config: ToolConfig): void;
     (e: 'update-drawing-height', value: number): void;
+    (e: 'update-background-preset', preset: string): void;
+    (e: 'update-custom-color', color: string): void;
 }>();
+
+// Gradient-Presets importieren
+import { gradientPresets } from '../utils/background_presets';
 
 const store = useMainStore();
 const dragOver = ref(false);
@@ -119,13 +156,13 @@ const loadSVGFile = async (file: File) => {
         if (event.target) {
             const contents = event.target.result as string;
             const lineGeoGroup = await getThreejsObjectFromSvg(contents);
-            const currentPenType = props.toolPenTypes[props.activeToolIndex - 1];
+            const currentToolConfig = props.toolConfigs[props.activeToolIndex - 1];
 
             store.addSVGItem(
                 markRaw(lineGeoGroup),
                 props.activeToolIndex,
                 file.name,
-                currentPenType,
+                currentToolConfig.penType, // Nur penType für Kompatibilität
                 { ...defaultInfillOptions },
                 3000,
                 props.activeToolIndex,

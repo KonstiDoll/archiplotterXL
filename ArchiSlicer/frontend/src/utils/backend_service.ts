@@ -1,20 +1,38 @@
-//deprecated and not used for now
-//can handle connections between frontend and main.py
-export const uploadImage = async (files: File[]) => {
+// Backend service for API communication
+// Currently not used - prepared for future image processing features
 
+const BACKEND_URL = '/api';
+
+/**
+ * Upload an image to the backend for processing
+ * @param image The image file to upload
+ * @returns URL of the processed image
+ */
+export async function uploadImageForProcessing(image: File): Promise<string> {
     const formData = new FormData();
-    formData.append('file', files[0]);
-    const projectId = newProject.value.projectData.project_id || '123';
+    formData.append('file', image);
 
-    const response = await HTTP.post(`/uploadfile/?project_id=${projectId}`, formData, {
-        headers: {
-            'Content-Type': 'multipart/form-data'
-        }
-    })
+    const response = await fetch(`${BACKEND_URL}/process_image/`, {
+        method: 'POST',
+        body: formData,
+    });
 
-    //take the last part of the path
-    const filename = response.data.filename.split("/").pop();
-    customization.value.logo = filename
-    imagePath.value = projectId + "/" + filename;
-    console.log(response.data)
+    if (!response.ok) {
+        throw new Error(`Backend error: ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+}
+
+/**
+ * Check if backend is available
+ */
+export async function checkBackendHealth(): Promise<boolean> {
+    try {
+        const response = await fetch(`${BACKEND_URL}/`);
+        return response.ok;
+    } catch {
+        return false;
+    }
 }

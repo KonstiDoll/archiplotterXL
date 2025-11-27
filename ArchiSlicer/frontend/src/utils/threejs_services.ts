@@ -47,6 +47,119 @@ export const defaultInfillOptions: InfillOptions = {
   outlineOffset: 0.5
 };
 
+// Hilfsfunktion: CSS-Farbe zu Hex-String konvertieren
+export function cssColorToHex(color: string): string {
+    if (!color || color === 'none' || color === 'transparent') {
+        return '#000000'; // Default: Schwarz
+    }
+
+    // Bereits Hex-Format
+    if (color.startsWith('#')) {
+        // 3-stelliges Hex zu 6-stelligem erweitern
+        if (color.length === 4) {
+            return `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}`;
+        }
+        return color.toLowerCase();
+    }
+
+    // RGB/RGBA Format
+    const rgbMatch = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+    if (rgbMatch) {
+        const r = parseInt(rgbMatch[1]).toString(16).padStart(2, '0');
+        const g = parseInt(rgbMatch[2]).toString(16).padStart(2, '0');
+        const b = parseInt(rgbMatch[3]).toString(16).padStart(2, '0');
+        return `#${r}${g}${b}`;
+    }
+
+    // Benannte Farben (häufigste)
+    const namedColors: { [key: string]: string } = {
+        'black': '#000000',
+        'white': '#ffffff',
+        'red': '#ff0000',
+        'green': '#00ff00',
+        'lime': '#00ff00',
+        'blue': '#0000ff',
+        'yellow': '#ffff00',
+        'cyan': '#00ffff',
+        'magenta': '#ff00ff',
+        'orange': '#ffa500',
+        'pink': '#ffc0cb',
+        'purple': '#800080',
+        'gray': '#808080',
+        'grey': '#808080'
+    };
+
+    const lowerColor = color.toLowerCase();
+    if (namedColors[lowerColor]) {
+        return namedColors[lowerColor];
+    }
+
+    return '#000000'; // Fallback: Schwarz
+}
+
+// Funktion zum Extrahieren aller einzigartigen Farben aus SVG-Inhalt
+export function extractColorsFromSVG(svgContent: string): string[] {
+    const parser = new DOMParser();
+    const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
+    const colors = new Set<string>();
+
+    // Alle Elemente mit stroke-Attribut finden
+    const elements = svgDoc.querySelectorAll('[stroke]');
+    elements.forEach(el => {
+        const stroke = el.getAttribute('stroke');
+        if (stroke && stroke !== 'none') {
+            colors.add(cssColorToHex(stroke));
+        }
+    });
+
+    // Auch style-Attribute prüfen
+    const styledElements = svgDoc.querySelectorAll('[style]');
+    styledElements.forEach(el => {
+        const style = el.getAttribute('style') || '';
+        const strokeMatch = style.match(/stroke:\s*([^;]+)/);
+        if (strokeMatch && strokeMatch[1] !== 'none') {
+            colors.add(cssColorToHex(strokeMatch[1].trim()));
+        }
+    });
+
+    // Falls keine Farben gefunden wurden, Schwarz als Default
+    if (colors.size === 0) {
+        colors.add('#000000');
+    }
+
+    return Array.from(colors);
+}
+
+// Interface für Farb-Statistiken
+export interface ColorInfo {
+    color: string;      // Hex-Farbe z.B. "#ff0000"
+    lineCount: number;  // Anzahl der Linien mit dieser Farbe
+}
+
+// Funktion zum Analysieren der Farben in einer THREE.Group
+export function analyzeColorsInGroup(group: THREE.Group): ColorInfo[] {
+    const colorCounts = new Map<string, number>();
+
+    group.children.forEach(child => {
+        if (child instanceof THREE.Line) {
+            const strokeColor = child.userData?.strokeColor || '#000000';
+            const count = colorCounts.get(strokeColor) || 0;
+            colorCounts.set(strokeColor, count + 1);
+        }
+    });
+
+    // Zu Array konvertieren und nach Anzahl sortieren
+    const colorInfos: ColorInfo[] = [];
+    colorCounts.forEach((count, color) => {
+        colorInfos.push({ color, lineCount: count });
+    });
+
+    // Nach Linienanzahl absteigend sortieren
+    colorInfos.sort((a, b) => b.lineCount - a.lineCount);
+
+    return colorInfos;
+}
+
 export function getThreejsObjectFromSvg(svgContent: string, _offsetX: number = 0): Promise<THREE.Group> {
     console.log("--- SVG Analyse Start ---");
     // _offsetX parameter is kept for compatibility but not used anymore
@@ -108,21 +221,33 @@ export function getThreejsObjectFromSvg(svgContent: string, _offsetX: number = 0
     const group = new THREE.Group();
     
     paths.forEach((shapePath) => {
-        const randomColor = Math.floor(Math.random() * 0xffffff);
+        // Extrahiere die stroke-Farbe aus den SVG-Daten
+        // SVGLoader speichert Style-Infos in userData.style
+        //@ts-ignore
+        const style = shapePath.userData?.style || {};
+        const strokeColor = style.stroke;
+
+        // Konvertiere die Farbe zu Hex
+        const hexColor = cssColorToHex(strokeColor);
+        const threeColor = new THREE.Color(hexColor);
+
         const material = new THREE.LineBasicMaterial({
-            color: randomColor,
+            color: threeColor,
         });
+
         shapePath.subPaths.forEach((subPath: any) => {
             // Get points from the subPath
             const points: THREE.Vector2[] = subPath.getPoints();
-            
+
             // Create a geometry from the points
             const geometry = new THREE.BufferGeometry().setFromPoints(points);
-            
+
             // Create a line from the geometry and material
             const line = new THREE.Line(geometry, material);
             //@ts-ignore
-            line.userData = shapePath.userData;
+            line.userData = { ...shapePath.userData };
+            // Speichere die Original-Stroke-Farbe für spätere Verwendung
+            line.userData.strokeColor = hexColor;
             
             if (subPath.curves.length > 1) {
                 const isClosed = computed(() => {

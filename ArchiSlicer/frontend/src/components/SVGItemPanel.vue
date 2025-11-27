@@ -25,8 +25,8 @@
 
         <!-- Settings -->
         <div class="p-3 space-y-3">
-            <!-- Tool & Feedrate Row -->
-            <div class="flex items-center space-x-3">
+            <!-- Tool & Feedrate Row (nur wenn NICHT analysiert) -->
+            <div v-if="!item.isAnalyzed" class="flex items-center space-x-3">
                 <div class="flex items-center">
                     <label class="text-xs text-slate-500 mr-1">Tool:</label>
                     <select :value="item.toolNumber"
@@ -42,6 +42,44 @@
                         class="p-1 w-20 border rounded text-sm" min="100" max="30000" step="100" />
                     <span class="text-xs text-slate-400 ml-1">mm/min</span>
                 </div>
+            </div>
+
+            <!-- Farb-Analyse Status -->
+            <div class="flex items-center justify-between">
+                <!-- Mini-Farbübersicht wenn analysiert -->
+                <div v-if="item.isAnalyzed" class="flex items-center space-x-1">
+                    <span class="text-xs text-slate-500 mr-1">Farben:</span>
+                    <div v-for="(colorGroup, idx) in item.colorGroups.slice(0, 5)" :key="idx"
+                        class="w-4 h-4 rounded border border-slate-300"
+                        :style="{ backgroundColor: colorGroup.color }"
+                        :title="`${colorGroup.color} (Tool ${colorGroup.toolNumber})`">
+                    </div>
+                    <span v-if="item.colorGroups.length > 5" class="text-xs text-slate-400">
+                        +{{ item.colorGroups.length - 5 }}
+                    </span>
+                </div>
+                <div v-else class="text-xs text-slate-400">
+                    Nicht analysiert
+                </div>
+
+                <!-- Analyse Button -->
+                <button v-if="!item.isAnalyzed"
+                    @click="$emit('analyze')"
+                    class="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
+                    Analysieren
+                </button>
+                <span v-else class="text-xs text-green-600">
+                    ✓ {{ item.colorGroups.length }} Farben
+                </span>
+            </div>
+
+            <!-- Feedrate (auch wenn analysiert) -->
+            <div v-if="item.isAnalyzed" class="flex items-center">
+                <label class="text-xs text-slate-500 mr-1">Speed:</label>
+                <input type="number" :value="item.feedrate"
+                    @change="$emit('update-feedrate', Number(($event.target as HTMLInputElement).value))"
+                    class="p-1 w-20 border rounded text-sm" min="100" max="30000" step="100" />
+                <span class="text-xs text-slate-400 ml-1">mm/min</span>
             </div>
 
             <!-- Infill Toggle Button -->
@@ -128,6 +166,8 @@
 import { ref, computed } from 'vue';
 import { InfillPatternType, patternDensityRanges } from '../utils/threejs_services';
 
+import type { ColorGroup } from '../store';
+
 const props = defineProps<{
     item: {
         fileName: string;
@@ -140,6 +180,9 @@ const props = defineProps<{
             angle: number;
             outlineOffset: number;
         };
+        // NEU: Farb-Analyse
+        colorGroups: ColorGroup[];
+        isAnalyzed: boolean;
     };
     isFirst: boolean;
     isLast: boolean;
@@ -158,6 +201,7 @@ defineEmits<{
     (e: 'update-offset', value: number): void;
     (e: 'remove-infill'): void;
     (e: 'generate-preview'): void;
+    (e: 'analyze'): void;  // NEU: Farbanalyse
 }>();
 
 const expanded = ref(false);

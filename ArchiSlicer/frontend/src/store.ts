@@ -1,11 +1,19 @@
 import { defineStore } from 'pinia'
 import * as THREE from 'three';
-import { InfillOptions, defaultInfillOptions } from './utils/threejs_services';
+import { InfillOptions, defaultInfillOptions, analyzeColorsInGroup } from './utils/threejs_services';
+
+// Interface für Farbgruppen (erkannte Farben mit Tool-Zuordnung)
+export interface ColorGroup {
+  color: string;           // Hex-Farbe z.B. "#ff0000"
+  toolNumber: number;      // Zugeordnetes Tool (1-9), default: 1
+  lineCount: number;       // Anzahl Linien mit dieser Farbe
+  visible: boolean;        // Sichtbarkeit in Vorschau
+}
 
 // Interface für SVG-Geometrien mit Werkzeug-Informationen
-interface SVGItem {
+export interface SVGItem {
   geometry: THREE.Group;
-  toolNumber: number;       // Werkzeug für die Konturen
+  toolNumber: number;       // Werkzeug für die Konturen (Fallback wenn nicht analysiert)
   infillToolNumber: number; // Werkzeug für das Infill (kann anders als für Konturen sein)
   fileName: string;
   penType: string;
@@ -13,6 +21,9 @@ interface SVGItem {
   drawingHeight: number;    // Z-Höhe für verschiedene Materialstärken (mm)
   infillOptions: InfillOptions;  // Infill-Optionen für dieses SVG
   infillGroup?: THREE.Group;    // Optional: Generierte Infill-Gruppe
+  // NEU: Farb-Analyse
+  colorGroups: ColorGroup[];   // Erkannte Farben mit Tool-Zuordnung
+  isAnalyzed: boolean;         // Wurde Farbanalyse durchgeführt?
 }
 
 export const useMainStore = defineStore('main', {
@@ -30,10 +41,10 @@ export const useMainStore = defineStore('main', {
     
     // Neue Methode zum Hinzufügen einer SVG mit Werkzeug
     addSVGItem(
-      geometry: THREE.Group, 
-      toolNumber: number, 
-      fileName: string, 
-      penType: string = 'stabilo',
+      geometry: THREE.Group,
+      toolNumber: number,
+      fileName: string,
+      penType: string = 'stabilo-schwarz',
       infillOptions: InfillOptions = { ...defaultInfillOptions },
       feedrate: number = 3000,  // Standard-Geschwindigkeit
       infillToolNumber: number = toolNumber,  // Standardmäßig das gleiche Werkzeug wie für Konturen
@@ -47,9 +58,11 @@ export const useMainStore = defineStore('main', {
         penType,
         feedrate,
         drawingHeight,
-        infillOptions
+        infillOptions,
+        colorGroups: [],    // Leer bis Analyse durchgeführt wird
+        isAnalyzed: false   // Noch nicht analysiert
       });
-      
+
       // Update auch lineGeometry für Kompatibilität
       this.lineGeometry = geometry;
     },
@@ -138,6 +151,55 @@ export const useMainStore = defineStore('main', {
     updateSVGItemDrawingHeight(index: number, drawingHeight: number) {
       if (index >= 0 && index < this.svgItems.length) {
         this.svgItems[index].drawingHeight = drawingHeight;
+      }
+    },
+
+    // ===== NEU: Farb-Analyse Actions =====
+
+    // Farbanalyse für ein SVG-Item durchführen
+    analyzeColors(index: number) {
+      if (index >= 0 && index < this.svgItems.length) {
+        const item = this.svgItems[index];
+        const colorInfos = analyzeColorsInGroup(item.geometry);
+
+        // ColorGroups erstellen mit Default Tool 1
+        item.colorGroups = colorInfos.map(info => ({
+          color: info.color,
+          toolNumber: 1,  // Default: alle Farben bekommen Tool 1
+          lineCount: info.lineCount,
+          visible: true
+        }));
+
+        item.isAnalyzed = true;
+        console.log(`Farbanalyse für "${item.fileName}": ${item.colorGroups.length} Farben gefunden`);
+      }
+    },
+
+    // Tool für eine Farbgruppe zuweisen
+    setColorTool(svgIndex: number, colorIndex: number, toolNumber: number) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          item.colorGroups[colorIndex].toolNumber = toolNumber;
+        }
+      }
+    },
+
+    // Sichtbarkeit einer Farbgruppe togglen
+    toggleColorVisibility(svgIndex: number, colorIndex: number) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          item.colorGroups[colorIndex].visible = !item.colorGroups[colorIndex].visible;
+        }
+      }
+    },
+
+    // Farbanalyse zurücksetzen
+    resetColorAnalysis(index: number) {
+      if (index >= 0 && index < this.svgItems.length) {
+        this.svgItems[index].colorGroups = [];
+        this.svgItems[index].isAnalyzed = false;
       }
     }
   }

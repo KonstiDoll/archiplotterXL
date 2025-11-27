@@ -1,29 +1,56 @@
 import * as THREE from 'three';
 import { ref } from 'vue';
 
-type Pen = {
-    penUp: number,
-    penDown: number
+// Stift-Typ (mechanische Eigenschaften)
+export type PenType = {
+    id: string;           // z.B. "stabilo"
+    displayName: string;  // z.B. "Stabilo Point 88"
+    penUp: number;
+    penDown: number;
+}
+
+// Tool-Konfiguration (pro Tool 1-9)
+export type ToolConfig = {
+    penType: string;      // ID des Stifttyps (z.B. "stabilo")
+    color: string;        // Frei wählbare Hex-Farbe (z.B. "#ff0000")
 }
 
 const travelSpeed = 15000;
 
-// Erweitere das Stift-Dictionary um mehrere Stifttypen mit verschiedenen Höhen
-const penDrawingHeightDict: { [key: string]: Pen } = { 
-    'stabilo': { penDown: 13, penUp: 33 },
-    'posca': { penDown: 13, penUp: 33 },
-    'fineliner': { penDown: 15, penUp: 35 },
-    'brushpen': { penDown: 8, penUp: 33 },
-    'marker': { penDown: 11, penUp: 36 }
+// Verfügbare Stift-Typen (nur mechanische Eigenschaften)
+export const penTypes: { [key: string]: PenType } = {
+    'stabilo':   { id: 'stabilo',   displayName: 'Stabilo Point 88', penDown: 13, penUp: 33 },
+    'posca':     { id: 'posca',     displayName: 'POSCA Marker',     penDown: 13, penUp: 33 },
+    'fineliner': { id: 'fineliner', displayName: 'Fineliner',        penDown: 15, penUp: 35 },
+    'brushpen':  { id: 'brushpen',  displayName: 'Brushpen',         penDown: 8,  penUp: 33 },
+    'marker':    { id: 'marker',    displayName: 'Marker (dick)',    penDown: 11, penUp: 36 },
 };
 
-// Liste aller verfügbaren Stifte für UI-Auswahl
-export const availablePens = Object.keys(penDrawingHeightDict);
+// Liste aller verfügbaren Stift-Typen für UI-Auswahl
+export const availablePenTypes = Object.keys(penTypes);
+
+// Hilfsfunktion um PenType-Config zu bekommen
+export function getPenTypeConfig(penTypeId: string): PenType | undefined {
+    return penTypes[penTypeId];
+}
+
+// Standard-Tool-Konfiguration erstellen
+export function createDefaultToolConfig(): ToolConfig {
+    return {
+        penType: 'stabilo',
+        color: '#000000'
+    };
+}
+
+// Alle PenType-Configs für UI
+export function getAllPenTypes(): { [key: string]: PenType } {
+    return penTypes;
+}
 
 export function createGcodeFromLineGroup(
     lineGeoGroup: THREE.Group,
     toolNumber: number = 1,
-    penType: string = 'stabilo',
+    toolConfig: ToolConfig = { penType: 'stabilo', color: '#000000' },
     customFeedrate: number = 3000,
     infillToolNumber: number = toolNumber,
     drawingHeight: number = 0
@@ -31,15 +58,17 @@ export function createGcodeFromLineGroup(
 
     // Verwende die benutzerdefinierte Feedrate anstelle des Standardwerts
     const drawingSpeed = customFeedrate;
-    
-    // Fallback zum Standard-Stifttyp, falls nicht gefunden
-    if (!penDrawingHeightDict[penType]) {
-        console.warn(`Stifttyp "${penType}" nicht gefunden, verwende "stabilo"`);
-        penType = 'stabilo';
+
+    // Hole die PenType-Konfiguration (mechanische Eigenschaften)
+    const penTypeId = toolConfig.penType;
+    const penTypeConfig = penTypes[penTypeId] || penTypes['stabilo'];
+
+    if (!penTypes[penTypeId]) {
+        console.warn(`Stifttyp "${penTypeId}" nicht gefunden, verwende "stabilo"`);
     }
-    
-    const penUp = penDrawingHeightDict[penType].penUp;
-    const penDown = penDrawingHeightDict[penType].penDown;
+
+    const penUp = penTypeConfig.penUp;
+    const penDown = penTypeConfig.penDown;
     
     // Wichtig: U und Z sind getrennte Achsen und sollten in separaten Befehlen gesteuert werden
     // Z-Achse ist für die Materialdicke (Höhenanpassung)
@@ -127,10 +156,11 @@ export function createGcodeFromLineGroup(
     if (allLines.length > 0) {
         const grabTool = 'M98 P"/macros/grab_tool_' + toolNumber + '"\n'
         const placeTool = 'M98 P"/macros/place_tool_' + toolNumber + '"\n'
-        const moveToDrawingHeight = 'M98 P"/macros/move_to_drawingHeight_' + penType + '"\n'
-        
+        // Makro-Name verwendet nur penTypeId (nicht Farbe)
+        const moveToDrawingHeight = 'M98 P"/macros/move_to_drawingHeight_' + penTypeId + '"\n'
+
         gCode += grabTool;
-        gCode += '; Stifttyp: ' + penType + '\n';
+        gCode += '; Stifttyp: ' + penTypeConfig.displayName + ', Farbe: ' + toolConfig.color + '\n';
         gCode += moveToDrawingHeight;
         
         // Füge den Z-Offset für die Materialstärke nach dem Makro hinzu
@@ -155,10 +185,11 @@ export function createGcodeFromLineGroup(
         // Nur wenn Infill ein anderes Werkzeug verwendet oder noch kein Werkzeug geholt wurde
         if (infillToolNumber !== toolNumber || allLines.length === 0) {
             const grabInfillTool = 'M98 P"/macros/grab_tool_' + infillToolNumber + '"\n'
-            const moveToDrawingHeight = 'M98 P"/macros/move_to_drawingHeight_' + penType + '"\n'
+            // Makro-Name verwendet nur penTypeId (nicht Farbe)
+            const moveToDrawingHeight = 'M98 P"/macros/move_to_drawingHeight_' + penTypeId + '"\n'
 
             gCode += grabInfillTool;
-            gCode += '; Stifttyp für Infill: ' + penType + '\n';
+            gCode += '; Stifttyp für Infill: ' + penTypeConfig.displayName + '\n';
             gCode += moveToDrawingHeight;
             
             // Füge den Z-Offset für die Materialstärke nach dem Makro hinzu
@@ -194,6 +225,160 @@ export function createGcodeFromLineGroup(
     console.log('Letzte 5 G-Code Befehle:');
     gcodeLines.slice(-10).forEach(line => console.log(line));
     
+    return gCode;
+}
+
+// Interface für Farb-Tool-Zuordnung (Import aus store.ts vermeiden - eigene Definition)
+interface ColorToolMapping {
+    color: string;
+    toolNumber: number;
+    lineCount: number;
+    visible: boolean;
+}
+
+// Neue Funktion für Multi-Color G-Code
+export function createGcodeFromColorGroups(
+    lineGeoGroup: THREE.Group,
+    colorGroups: ColorToolMapping[],
+    toolConfigs: ToolConfig[],
+    customFeedrate: number = 3000,
+    drawingHeight: number = 0
+): string {
+    // Map von Farbe zu Tool-Nummer erstellen
+    const colorToTool = new Map<string, number>();
+    colorGroups.forEach(cg => {
+        colorToTool.set(cg.color, cg.toolNumber);
+    });
+
+    // Linien nach Tool gruppieren (für optimale Tool-Wechsel)
+    const linesByTool = new Map<number, THREE.Line[]>();
+
+    // Sammle alle Linien (außer Infill)
+    lineGeoGroup.children.forEach((child) => {
+        if (child instanceof THREE.Line && child.name.indexOf('Infill_') !== 0) {
+            const strokeColor = child.userData?.strokeColor || '#000000';
+            const toolNumber = colorToTool.get(strokeColor) || 1;
+
+            if (!linesByTool.has(toolNumber)) {
+                linesByTool.set(toolNumber, []);
+            }
+            linesByTool.get(toolNumber)!.push(child);
+        }
+    });
+
+    // Infill-Linien sammeln (bekommen das erste Tool)
+    const infillLines: THREE.Line[] = [];
+    lineGeoGroup.children.forEach((child) => {
+        if (child instanceof THREE.Group && child.name === "InfillGroup") {
+            child.children.forEach((infillChild) => {
+                if (infillChild instanceof THREE.Line) {
+                    infillLines.push(infillChild);
+                }
+            });
+        }
+    });
+
+    // G-Code generieren
+    let gCode = '';
+    gCode += 'G90\nG21\n'; // Absolute positioning, millimeters
+
+    if (drawingHeight > 0) {
+        gCode += `; Material-/Zeichenhöhe: ${drawingHeight.toFixed(2)}mm\n`;
+    }
+
+    // Z-Offset für die Materialdicke
+    const adjustMaterialHeight = drawingHeight > 0
+        ? `G91\nG1 Z${drawingHeight.toFixed(2)} F6000\nG90\n`
+        : '';
+
+    // Sortiere Tools für konsistente Reihenfolge
+    const sortedTools = Array.from(linesByTool.keys()).sort((a, b) => a - b);
+
+    // Für jedes Tool die Linien zeichnen
+    sortedTools.forEach((toolNumber) => {
+        const lines = linesByTool.get(toolNumber)!;
+        if (lines.length === 0) return;
+
+        // Tool-Konfiguration für dieses Tool (0-indexed)
+        const toolConfig = toolConfigs[toolNumber - 1] || { penType: 'stabilo', color: '#000000' };
+        const penTypeId = toolConfig.penType;
+        const penTypeConfig = penTypes[penTypeId] || penTypes['stabilo'];
+
+        const penUp = penTypeConfig.penUp;
+        const penDown = penTypeConfig.penDown;
+        const moveUUp = `G1 U${penUp} F6000\n`;
+        const moveUDown = `G1 U${penDown} F6000\n`;
+
+        // Tool wechseln
+        gCode += `\n; === Tool #${toolNumber} (${penTypeConfig.displayName}, ${toolConfig.color}) ===\n`;
+        gCode += `M98 P"/macros/grab_tool_${toolNumber}"\n`;
+        // Makro-Name verwendet nur penTypeId (nicht Farbe)
+        gCode += `M98 P"/macros/move_to_drawingHeight_${penTypeId}"\n`;
+
+        if (drawingHeight > 0) {
+            gCode += adjustMaterialHeight;
+        }
+
+        gCode += moveUUp;
+
+        // Farben die diesem Tool zugeordnet sind
+        const colorsForTool: string[] = [];
+        colorGroups.forEach(cg => {
+            if (cg.toolNumber === toolNumber) {
+                colorsForTool.push(cg.color);
+            }
+        });
+        gCode += `; Farben: ${colorsForTool.join(', ')}\n`;
+        gCode += `; ${lines.length} Linien\n`;
+
+        // Linien zeichnen
+        lines.forEach((lineGeo) => {
+            const gcodeLine = createGcodeFromLine(lineGeo, moveUDown, customFeedrate);
+            gCode += gcodeLine;
+            gCode += moveUUp;
+        });
+
+        // Tool ablegen
+        gCode += `M98 P"/macros/place_tool_${toolNumber}"\n`;
+    });
+
+    // Infill separat (mit Tool 1 oder separatem Infill-Tool)
+    if (infillLines.length > 0) {
+        const infillTool = 1; // Könnte später konfigurierbar sein
+        const infillToolConfig = toolConfigs[infillTool - 1] || { penType: 'stabilo', color: '#000000' };
+        const infillPenTypeId = infillToolConfig.penType;
+        const infillPenTypeConfig = penTypes[infillPenTypeId] || penTypes['stabilo'];
+
+        const penUp = infillPenTypeConfig.penUp;
+        const penDown = infillPenTypeConfig.penDown;
+        const moveUUp = `G1 U${penUp} F6000\n`;
+        const moveUDown = `G1 U${penDown} F6000\n`;
+
+        gCode += `\n; === Infill mit Tool #${infillTool} ===\n`;
+        gCode += `M98 P"/macros/grab_tool_${infillTool}"\n`;
+        // Makro-Name verwendet nur penTypeId (nicht Farbe)
+        gCode += `M98 P"/macros/move_to_drawingHeight_${infillPenTypeId}"\n`;
+
+        if (drawingHeight > 0) {
+            gCode += adjustMaterialHeight;
+        }
+
+        gCode += moveUUp;
+        gCode += `; ${infillLines.length} Infill-Linien\n`;
+
+        infillLines.forEach((lineGeo) => {
+            const gcodeLine = createGcodeFromLine(lineGeo, moveUDown, customFeedrate);
+            gCode += gcodeLine;
+            gCode += moveUUp;
+        });
+
+        gCode += `M98 P"/macros/place_tool_${infillTool}"\n`;
+    }
+
+    gCode += 'G1 Y0 F15000\n';
+
+    console.log(`Multi-Color G-Code generiert: ${sortedTools.length} Tools verwendet`);
+
     return gCode;
 }
 

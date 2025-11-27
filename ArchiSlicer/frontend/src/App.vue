@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useMainStore } from './store';
-import { createGcodeFromLineGroup } from './utils/gcode_services';
+import { createGcodeFromLineGroup, createGcodeFromColorGroups, type ToolConfig } from './utils/gcode_services';
 import { InfillPatternType } from './utils/threejs_services';
 import AppHeader from './components/AppHeader.vue';
 import Sidebar from './components/Sidebar.vue';
@@ -12,9 +12,16 @@ const store = useMainStore();
 
 // State
 const activeToolIndex = ref(1);
-const toolPenTypes = ref<string[]>(Array(9).fill('stabilo'));
+// Neue ToolConfig-basierte Konfiguration (Typ + Farbe getrennt)
+const toolConfigs = ref<ToolConfig[]>(Array(9).fill(null).map(() => ({
+    penType: 'stabilo',
+    color: '#000000'
+})));
 const globalDrawingHeight = ref(0);
 const gCode = ref('');
+// Hintergrund-Preset für die 3D-Vorschau
+const backgroundPreset = ref('forest');
+const customBackgroundColor = ref('#e0e0e0');
 
 // Computed
 const hasItems = computed(() => store.svgItems.length > 0);
@@ -43,12 +50,20 @@ const handleSelectTool = (index: number) => {
     activeToolIndex.value = index;
 };
 
-const handleUpdatePenType = (index: number, penType: string) => {
-    toolPenTypes.value[index] = penType;
+const handleUpdateToolConfig = (index: number, config: ToolConfig) => {
+    toolConfigs.value[index] = config;
 };
 
 const handleUpdateDrawingHeight = (value: number) => {
     globalDrawingHeight.value = value;
+};
+
+const handleUpdateBackgroundPreset = (preset: string) => {
+    backgroundPreset.value = preset;
+};
+
+const handleUpdateCustomColor = (color: string) => {
+    customBackgroundColor.value = color;
 };
 
 // G-Code generation
@@ -63,24 +78,49 @@ const generateGcode = () => {
     combinedGcode += `; Zeichenhöhe/Materialstärke: ${globalDrawingHeight.value.toFixed(2)}mm\n\n`;
 
     store.svgItems.forEach((item, index) => {
-        const currentPenType = toolPenTypes.value[item.toolNumber - 1];
-
-        const svgGcode = createGcodeFromLineGroup(
-            item.geometry,
-            item.toolNumber,
-            currentPenType,
-            item.feedrate,
-            item.infillToolNumber,
-            globalDrawingHeight.value
-        );
-
         combinedGcode += `\n; --- SVG #${index + 1}: ${item.fileName} ---\n`;
-        combinedGcode += `; Kontur mit Tool #${item.toolNumber}, Stift "${currentPenType}"\n`;
-        if (item.infillOptions.patternType !== InfillPatternType.NONE) {
-            combinedGcode += `; Infill (${item.infillOptions.patternType}) mit Tool #${item.infillToolNumber}\n`;
+
+        // Prüfen ob SVG analysiert wurde
+        if (item.isAnalyzed && item.colorGroups.length > 0) {
+            // Multi-Color G-Code generieren
+            combinedGcode += `; Multi-Color Modus: ${item.colorGroups.length} Farben\n`;
+
+            // Verwendete Tools auflisten
+            const usedTools = new Set(item.colorGroups.map(cg => cg.toolNumber));
+            combinedGcode += `; Verwendete Tools: ${Array.from(usedTools).sort().join(', ')}\n`;
+            combinedGcode += `; Feedrate ${item.feedrate} mm/min\n`;
+
+            const svgGcode = createGcodeFromColorGroups(
+                item.geometry,
+                item.colorGroups,
+                toolConfigs.value,
+                item.feedrate,
+                globalDrawingHeight.value
+            );
+
+            combinedGcode += svgGcode;
+        } else {
+            // Standard Single-Tool G-Code
+            const currentToolConfig = toolConfigs.value[item.toolNumber - 1];
+
+            combinedGcode += `; Single-Tool Modus\n`;
+            combinedGcode += `; Kontur mit Tool #${item.toolNumber}, Typ "${currentToolConfig.penType}", Farbe "${currentToolConfig.color}"\n`;
+            if (item.infillOptions.patternType !== InfillPatternType.NONE) {
+                combinedGcode += `; Infill (${item.infillOptions.patternType}) mit Tool #${item.infillToolNumber}\n`;
+            }
+            combinedGcode += `; Feedrate ${item.feedrate} mm/min\n`;
+
+            const svgGcode = createGcodeFromLineGroup(
+                item.geometry,
+                item.toolNumber,
+                currentToolConfig,
+                item.feedrate,
+                item.infillToolNumber,
+                globalDrawingHeight.value
+            );
+
+            combinedGcode += svgGcode;
         }
-        combinedGcode += `; Feedrate ${item.feedrate} mm/min\n`;
-        combinedGcode += svgGcode;
     });
 
     gCode.value = combinedGcode;
@@ -97,18 +137,26 @@ const generateGcode = () => {
             <!-- Sidebar -->
             <Sidebar
                 :active-tool-index="activeToolIndex"
-                :tool-pen-types="toolPenTypes"
+                :tool-configs="toolConfigs"
                 :global-drawing-height="globalDrawingHeight"
+                :background-preset="backgroundPreset"
+                :custom-background-color="customBackgroundColor"
                 @select-tool="handleSelectTool"
-                @update-pen-type="handleUpdatePenType"
+                @update-tool-config="handleUpdateToolConfig"
                 @update-drawing-height="handleUpdateDrawingHeight"
+                @update-background-preset="handleUpdateBackgroundPreset"
+                @update-custom-color="handleUpdateCustomColor"
             />
 
             <!-- Main Area -->
             <main class="flex flex-col flex-grow overflow-hidden">
                 <!-- 3D Preview -->
                 <div class="flex-grow overflow-hidden p-2">
-                    <ThreejsScene :activeToolIndex="activeToolIndex" class="h-full rounded-lg" />
+                    <ThreejsScene
+                        :activeToolIndex="activeToolIndex"
+                        :backgroundPreset="backgroundPreset"
+                        :customColor="customBackgroundColor"
+                        class="h-full rounded-lg" />
                 </div>
 
                 <!-- G-Code Panel -->
