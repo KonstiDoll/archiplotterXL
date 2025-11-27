@@ -25,6 +25,19 @@
 
         <!-- Settings -->
         <div class="p-3 space-y-3">
+            <!-- Workpiece Start Auswahl -->
+            <div v-if="store.workpieceStarts.length > 0" class="flex items-center">
+                <label class="text-xs text-slate-500 mr-2">Position:</label>
+                <select :value="item.workpieceStartId || ''"
+                    @change="$emit('update-workpiece-start', ($event.target as HTMLSelectElement).value || undefined)"
+                    class="flex-grow p-1 border rounded text-sm">
+                    <option value="">Ursprung (0, 0)</option>
+                    <option v-for="ws in store.workpieceStarts" :key="ws.id" :value="ws.id">
+                        {{ ws.name }} ({{ ws.x }}, {{ ws.y }})
+                    </option>
+                </select>
+            </div>
+
             <!-- Tool & Feedrate Row (nur wenn NICHT analysiert) -->
             <div v-if="!item.isAnalyzed" class="flex items-center space-x-3">
                 <div class="flex items-center">
@@ -165,8 +178,9 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { InfillPatternType, patternDensityRanges } from '../utils/threejs_services';
+import { useMainStore, type ColorGroup } from '../store';
 
-import type { ColorGroup } from '../store';
+const store = useMainStore();
 
 const props = defineProps<{
     item: {
@@ -180,9 +194,13 @@ const props = defineProps<{
             angle: number;
             outlineOffset: number;
         };
-        // NEU: Farb-Analyse
+        // Farb-Analyse
         colorGroups: ColorGroup[];
         isAnalyzed: boolean;
+        // Platzierung
+        offsetX: number;
+        offsetY: number;
+        workpieceStartId?: string;
     };
     isFirst: boolean;
     isLast: boolean;
@@ -201,7 +219,8 @@ defineEmits<{
     (e: 'update-offset', value: number): void;
     (e: 'remove-infill'): void;
     (e: 'generate-preview'): void;
-    (e: 'analyze'): void;  // NEU: Farbanalyse
+    (e: 'analyze'): void;
+    (e: 'update-workpiece-start', value: string | undefined): void;
 }>();
 
 const expanded = ref(false);

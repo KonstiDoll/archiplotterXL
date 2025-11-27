@@ -53,7 +53,9 @@ export function createGcodeFromLineGroup(
     toolConfig: ToolConfig = { penType: 'stabilo', color: '#000000' },
     customFeedrate: number = 3000,
     infillToolNumber: number = toolNumber,
-    drawingHeight: number = 0
+    drawingHeight: number = 0,
+    offsetX: number = 0,
+    offsetY: number = 0
 ): string {
 
     // Verwende die benutzerdefinierte Feedrate anstelle des Standardwerts
@@ -171,8 +173,11 @@ export function createGcodeFromLineGroup(
         gCode += moveUUp;
         
         gCode += '\n; --- Konturen zeichnen mit Tool #' + toolNumber + ' ---\n';
+        if (offsetX !== 0 || offsetY !== 0) {
+            gCode += `; Offset: X+${offsetX.toFixed(2)}, Y+${offsetY.toFixed(2)}\n`;
+        }
         allLines.forEach((lineGeo) => {
-            const gcodeLine = createGcodeFromLine(lineGeo, moveUDown, drawingSpeed);
+            const gcodeLine = createGcodeFromLine(lineGeo, moveUDown, drawingSpeed, offsetX, offsetY);
             gCode += gcodeLine;
             gCode += moveUUp;
         });
@@ -202,7 +207,7 @@ export function createGcodeFromLineGroup(
         
         gCode += '\n; --- Infill zeichnen mit Tool #' + infillToolNumber + ' ---\n';
         infillLines.forEach((lineGeo) => {
-            const gcodeLine = createGcodeFromLine(lineGeo, moveUDown, drawingSpeed);
+            const gcodeLine = createGcodeFromLine(lineGeo, moveUDown, drawingSpeed, offsetX, offsetY);
             gCode += gcodeLine;
             gCode += moveUUp;
         });
@@ -242,7 +247,9 @@ export function createGcodeFromColorGroups(
     colorGroups: ColorToolMapping[],
     toolConfigs: ToolConfig[],
     customFeedrate: number = 3000,
-    drawingHeight: number = 0
+    drawingHeight: number = 0,
+    offsetX: number = 0,
+    offsetY: number = 0
 ): string {
     // Map von Farbe zu Tool-Nummer erstellen
     const colorToTool = new Map<string, number>();
@@ -330,10 +337,13 @@ export function createGcodeFromColorGroups(
         });
         gCode += `; Farben: ${colorsForTool.join(', ')}\n`;
         gCode += `; ${lines.length} Linien\n`;
+        if (offsetX !== 0 || offsetY !== 0) {
+            gCode += `; Offset: X+${offsetX.toFixed(2)}, Y+${offsetY.toFixed(2)}\n`;
+        }
 
         // Linien zeichnen
         lines.forEach((lineGeo) => {
-            const gcodeLine = createGcodeFromLine(lineGeo, moveUDown, customFeedrate);
+            const gcodeLine = createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY);
             gCode += gcodeLine;
             gCode += moveUUp;
         });
@@ -367,7 +377,7 @@ export function createGcodeFromColorGroups(
         gCode += `; ${infillLines.length} Infill-Linien\n`;
 
         infillLines.forEach((lineGeo) => {
-            const gcodeLine = createGcodeFromLine(lineGeo, moveUDown, customFeedrate);
+            const gcodeLine = createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY);
             gCode += gcodeLine;
             gCode += moveUUp;
         });
@@ -383,22 +393,29 @@ export function createGcodeFromColorGroups(
 }
 
 // Helper function for creating G-code from a single line
-function createGcodeFromLine(lineGeo: THREE.Line, moveUDown: string, customFeedrate: number = 3000): string {
+function createGcodeFromLine(
+    lineGeo: THREE.Line,
+    moveUDown: string,
+    customFeedrate: number = 3000,
+    offsetX: number = 0,
+    offsetY: number = 0
+): string {
     let gcode = '';
     const first = ref(true);
     let speed = travelSpeed;
-    
+
     // Erste und letzte Position für Logging
     const positions = lineGeo.geometry.attributes.position.array;
     if (positions.length > 0) {
-        console.log(`Linie Startpunkt: X=${positions[0].toFixed(2)}, Y=${positions[1].toFixed(2)}`);
+        console.log(`Linie Startpunkt: X=${(positions[0] + offsetX).toFixed(2)}, Y=${(positions[1] + offsetY).toFixed(2)}`);
         const lastIndex = positions.length - 3;
-        console.log(`Linie Endpunkt: X=${positions[lastIndex].toFixed(2)}, Y=${positions[lastIndex+1].toFixed(2)}`);
+        console.log(`Linie Endpunkt: X=${(positions[lastIndex] + offsetX).toFixed(2)}, Y=${(positions[lastIndex+1] + offsetY).toFixed(2)}`);
     }
-    
+
     for (let index = 0; index < positions.length; index += 3) {
-        const x = positions[index].toFixed(2);
-        const y = positions[index + 1].toFixed(2);
+        // Offset auf Koordinaten anwenden
+        const x = (positions[index] + offsetX).toFixed(2);
+        const y = (positions[index + 1] + offsetY).toFixed(2);
         // Z-Wert wird nicht im Bewegungsbefehl gesetzt, da dieser bereits durch setMaterialHeight gesetzt wurde
         const gcodeLine = `G1 X${x} Y${y} F${speed}\n`;
         gcode += gcodeLine;
@@ -408,6 +425,6 @@ function createGcodeFromLine(lineGeo: THREE.Line, moveUDown: string, customFeedr
             speed = customFeedrate; // Verwende benutzerdefinierte Feedrate
         }
     }
-    
+
     return gcode;
 }

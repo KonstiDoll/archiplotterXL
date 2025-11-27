@@ -10,6 +10,14 @@ export interface ColorGroup {
   visible: boolean;        // Sichtbarkeit in Vorschau
 }
 
+// Interface für Workpiece Starts (Platzierungspunkte)
+export interface WorkpieceStart {
+  id: string;              // Eindeutige ID
+  name: string;            // Anzeigename z.B. "Start 1", "Mitte"
+  x: number;               // X-Position in mm
+  y: number;               // Y-Position in mm
+}
+
 // Interface für SVG-Geometrien mit Werkzeug-Informationen
 export interface SVGItem {
   geometry: THREE.Group;
@@ -21,9 +29,13 @@ export interface SVGItem {
   drawingHeight: number;    // Z-Höhe für verschiedene Materialstärken (mm)
   infillOptions: InfillOptions;  // Infill-Optionen für dieses SVG
   infillGroup?: THREE.Group;    // Optional: Generierte Infill-Gruppe
-  // NEU: Farb-Analyse
+  // Farb-Analyse
   colorGroups: ColorGroup[];   // Erkannte Farben mit Tool-Zuordnung
   isAnalyzed: boolean;         // Wurde Farbanalyse durchgeführt?
+  // Platzierung / Offset
+  offsetX: number;             // X-Offset für Platzierung (mm)
+  offsetY: number;             // Y-Offset für Platzierung (mm)
+  workpieceStartId?: string;   // Optional: Referenz zum gewählten Workpiece Start
 }
 
 export const useMainStore = defineStore('main', {
@@ -31,7 +43,11 @@ export const useMainStore = defineStore('main', {
     // Statt einzelner Geometrie eine Liste von SVG-Items
     svgItems: [] as SVGItem[],
     // Für Kompatibilität behalten wir lineGeometry bei
-    lineGeometry: null as THREE.Group | null
+    lineGeometry: null as THREE.Group | null,
+    // Workpiece Starts (Platzierungspunkte)
+    workpieceStarts: [
+      { id: 'default_start_1', name: 'Start 1', x: 100, y: 100 }
+    ] as WorkpieceStart[]
   }),
   actions: {
     // Altes setLineGeometry für Kompatibilität
@@ -60,7 +76,9 @@ export const useMainStore = defineStore('main', {
         drawingHeight,
         infillOptions,
         colorGroups: [],    // Leer bis Analyse durchgeführt wird
-        isAnalyzed: false   // Noch nicht analysiert
+        isAnalyzed: false,  // Noch nicht analysiert
+        offsetX: 0,         // Kein Offset standardmäßig
+        offsetY: 0
       });
 
       // Update auch lineGeometry für Kompatibilität
@@ -200,6 +218,87 @@ export const useMainStore = defineStore('main', {
       if (index >= 0 && index < this.svgItems.length) {
         this.svgItems[index].colorGroups = [];
         this.svgItems[index].isAnalyzed = false;
+      }
+    },
+
+    // ===== Workpiece Start Actions =====
+
+    // Workpiece Start hinzufügen
+    addWorkpieceStart(name: string, x: number, y: number) {
+      const id = `ws_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      this.workpieceStarts.push({ id, name, x, y });
+      return id;
+    },
+
+    // Workpiece Start entfernen
+    removeWorkpieceStart(id: string) {
+      const index = this.workpieceStarts.findIndex(ws => ws.id === id);
+      if (index >= 0) {
+        this.workpieceStarts.splice(index, 1);
+        // SVGs die diesen Start verwenden zurücksetzen
+        this.svgItems.forEach(item => {
+          if (item.workpieceStartId === id) {
+            item.workpieceStartId = undefined;
+            item.offsetX = 0;
+            item.offsetY = 0;
+          }
+        });
+      }
+    },
+
+    // Workpiece Start aktualisieren
+    updateWorkpieceStart(id: string, x: number, y: number) {
+      const ws = this.workpieceStarts.find(ws => ws.id === id);
+      if (ws) {
+        ws.x = x;
+        ws.y = y;
+        // SVGs die diesen Start verwenden aktualisieren
+        this.svgItems.forEach(item => {
+          if (item.workpieceStartId === id) {
+            item.offsetX = x;
+            item.offsetY = y;
+          }
+        });
+      }
+    },
+
+    // Workpiece Start Namen ändern
+    updateWorkpieceStartName(id: string, name: string) {
+      const ws = this.workpieceStarts.find(ws => ws.id === id);
+      if (ws) {
+        ws.name = name;
+      }
+    },
+
+    // ===== SVG Offset Actions =====
+
+    // SVG Offset manuell setzen
+    updateSVGItemOffset(index: number, offsetX: number, offsetY: number) {
+      if (index >= 0 && index < this.svgItems.length) {
+        this.svgItems[index].offsetX = offsetX;
+        this.svgItems[index].offsetY = offsetY;
+        // Workpiece Start Referenz entfernen (manuelle Eingabe)
+        this.svgItems[index].workpieceStartId = undefined;
+      }
+    },
+
+    // SVG an einen Workpiece Start setzen
+    setSVGItemWorkpieceStart(index: number, workpieceStartId: string | undefined) {
+      if (index >= 0 && index < this.svgItems.length) {
+        const item = this.svgItems[index];
+        item.workpieceStartId = workpieceStartId;
+
+        if (workpieceStartId) {
+          const ws = this.workpieceStarts.find(ws => ws.id === workpieceStartId);
+          if (ws) {
+            item.offsetX = ws.x;
+            item.offsetY = ws.y;
+          }
+        } else {
+          // Kein Start ausgewählt -> Offset zurücksetzen
+          item.offsetX = 0;
+          item.offsetY = 0;
+        }
       }
     }
   }

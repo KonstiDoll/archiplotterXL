@@ -46,12 +46,16 @@
                         @remove-infill="removeInfill(index)"
                         @generate-preview="generatePreview(index)"
                         @analyze="store.analyzeColors(index)"
+                        @update-workpiece-start="(v) => store.setSVGItemWorkpieceStart(index, v)"
                     />
                 </div>
             </div>
 
             <!-- Color Assignment Panel -->
             <ColorAssignmentPanel v-if="store.svgItems.length > 0" />
+
+            <!-- Workpiece Starts Panel -->
+            <WorkpieceStartPanel />
 
             <!-- Tool Panel -->
             <ToolPanel
@@ -112,6 +116,7 @@ import { type ToolConfig } from '../utils/gcode_services';
 import ToolPanel from './ToolPanel.vue';
 import SVGItemPanel from './SVGItemPanel.vue';
 import ColorAssignmentPanel from './ColorAssignmentPanel.vue';
+import WorkpieceStartPanel from './WorkpieceStartPanel.vue';
 
 const props = defineProps<{
     activeToolIndex: number;

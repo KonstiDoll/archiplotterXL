@@ -40,9 +40,156 @@ const domElement = renderer.domElement;
 camera.position.set(0, 0, 5000);
 const controller = new OrbitControls(camera, domElement);
 controller.enableDamping = true;
+// Maustasten: Links = Bewegen, Rechts = Rotieren (besser für 2D-Platzierung)
+controller.mouseButtons = {
+    LEFT: THREE.MOUSE.PAN,
+    MIDDLE: THREE.MOUSE.DOLLY,
+    RIGHT: THREE.MOUSE.ROTATE
+};
 controller.update();
 // Kein Three.js Hintergrund - CSS übernimmt
 scene.background = null;
+
+// Zeichenfläche erstellen (1000x1000mm)
+const CANVAS_WIDTH = 1000;
+const CANVAS_HEIGHT = 1000;
+
+const createDrawingCanvas = () => {
+    const canvasGroup = new THREE.Group();
+    canvasGroup.name = 'drawingCanvas';
+
+    // Rahmen der Zeichenfläche (dünne weiße Linie)
+    const borderGeometry = new THREE.BufferGeometry();
+    const borderPoints = [
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(CANVAS_WIDTH, 0, 0),
+        new THREE.Vector3(CANVAS_WIDTH, CANVAS_HEIGHT, 0),
+        new THREE.Vector3(0, CANVAS_HEIGHT, 0),
+        new THREE.Vector3(0, 0, 0),
+    ];
+    borderGeometry.setFromPoints(borderPoints);
+    const borderMaterial = new THREE.LineBasicMaterial({
+        color: 0xffffff,
+        opacity: 0.6,
+        transparent: true
+    });
+    const border = new THREE.Line(borderGeometry, borderMaterial);
+    canvasGroup.add(border);
+
+    // Startpunkt-Marker (0,0) - kleines Kreuz
+    const markerSize = 20;
+    const markerGeometry = new THREE.BufferGeometry();
+    const markerPoints = [
+        // Horizontale Linie
+        new THREE.Vector3(-markerSize, 0, 0),
+        new THREE.Vector3(markerSize, 0, 0),
+        // Vertikale Linie (als separate Line)
+    ];
+    markerGeometry.setFromPoints(markerPoints);
+    const markerMaterial = new THREE.LineBasicMaterial({ color: 0xff6b6b });
+    const markerH = new THREE.Line(markerGeometry, markerMaterial);
+    canvasGroup.add(markerH);
+
+    const markerVGeometry = new THREE.BufferGeometry();
+    markerVGeometry.setFromPoints([
+        new THREE.Vector3(0, -markerSize, 0),
+        new THREE.Vector3(0, markerSize, 0),
+    ]);
+    const markerV = new THREE.Line(markerVGeometry, markerMaterial);
+    canvasGroup.add(markerV);
+
+    // Kleiner Kreis am Startpunkt
+    const circleGeometry = new THREE.BufferGeometry();
+    const circlePoints: THREE.Vector3[] = [];
+    const segments = 32;
+    const radius = 10;
+    for (let i = 0; i <= segments; i++) {
+        const theta = (i / segments) * Math.PI * 2;
+        circlePoints.push(new THREE.Vector3(
+            Math.cos(theta) * radius,
+            Math.sin(theta) * radius,
+            0
+        ));
+    }
+    circleGeometry.setFromPoints(circlePoints);
+    const circle = new THREE.Line(circleGeometry, markerMaterial);
+    canvasGroup.add(circle);
+
+    return canvasGroup;
+};
+
+// Zeichenfläche zur Szene hinzufügen
+const drawingCanvas = createDrawingCanvas();
+scene.add(drawingCanvas);
+
+// Workpiece Start Marker erstellen
+const createWorkpieceStartMarker = (x: number, y: number, name: string) => {
+    const markerGroup = new THREE.Group();
+    markerGroup.name = `workpieceStart_${name}`;
+
+    const markerSize = 15;
+    const markerColor = 0x00d4ff; // Cyan
+
+    // Kreuz
+    const hGeometry = new THREE.BufferGeometry();
+    hGeometry.setFromPoints([
+        new THREE.Vector3(-markerSize, 0, 0),
+        new THREE.Vector3(markerSize, 0, 0),
+    ]);
+    const markerMaterial = new THREE.LineBasicMaterial({ color: markerColor });
+    const markerH = new THREE.Line(hGeometry, markerMaterial);
+    markerGroup.add(markerH);
+
+    const vGeometry = new THREE.BufferGeometry();
+    vGeometry.setFromPoints([
+        new THREE.Vector3(0, -markerSize, 0),
+        new THREE.Vector3(0, markerSize, 0),
+    ]);
+    const markerV = new THREE.Line(vGeometry, markerMaterial);
+    markerGroup.add(markerV);
+
+    // Kreis
+    const circleGeometry = new THREE.BufferGeometry();
+    const circlePoints: THREE.Vector3[] = [];
+    const segments = 24;
+    const radius = 8;
+    for (let i = 0; i <= segments; i++) {
+        const theta = (i / segments) * Math.PI * 2;
+        circlePoints.push(new THREE.Vector3(
+            Math.cos(theta) * radius,
+            Math.sin(theta) * radius,
+            0
+        ));
+    }
+    circleGeometry.setFromPoints(circlePoints);
+    const circle = new THREE.Line(circleGeometry, markerMaterial);
+    markerGroup.add(circle);
+
+    markerGroup.position.set(x, y, 0);
+    return markerGroup;
+};
+
+// Gruppe für alle Workpiece Start Marker
+const workpieceStartMarkers = new THREE.Group();
+workpieceStartMarkers.name = 'workpieceStartMarkers';
+scene.add(workpieceStartMarkers);
+
+// Watch für Workpiece Starts
+watch(() => store.workpieceStarts, (newStarts) => {
+    // Alte Marker entfernen
+    while (workpieceStartMarkers.children.length > 0) {
+        const child = workpieceStartMarkers.children[0];
+        workpieceStartMarkers.remove(child);
+    }
+
+    // Neue Marker hinzufügen
+    newStarts.forEach(ws => {
+        const marker = createWorkpieceStartMarker(ws.x, ws.y, ws.name);
+        workpieceStartMarkers.add(marker);
+    });
+
+    console.log(`Workpiece Starts aktualisiert: ${newStarts.length} Marker`);
+}, { deep: true });
 
 // Collection of objects added to scene
 const addedObjects = ref<THREE.Group[]>([]);
@@ -61,29 +208,52 @@ watch(() => store.svgItems, (newItems) => {
     addedObjects.value.forEach(obj => {
         scene.remove(obj);
     });
-    
+
     addedObjects.value = [];
-    
+
     // Füge alle SVGs aus dem Store zur Szene hinzu
     newItems.forEach(item => {
         const obj = markRaw(item.geometry);
+        // Offset anwenden (SVG-Ursprung an Workpiece Start setzen)
+        obj.position.set(item.offsetX, item.offsetY, 0);
         scene.add(obj);
         addedObjects.value.push(obj);
     });
-    
+
     console.log(`Szene aktualisiert: ${addedObjects.value.length} SVGs`);
-    
+
     // Kamera zurücksetzen, um alle Objekte zu sehen
     resetCamera();
 }, { deep: true });
 
+// Funktion zum Zurücksetzen der Kamera auf die Zeichenfläche
+const resetCameraToCanvas = () => {
+    const centerX = CANVAS_WIDTH / 2;
+    const centerY = CANVAS_HEIGHT / 2;
+    const distance = Math.max(CANVAS_WIDTH, CANVAS_HEIGHT) * 1.5;
+
+    camera.position.set(centerX, centerY, distance);
+    camera.lookAt(new THREE.Vector3(centerX, centerY, 0));
+    camera.updateProjectionMatrix();
+
+    controller.target.set(centerX, centerY, 0);
+    controller.update();
+};
+
 // Funktion zum Zurücksetzen der Kamera, um alle Objekte zu sehen
 const resetCamera = () => {
-    if (addedObjects.value.length === 0) return;
-    
-    // Berechne Bounding Box aller Objekte
+    if (addedObjects.value.length === 0) {
+        resetCameraToCanvas();
+        return;
+    }
+
+    // Berechne Bounding Box aller Objekte + Zeichenfläche
     const box = new THREE.Box3();
-    
+
+    // Zeichenfläche immer einbeziehen
+    box.expandByPoint(new THREE.Vector3(0, 0, 0));
+    box.expandByPoint(new THREE.Vector3(CANVAS_WIDTH, CANVAS_HEIGHT, 0));
+
     addedObjects.value.forEach(obj => {
         obj.traverse(child => {
             if (child instanceof THREE.Line) {
@@ -91,23 +261,23 @@ const resetCamera = () => {
             }
         });
     });
-    
+
     // Kamera so positionieren, dass alle Objekte sichtbar sind
     const center = new THREE.Vector3();
     box.getCenter(center);
-    
+
     const size = new THREE.Vector3();
     box.getSize(size);
-    
+
     // Abstand berechnen
     const maxDim = Math.max(size.x, size.y);
-    const distance = maxDim * 2;
-    
+    const distance = maxDim * 1.5;
+
     // Kamera positionieren
     camera.position.set(center.x, center.y, distance);
     camera.lookAt(center);
     camera.updateProjectionMatrix();
-    
+
     // Controller zurücksetzen
     controller.target.set(center.x, center.y, 0);
     controller.update();
@@ -117,6 +287,8 @@ onMounted(() => {
     threejsMap.value?.appendChild(domElement);
     window.addEventListener("resize", setSize);
     setSize();
+    // Kamera initial auf die Zeichenfläche ausrichten
+    resetCameraToCanvas();
     animate();
 });
 

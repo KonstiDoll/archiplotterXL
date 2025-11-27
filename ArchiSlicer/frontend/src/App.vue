@@ -80,6 +80,11 @@ const generateGcode = () => {
     store.svgItems.forEach((item, index) => {
         combinedGcode += `\n; --- SVG #${index + 1}: ${item.fileName} ---\n`;
 
+        // Offset ausgeben wenn gesetzt
+        if (item.offsetX !== 0 || item.offsetY !== 0) {
+            combinedGcode += `; Platzierung: X=${item.offsetX}mm, Y=${item.offsetY}mm\n`;
+        }
+
         // Prüfen ob SVG analysiert wurde
         if (item.isAnalyzed && item.colorGroups.length > 0) {
             // Multi-Color G-Code generieren
@@ -95,7 +100,9 @@ const generateGcode = () => {
                 item.colorGroups,
                 toolConfigs.value,
                 item.feedrate,
-                globalDrawingHeight.value
+                globalDrawingHeight.value,
+                item.offsetX,
+                item.offsetY
             );
 
             combinedGcode += svgGcode;
@@ -116,7 +123,9 @@ const generateGcode = () => {
                 currentToolConfig,
                 item.feedrate,
                 item.infillToolNumber,
-                globalDrawingHeight.value
+                globalDrawingHeight.value,
+                item.offsetX,
+                item.offsetY
             );
 
             combinedGcode += svgGcode;
