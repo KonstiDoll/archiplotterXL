@@ -1,20 +1,19 @@
-//deprecated and not used for now
-//can handle connections between frontend and main.py
-export const uploadImage = async (files: File[]) => {
+// This is the backend service
 
-    const formData = new FormData();
-    formData.append('file', files[0]);
-    const projectId = newProject.value.projectData.project_id || '123';
+export async function uploadImage(image: File): Promise<string> {
+  const formData = new FormData();
+  formData.append("file", image);
 
-    const response = await HTTP.post(`/uploadfile/?project_id=${projectId}`, formData, {
-        headers: {
-            'Content-Type': 'multipart/form-data'
-        }
-    })
+  const response = await fetch("/process_image/", {
+    method: "POST",
+    body: formData,
+  });
 
-    //take the last part of the path
-    const filename = response.data.filename.split("/").pop();
-    customization.value.logo = filename
-    imagePath.value = projectId + "/" + filename;
-    console.log(response.data)
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  const imageUrl = URL.createObjectURL(blob);
+  return imageUrl;
 }
