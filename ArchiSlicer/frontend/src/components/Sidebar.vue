@@ -1,16 +1,16 @@
 <template>
-    <aside class="flex flex-col w-80 h-full bg-slate-200 overflow-hidden shrink-0">
+    <aside class="flex flex-col w-80 h-full bg-slate-900 overflow-hidden shrink-0">
         <!-- Scrollable Content -->
         <div class="flex-grow overflow-y-auto p-3 space-y-4">
 
             <!-- File Upload -->
-            <div class="relative flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-400 rounded-lg hover:border-slate-500 hover:bg-slate-100 transition-colors cursor-pointer"
+            <div class="relative flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-500 rounded-lg bg-slate-800 hover:border-slate-400 hover:bg-slate-700 transition-colors cursor-pointer"
                 @dragover.prevent="dragOver = true"
                 @dragleave="dragOver = false"
                 @drop.prevent="handleDrop"
-                :class="{ 'border-blue-500 bg-blue-50': dragOver }">
-                <div class="text-slate-600 font-medium">Datei hochladen</div>
-                <div class="text-xs text-slate-500 mt-1">oder hier ablegen</div>
+                :class="{ 'border-blue-500 bg-blue-900/50': dragOver }">
+                <div class="text-white font-medium">Datei hochladen</div>
+                <div class="text-xs text-slate-400 mt-1">oder hier ablegen</div>
                 <input type="file" accept=".svg" @change="handleFileSelect"
                     class="absolute inset-0 opacity-0 cursor-pointer" />
             </div>
@@ -18,11 +18,11 @@
             <!-- SVG Items List -->
             <div v-if="store.svgItems.length > 0" class="space-y-2">
                 <div class="flex items-center justify-between">
-                    <h3 class="font-semibold text-sm text-slate-700">
+                    <h3 class="font-semibold text-sm text-white">
                         Dateien ({{ store.svgItems.length }})
                     </h3>
                     <button @click="store.clearSVGItems()"
-                        class="text-xs text-red-600 hover:text-red-800">
+                        class="text-xs text-red-400 hover:text-red-300">
                         Alle löschen
                     </button>
                 </div>
@@ -46,6 +46,8 @@
                         @remove-infill="removeInfill(index)"
                         @generate-preview="generatePreview(index)"
                         @analyze="store.analyzeColors(index)"
+                        @analyze-paths="store.analyzePathRelationships(index)"
+                        @set-path-role="(pathId, role) => store.setPathRole(index, pathId, role)"
                         @update-workpiece-start="(v) => store.setSVGItemWorkpieceStart(index, v)"
                     />
                 </div>
@@ -111,7 +113,7 @@
 import { ref, markRaw } from 'vue';
 import * as THREE from 'three';
 import { useMainStore } from '../store';
-import { getThreejsObjectFromSvg, generateInfillForGroup, InfillPatternType, defaultInfillOptions } from '../utils/threejs_services';
+import { getThreejsObjectFromSvg, generateInfillForGroup, generateInfillWithHoles, InfillPatternType, defaultInfillOptions } from '../utils/threejs_services';
 import { type ToolConfig } from '../utils/gcode_services';
 import ToolPanel from './ToolPanel.vue';
 import SVGItemPanel from './SVGItemPanel.vue';
@@ -240,11 +242,17 @@ const generatePreview = (index: number) => {
         item.geometry.remove(item.infillGroup);
     }
 
-    // Generate new infill
-    const infillGroup = generateInfillForGroup(item.geometry, item.infillOptions);
+    // Generate new infill - use hole-aware version if path analysis is available
+    let infillGroup: THREE.Group;
+    if (item.isPathAnalyzed && item.pathAnalysis) {
+        infillGroup = generateInfillWithHoles(item.geometry, item.infillOptions, item.pathAnalysis);
+        console.log(`Infill mit Hole-Clipping generiert für SVG #${index}: ${item.fileName}`);
+    } else {
+        infillGroup = generateInfillForGroup(item.geometry, item.infillOptions);
+        console.log(`Infill-Vorschau generiert für SVG #${index}: ${item.fileName}`);
+    }
+
     store.setSVGItemInfillGroup(index, infillGroup);
     item.geometry.add(infillGroup);
-
-    console.log(`Infill-Vorschau generiert für SVG #${index}: ${item.fileName}`);
 };
 </script>

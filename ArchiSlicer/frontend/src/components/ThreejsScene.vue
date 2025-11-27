@@ -202,7 +202,10 @@ watch(() => store.lineGeometry, (newVal) => {
     }
 });
 
-// Watch for changes to the items array
+// Track previous item count to detect adds/removes
+let previousItemCount = 0;
+
+// Watch for changes to the items array - but DON'T reset camera on every change
 watch(() => store.svgItems, (newItems) => {
     // Entferne alle vorherigen Objekte
     addedObjects.value.forEach(obj => {
@@ -222,8 +225,19 @@ watch(() => store.svgItems, (newItems) => {
 
     console.log(`Szene aktualisiert: ${addedObjects.value.length} SVGs`);
 
-    // Kamera zurücksetzen, um alle Objekte zu sehen
-    resetCamera();
+    // NUR Kamera zurücksetzen wenn Items hinzugefügt oder entfernt wurden
+    // NICHT bei Infill-Änderungen, Farb-Analyse, etc.
+    const currentCount = newItems.length;
+    if (currentCount !== previousItemCount) {
+        // Neues Item wurde hinzugefügt - zoom auf das neue
+        if (currentCount > previousItemCount && currentCount > 0) {
+            const lastItem = newItems[currentCount - 1];
+            zoomToGeometry(lastItem.geometry);
+        } else if (currentCount === 0) {
+            resetCameraToCanvas();
+        }
+        previousItemCount = currentCount;
+    }
 }, { deep: true });
 
 // Funktion zum Zurücksetzen der Kamera auf die Zeichenfläche
@@ -240,38 +254,32 @@ const resetCameraToCanvas = () => {
     controller.update();
 };
 
-// Funktion zum Zurücksetzen der Kamera, um alle Objekte zu sehen
-const resetCamera = () => {
-    if (addedObjects.value.length === 0) {
+// Funktion zum Zoomen auf eine bestimmte Geometrie
+const zoomToGeometry = (geometry: THREE.Group) => {
+    const box = new THREE.Box3();
+
+    geometry.traverse(child => {
+        if (child instanceof THREE.Line) {
+            box.expandByObject(child);
+        }
+    });
+
+    // Fallback wenn Box leer ist
+    if (box.isEmpty()) {
         resetCameraToCanvas();
         return;
     }
 
-    // Berechne Bounding Box aller Objekte + Zeichenfläche
-    const box = new THREE.Box3();
-
-    // Zeichenfläche immer einbeziehen
-    box.expandByPoint(new THREE.Vector3(0, 0, 0));
-    box.expandByPoint(new THREE.Vector3(CANVAS_WIDTH, CANVAS_HEIGHT, 0));
-
-    addedObjects.value.forEach(obj => {
-        obj.traverse(child => {
-            if (child instanceof THREE.Line) {
-                box.expandByObject(child);
-            }
-        });
-    });
-
-    // Kamera so positionieren, dass alle Objekte sichtbar sind
+    // Kamera so positionieren, dass die Geometrie sichtbar ist
     const center = new THREE.Vector3();
     box.getCenter(center);
 
     const size = new THREE.Vector3();
     box.getSize(size);
 
-    // Abstand berechnen
+    // Abstand berechnen (mit etwas Padding)
     const maxDim = Math.max(size.x, size.y);
-    const distance = maxDim * 1.5;
+    const distance = maxDim * 1.8; // Etwas mehr Abstand für bessere Übersicht
 
     // Kamera positionieren
     camera.position.set(center.x, center.y, distance);
@@ -281,6 +289,8 @@ const resetCamera = () => {
     // Controller zurücksetzen
     controller.target.set(center.x, center.y, 0);
     controller.update();
+
+    console.log(`Kamera auf Geometrie gezoomt: Center(${center.x.toFixed(1)}, ${center.y.toFixed(1)}), Distanz: ${distance.toFixed(1)}`);
 };
 
 onMounted(() => {

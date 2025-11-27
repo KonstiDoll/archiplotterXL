@@ -1,23 +1,23 @@
 <template>
-    <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+    <div class="bg-slate-800 rounded-lg overflow-hidden">
         <!-- Header -->
-        <div class="flex items-center justify-between p-3 bg-slate-100 border-b">
-            <span class="font-medium text-sm truncate max-w-[140px]" :title="item.fileName">
+        <div class="flex items-center justify-between p-3 bg-slate-700">
+            <span class="text-white font-medium text-sm truncate max-w-[140px]" :title="item.fileName">
                 {{ item.fileName }}
             </span>
             <div class="flex items-center space-x-1">
                 <button @click="$emit('move-up')"
-                    class="p-1 rounded hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                    class="p-1 rounded text-slate-300 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
                     :disabled="isFirst">
                     <span class="text-sm">↑</span>
                 </button>
                 <button @click="$emit('move-down')"
-                    class="p-1 rounded hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                    class="p-1 rounded text-slate-300 hover:bg-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
                     :disabled="isLast">
                     <span class="text-sm">↓</span>
                 </button>
                 <button @click="$emit('remove')"
-                    class="p-1 rounded hover:bg-red-100 text-red-500 hover:text-red-700">
+                    class="p-1 rounded text-red-400 hover:bg-slate-600 hover:text-red-300">
                     <span class="text-lg leading-none">&times;</span>
                 </button>
             </div>
@@ -27,10 +27,10 @@
         <div class="p-3 space-y-3">
             <!-- Workpiece Start Auswahl -->
             <div v-if="store.workpieceStarts.length > 0" class="flex items-center">
-                <label class="text-xs text-slate-500 mr-2">Position:</label>
+                <label class="text-xs text-slate-400 mr-2">Position:</label>
                 <select :value="item.workpieceStartId || ''"
                     @change="$emit('update-workpiece-start', ($event.target as HTMLSelectElement).value || undefined)"
-                    class="flex-grow p-1 border rounded text-sm">
+                    class="flex-grow p-1 text-sm border border-slate-600 rounded bg-slate-700 text-white">
                     <option value="">Ursprung (0, 0)</option>
                     <option v-for="ws in store.workpieceStarts" :key="ws.id" :value="ws.id">
                         {{ ws.name }} ({{ ws.x }}, {{ ws.y }})
@@ -41,18 +41,18 @@
             <!-- Tool & Feedrate Row (nur wenn NICHT analysiert) -->
             <div v-if="!item.isAnalyzed" class="flex items-center space-x-3">
                 <div class="flex items-center">
-                    <label class="text-xs text-slate-500 mr-1">Tool:</label>
+                    <label class="text-xs text-slate-400 mr-1">Tool:</label>
                     <select :value="item.toolNumber"
                         @change="$emit('update-tool', Number(($event.target as HTMLSelectElement).value))"
-                        class="p-1 w-14 border rounded text-sm">
+                        class="p-1 w-14 text-sm border border-slate-600 rounded bg-slate-700 text-white">
                         <option v-for="i in 9" :key="i" :value="i">{{ i }}</option>
                     </select>
                 </div>
                 <div class="flex items-center flex-grow">
-                    <label class="text-xs text-slate-500 mr-1">Speed:</label>
+                    <label class="text-xs text-slate-400 mr-1">Speed:</label>
                     <input type="number" :value="item.feedrate"
                         @change="$emit('update-feedrate', Number(($event.target as HTMLInputElement).value))"
-                        class="p-1 w-20 border rounded text-sm" min="100" max="30000" step="100" />
+                        class="p-1 w-20 text-sm border border-slate-600 rounded bg-slate-700 text-white" min="100" max="30000" step="100" />
                     <span class="text-xs text-slate-400 ml-1">mm/min</span>
                 </div>
             </div>
@@ -61,9 +61,9 @@
             <div class="flex items-center justify-between">
                 <!-- Mini-Farbübersicht wenn analysiert -->
                 <div v-if="item.isAnalyzed" class="flex items-center space-x-1">
-                    <span class="text-xs text-slate-500 mr-1">Farben:</span>
+                    <span class="text-xs text-slate-400 mr-1">Farben:</span>
                     <div v-for="(colorGroup, idx) in item.colorGroups.slice(0, 5)" :key="idx"
-                        class="w-4 h-4 rounded border border-slate-300"
+                        class="w-4 h-4 rounded border border-slate-500"
                         :style="{ backgroundColor: colorGroup.color }"
                         :title="`${colorGroup.color} (Tool ${colorGroup.toolNumber})`">
                     </div>
@@ -72,35 +72,92 @@
                     </span>
                 </div>
                 <div v-else class="text-xs text-slate-400">
-                    Nicht analysiert
+                    Farben nicht analysiert
                 </div>
 
                 <!-- Analyse Button -->
                 <button v-if="!item.isAnalyzed"
                     @click="$emit('analyze')"
-                    class="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
+                    class="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">
                     Analysieren
                 </button>
-                <span v-else class="text-xs text-green-600">
+                <span v-else class="text-xs text-green-400">
                     ✓ {{ item.colorGroups.length }} Farben
                 </span>
             </div>
 
             <!-- Feedrate (auch wenn analysiert) -->
             <div v-if="item.isAnalyzed" class="flex items-center">
-                <label class="text-xs text-slate-500 mr-1">Speed:</label>
+                <label class="text-xs text-slate-400 mr-1">Speed:</label>
                 <input type="number" :value="item.feedrate"
                     @change="$emit('update-feedrate', Number(($event.target as HTMLInputElement).value))"
-                    class="p-1 w-20 border rounded text-sm" min="100" max="30000" step="100" />
+                    class="p-1 w-20 text-sm border border-slate-600 rounded bg-slate-700 text-white" min="100" max="30000" step="100" />
                 <span class="text-xs text-slate-400 ml-1">mm/min</span>
+            </div>
+
+            <!-- Path-Analyse (Hole Detection) -->
+            <div class="flex items-center justify-between">
+                <div v-if="item.isPathAnalyzed" class="flex items-center space-x-2">
+                    <span class="text-xs text-slate-400">Pfade:</span>
+                    <span class="text-xs px-1.5 py-0.5 rounded bg-green-600/30 text-green-300">
+                        {{ item.pathAnalysis?.outerPaths.length || 0 }} Outer
+                    </span>
+                    <span v-if="(item.pathAnalysis?.holes.length || 0) > 0"
+                        class="text-xs px-1.5 py-0.5 rounded bg-yellow-600/30 text-yellow-300">
+                        {{ item.pathAnalysis?.holes.length }} Holes
+                    </span>
+                    <span v-if="(item.pathAnalysis?.nestedObjects.length || 0) > 0"
+                        class="text-xs px-1.5 py-0.5 rounded bg-blue-600/30 text-blue-300">
+                        {{ item.pathAnalysis?.nestedObjects.length }} Nested
+                    </span>
+                </div>
+                <div v-else class="text-xs text-slate-400">
+                    Pfade nicht analysiert
+                </div>
+
+                <button v-if="!item.isPathAnalyzed"
+                    @click="$emit('analyze-paths')"
+                    class="px-2 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700">
+                    Pfade analysieren
+                </button>
+                <button v-else
+                    @click="pathDetailsExpanded = !pathDetailsExpanded"
+                    class="px-2 py-1 text-xs bg-slate-600 text-white rounded hover:bg-slate-500">
+                    {{ pathDetailsExpanded ? 'Ausblenden' : 'Details' }}
+                </button>
+            </div>
+
+            <!-- Path Details (Expandable) -->
+            <div v-if="item.isPathAnalyzed && pathDetailsExpanded" class="p-2 bg-slate-700/50 rounded border border-slate-600 space-y-1 max-h-32 overflow-y-auto">
+                <div v-for="path in item.pathAnalysis?.paths" :key="path.id"
+                    class="flex items-center justify-between text-xs">
+                    <div class="flex items-center space-x-1">
+                        <span class="text-slate-400">#{{ path.id.slice(-4) }}</span>
+                        <span :class="{
+                            'text-green-400': getPathRole(path) === 'outer',
+                            'text-yellow-400': getPathRole(path) === 'hole',
+                            'text-blue-400': getPathRole(path) === 'nested-object'
+                        }">
+                            {{ getPathRole(path) }}
+                        </span>
+                        <span v-if="path.userOverriddenRole" class="text-orange-400">(überschrieben)</span>
+                    </div>
+                    <select :value="path.userOverriddenRole || path.autoDetectedRole"
+                        @change="handlePathRoleChange(path, ($event.target as HTMLSelectElement).value)"
+                        class="p-0.5 text-xs border border-slate-500 rounded bg-slate-600 text-white">
+                        <option value="outer">Outer</option>
+                        <option value="hole">Hole</option>
+                        <option value="nested-object">Nested</option>
+                    </select>
+                </div>
             </div>
 
             <!-- Infill Toggle Button -->
             <button @click="expanded = !expanded"
                 class="w-full flex items-center justify-between p-2 rounded text-sm transition-colors"
                 :class="item.infillOptions.patternType !== 'none'
-                    ? 'bg-blue-100 text-blue-800 hover:bg-blue-200'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'">
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'">
                 <span>
                     {{ item.infillOptions.patternType !== 'none'
                         ? `Infill: ${item.infillOptions.patternType}`
@@ -111,63 +168,63 @@
         </div>
 
         <!-- Infill Options (Expandable) -->
-        <div v-if="expanded" class="p-3 bg-slate-50 border-t space-y-3">
+        <div v-if="expanded" class="p-3 bg-slate-700/50 border-t border-slate-600 space-y-3">
             <!-- Pattern Type -->
             <div class="flex items-center">
-                <label class="w-20 text-xs text-slate-500">Pattern:</label>
+                <label class="w-20 text-xs text-slate-400">Pattern:</label>
                 <select :value="item.infillOptions.patternType"
                     @change="$emit('update-pattern', ($event.target as HTMLSelectElement).value)"
-                    class="flex-grow p-1 border rounded text-sm">
+                    class="flex-grow p-1 text-sm border border-slate-600 rounded bg-slate-600 text-white">
                     <option v-for="pt in patternTypes" :key="pt" :value="pt">{{ pt }}</option>
                 </select>
             </div>
 
             <!-- Infill Tool -->
             <div class="flex items-center">
-                <label class="w-20 text-xs text-slate-500">Infill Tool:</label>
+                <label class="w-20 text-xs text-slate-400">Infill Tool:</label>
                 <select :value="item.infillToolNumber"
                     @change="$emit('update-infill-tool', Number(($event.target as HTMLSelectElement).value))"
-                    class="flex-grow p-1 border rounded text-sm">
+                    class="flex-grow p-1 text-sm border border-slate-600 rounded bg-slate-600 text-white">
                     <option v-for="i in 9" :key="i" :value="i">{{ i }}</option>
                 </select>
             </div>
 
             <!-- Density -->
             <div class="flex items-center">
-                <label class="w-20 text-xs text-slate-500">Dichte:</label>
+                <label class="w-20 text-xs text-slate-400">Dichte:</label>
                 <input type="range" :value="item.infillOptions.density"
                     @input="$emit('update-density', Number(($event.target as HTMLInputElement).value))"
                     :min="densityRange.min" :max="densityRange.max" :step="densityRange.step"
                     class="flex-grow" />
-                <span class="w-12 text-right text-xs text-slate-500">{{ item.infillOptions.density.toFixed(1) }}mm</span>
+                <span class="w-12 text-right text-xs text-slate-400">{{ item.infillOptions.density.toFixed(1) }}mm</span>
             </div>
 
             <!-- Angle -->
             <div class="flex items-center">
-                <label class="w-20 text-xs text-slate-500">Winkel:</label>
+                <label class="w-20 text-xs text-slate-400">Winkel:</label>
                 <input type="range" :value="item.infillOptions.angle"
                     @input="$emit('update-angle', Number(($event.target as HTMLInputElement).value))"
                     min="0" max="180" step="5" class="flex-grow" />
-                <span class="w-12 text-right text-xs text-slate-500">{{ item.infillOptions.angle }}°</span>
+                <span class="w-12 text-right text-xs text-slate-400">{{ item.infillOptions.angle }}°</span>
             </div>
 
             <!-- Outline Offset -->
             <div class="flex items-center">
-                <label class="w-20 text-xs text-slate-500">Rand:</label>
+                <label class="w-20 text-xs text-slate-400">Rand:</label>
                 <input type="range" :value="item.infillOptions.outlineOffset"
                     @input="$emit('update-offset', Number(($event.target as HTMLInputElement).value))"
                     min="0" max="5" step="0.1" class="flex-grow" />
-                <span class="w-12 text-right text-xs text-slate-500">{{ item.infillOptions.outlineOffset.toFixed(1) }}mm</span>
+                <span class="w-12 text-right text-xs text-slate-400">{{ item.infillOptions.outlineOffset.toFixed(1) }}mm</span>
             </div>
 
             <!-- Action Buttons -->
             <div class="flex justify-end space-x-2 pt-2">
                 <button @click="$emit('remove-infill')"
-                    class="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200">
+                    class="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700">
                     Infill löschen
                 </button>
                 <button @click="$emit('generate-preview')"
-                    class="px-3 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200">
+                    class="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700">
                     Vorschau
                 </button>
             </div>
@@ -179,6 +236,8 @@
 import { ref, computed } from 'vue';
 import { InfillPatternType, patternDensityRanges } from '../utils/threejs_services';
 import { useMainStore, type ColorGroup } from '../store';
+import type { PathAnalysisResult, PathInfo, PathRole } from '../utils/geometry/path-analysis';
+import { getEffectiveRole } from '../utils/geometry/path-analysis';
 
 const store = useMainStore();
 
@@ -197,6 +256,9 @@ const props = defineProps<{
         // Farb-Analyse
         colorGroups: ColorGroup[];
         isAnalyzed: boolean;
+        // Path-Analyse (Hole Detection)
+        pathAnalysis?: PathAnalysisResult;
+        isPathAnalyzed: boolean;
         // Platzierung
         offsetX: number;
         offsetY: number;
@@ -206,7 +268,22 @@ const props = defineProps<{
     isLast: boolean;
 }>();
 
-defineEmits<{
+const expanded = ref(false);
+const pathDetailsExpanded = ref(false);
+const patternTypes = Object.values(InfillPatternType);
+
+const densityRange = computed(() => {
+    const pt = props.item.infillOptions.patternType as InfillPatternType;
+    return patternDensityRanges[pt] || patternDensityRanges[InfillPatternType.LINES];
+});
+
+// Helper function to get path role
+function getPathRole(path: PathInfo): PathRole {
+    return getEffectiveRole(path);
+}
+
+// Emit helper for path role change
+const emit = defineEmits<{
     (e: 'move-up'): void;
     (e: 'move-down'): void;
     (e: 'remove'): void;
@@ -220,14 +297,14 @@ defineEmits<{
     (e: 'remove-infill'): void;
     (e: 'generate-preview'): void;
     (e: 'analyze'): void;
+    (e: 'analyze-paths'): void;
+    (e: 'set-path-role', pathId: string, role: PathRole | null): void;
     (e: 'update-workpiece-start', value: string | undefined): void;
 }>();
 
-const expanded = ref(false);
-const patternTypes = Object.values(InfillPatternType);
-
-const densityRange = computed(() => {
-    const pt = props.item.infillOptions.patternType as InfillPatternType;
-    return patternDensityRanges[pt] || patternDensityRanges[InfillPatternType.LINES];
-});
+function handlePathRoleChange(path: PathInfo, value: string) {
+    const role = value as PathRole;
+    // If the selected value equals the auto-detected role, reset to null (auto)
+    emit('set-path-role', path.id, role === path.autoDetectedRole ? null : role);
+}
 </script>

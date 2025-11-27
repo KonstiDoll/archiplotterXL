@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import * as THREE from 'three';
 import { InfillOptions, defaultInfillOptions, analyzeColorsInGroup } from './utils/threejs_services';
+import { PathAnalysisResult, PathRole, analyzePathRelationships, extractPolygonsFromGroup, getEffectiveRole } from './utils/geometry/path-analysis';
 
 // Interface für Farbgruppen (erkannte Farben mit Tool-Zuordnung)
 export interface ColorGroup {
@@ -32,6 +33,9 @@ export interface SVGItem {
   // Farb-Analyse
   colorGroups: ColorGroup[];   // Erkannte Farben mit Tool-Zuordnung
   isAnalyzed: boolean;         // Wurde Farbanalyse durchgeführt?
+  // Path-Analyse (Hole Detection)
+  pathAnalysis?: PathAnalysisResult;  // Ergebnis der Path-Analyse
+  isPathAnalyzed: boolean;            // Wurde Path-Analyse durchgeführt?
   // Platzierung / Offset
   offsetX: number;             // X-Offset für Platzierung (mm)
   offsetY: number;             // Y-Offset für Platzierung (mm)
@@ -77,6 +81,7 @@ export const useMainStore = defineStore('main', {
         infillOptions,
         colorGroups: [],    // Leer bis Analyse durchgeführt wird
         isAnalyzed: false,  // Noch nicht analysiert
+        isPathAnalyzed: false,  // Path-Analyse noch nicht durchgeführt
         offsetX: 0,         // Kein Offset standardmäßig
         offsetY: 0
       });
@@ -299,6 +304,60 @@ export const useMainStore = defineStore('main', {
           item.offsetX = 0;
           item.offsetY = 0;
         }
+      }
+    },
+
+    // ===== Path-Analyse (Hole Detection) Actions =====
+
+    // Path-Analyse für ein SVG-Item durchführen
+    analyzePathRelationships(index: number) {
+      if (index >= 0 && index < this.svgItems.length) {
+        const item = this.svgItems[index];
+        const polygons = extractPolygonsFromGroup(item.geometry);
+
+        if (polygons.length > 0) {
+          item.pathAnalysis = analyzePathRelationships(polygons);
+          item.isPathAnalyzed = true;
+          console.log(`Path-Analyse für "${item.fileName}":`,
+            `${item.pathAnalysis.outerPaths.length} outer,`,
+            `${item.pathAnalysis.holes.length} holes,`,
+            `${item.pathAnalysis.nestedObjects.length} nested objects`
+          );
+        } else {
+          console.warn(`Keine Polygone in "${item.fileName}" gefunden`);
+        }
+      }
+    },
+
+    // Path-Rolle manuell überschreiben
+    setPathRole(svgIndex: number, pathId: string, role: PathRole | null) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (item.pathAnalysis) {
+          const path = item.pathAnalysis.paths.find(p => p.id === pathId);
+          if (path) {
+            path.userOverriddenRole = role;
+
+            // Listen neu berechnen
+            item.pathAnalysis.outerPaths = item.pathAnalysis.paths.filter(
+              p => getEffectiveRole(p) === 'outer'
+            );
+            item.pathAnalysis.holes = item.pathAnalysis.paths.filter(
+              p => getEffectiveRole(p) === 'hole'
+            );
+            item.pathAnalysis.nestedObjects = item.pathAnalysis.paths.filter(
+              p => getEffectiveRole(p) === 'nested-object'
+            );
+          }
+        }
+      }
+    },
+
+    // Path-Analyse zurücksetzen
+    resetPathAnalysis(index: number) {
+      if (index >= 0 && index < this.svgItems.length) {
+        this.svgItems[index].pathAnalysis = undefined;
+        this.svgItems[index].isPathAnalyzed = false;
       }
     }
   }
