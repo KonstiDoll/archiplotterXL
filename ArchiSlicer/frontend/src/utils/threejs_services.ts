@@ -393,14 +393,26 @@ export function generateInfillForGroup(group: THREE.Group, options: InfillOption
         console.log(`Generiere Infill für Pfad ${index}`);
         
         // Extraktion der Pfadpunkte
-        const points = extractPathPoints(path);
+        let points = extractPathPoints(path);
         console.log(`Extrahierte Punkte: ${points.length}`);
-        
+
         if (points.length < 3) {
             console.warn(`Zu wenig Punkte für Pfad ${index}: ${points.length}`);
             return; // Skip this path
         }
-        
+
+        // Outline Offset anwenden (Polygon nach innen versetzen)
+        if (options.outlineOffset > 0) {
+            const offsetResult = offsetPolygon(points, -options.outlineOffset, 'miter');
+            if (offsetResult.length > 0 && offsetResult[0].length >= 3) {
+                points = offsetResult[0];
+                console.log(`Outline Offset ${options.outlineOffset}mm angewandt, neue Punktzahl: ${points.length}`);
+            } else {
+                console.warn(`Outline Offset zu groß - Polygon kollabiert`);
+                return; // Skip this path
+            }
+        }
+
         // Berechne Bounding Box
         const bounds = calculateBounds(points);
         console.log(`Bounding Box: X(${bounds.minX.toFixed(2)}, ${bounds.maxX.toFixed(2)}), Y(${bounds.minY.toFixed(2)}, ${bounds.maxY.toFixed(2)})`);
@@ -488,13 +500,25 @@ export function generateInfillWithHoles(
     console.log(`Generiere Infill für ${polygonsWithHoles.length} Polygone mit Hole-Detection`);
 
     polygonsWithHoles.forEach((item, index) => {
-        const { outer, holes } = item;
+        let { outer, holes } = item;
 
         console.log(`Polygon ${index}: ${outer.length} Punkte, ${holes.length} Holes`);
 
         if (outer.length < 3) {
             console.warn(`Zu wenig Punkte für Polygon ${index}`);
             return;
+        }
+
+        // Outline Offset anwenden (Polygon nach innen versetzen)
+        if (options.outlineOffset > 0) {
+            const offsetResult = offsetPolygon(outer, -options.outlineOffset, 'miter');
+            if (offsetResult.length > 0 && offsetResult[0].length >= 3) {
+                outer = offsetResult[0];
+                console.log(`Outline Offset ${options.outlineOffset}mm angewandt, neue Punktzahl: ${outer.length}`);
+            } else {
+                console.warn(`Outline Offset zu groß - Polygon kollabiert`);
+                return;
+            }
         }
 
         const bounds = calculateBounds(outer);
@@ -894,9 +918,9 @@ function lineLineIntersection(
 }
 
 /**
- * Generiere ein Zickzack-Muster
- * - 3-Phasen-Algorithmus: Sammeln → Sortieren/Umkehren → Zeichnen
- * - Korrekte Verbindungslogik für durchgehenden Pfad
+ * Generiere ein echtes V-Muster (Zigzag)
+ * - Ein durchgehender Pfad der V-förmig hin und her geht
+ * - Direkte Verbindung zwischen Scanlines (kein Verfahren entlang der Kante)
  */
 function generateZigzagInfill(
     polygon: THREE.Vector2[],
@@ -905,33 +929,25 @@ function generateZigzagInfill(
 ): THREE.Line[] {
     const infillLines: THREE.Line[] = [];
 
-    // Berechne den Winkel in Radian
+    // Berechne Richtungs- und Normalenvektor basierend auf Winkel
     const angleRad = options.angle * Math.PI / 180;
-
-    // Berechne den Richtungsvektor
     const dir = new THREE.Vector2(Math.cos(angleRad), Math.sin(angleRad));
-
-    // Berechne den Normalenvektor (senkrecht zum Richtungsvektor)
     const normal = new THREE.Vector2(-dir.y, dir.x);
 
-    // Berechne die Breite und Höhe des Bereichs
+    // Berechne Dimensionen
     const width = bounds.maxX - bounds.minX;
     const height = bounds.maxY - bounds.minY;
-
-    // Berechne die diagonale Länge für die maximale Linienlänge
     const diagonal = Math.sqrt(width * width + height * height);
 
-    // Berechne die Anzahl der Linien basierend auf der Dichte
     const center = new THREE.Vector2(
         (bounds.minX + bounds.maxX) / 2,
         (bounds.minY + bounds.maxY) / 2
     );
 
-    // Berechne den Projektionsbereich für die Linien
+    // Berechne Projektionsbereich
     let projMin = Infinity;
     let projMax = -Infinity;
 
-    // Projiziere alle Punkte auf die Normale
     polygon.forEach(p => {
         const relX = p.x - center.x;
         const relY = p.y - center.y;
@@ -940,22 +956,16 @@ function generateZigzagInfill(
         projMax = Math.max(projMax, proj);
     });
 
-    // Berechne die Anzahl der Linien
     const projLength = projMax - projMin;
     const numLines = Math.ceil(projLength / options.density);
 
-    // Sicherheitsprüfung
     if (numLines <= 0 || numLines > 1000) {
         console.warn(`Ungültige Anzahl von Linien: ${numLines}`);
         return infillLines;
     }
 
-    console.log(`Erzeuge ${numLines} Zickzack-Linien mit Winkel ${options.angle}° und Abstand ${options.density}`);
-
-    // ========================================================================
-    // PHASE 1: Alle Segments sammeln (ohne zu zeichnen!)
-    // ========================================================================
-    type LineSegment = { start: THREE.Vector2, end: THREE.Vector2 };
+    // Sammle alle Scanline-Segmente
+    type LineSegment = { start: THREE.Vector2, end: THREE.Vector2, projValue: number };
     const segments: LineSegment[] = [];
 
     for (let i = 0; i <= numLines; i++) {
@@ -980,6 +990,7 @@ function generateZigzagInfill(
         const intersections = findPolygonIntersections(polygon, lineStart, lineEnd);
 
         if (intersections.length >= 2) {
+            // Sortiere Intersections entlang der Linie
             intersections.sort((a, b) => {
                 const dax = a.x - lineStart.x;
                 const day = a.y - lineStart.y;
@@ -988,11 +999,13 @@ function generateZigzagInfill(
                 return (dax * dir.x + day * dir.y) - (dbx * dir.x + dby * dir.y);
             });
 
+            // Für jedes Paar von Intersections ein Segment erstellen
             for (let j = 0; j < intersections.length; j += 2) {
                 if (j + 1 < intersections.length) {
                     segments.push({
                         start: intersections[j].clone(),
-                        end: intersections[j + 1].clone()
+                        end: intersections[j + 1].clone(),
+                        projValue: offset
                     });
                 }
             }
@@ -1000,94 +1013,46 @@ function generateZigzagInfill(
     }
 
     if (segments.length === 0) {
-        console.warn("Keine gültigen Liniensegmente für Zickzack-Muster gefunden");
+        console.warn("Keine gültigen Liniensegmente für Zigzag gefunden");
         return infillLines;
     }
 
-    // ========================================================================
-    // PHASE 2: Sortieren und alternierend umkehren (VOR dem Zeichnen!)
-    // ========================================================================
+    // Sortiere Segmente nach Projektion
+    segments.sort((a, b) => a.projValue - b.projValue);
 
-    // Sortiere nach Projektion auf die Normale
-    segments.sort((a, b) => {
-        const aMid = new THREE.Vector2(
-            (a.start.x + a.end.x) / 2 - center.x,
-            (a.start.y + a.end.y) / 2 - center.y
-        );
-        const bMid = new THREE.Vector2(
-            (b.start.x + b.end.x) / 2 - center.x,
-            (b.start.y + b.end.y) / 2 - center.y
-        );
-        const aProj = aMid.x * normal.x + aMid.y * normal.y;
-        const bProj = bMid.x * normal.x + bMid.y * normal.y;
-        return aProj - bProj;
-    });
+    // Baue EINEN durchgehenden Pfad als V-Muster
+    const pathPoints: THREE.Vector3[] = [];
 
-    // Kehre jedes zweite Segment um für korrektes Zickzack
     for (let i = 0; i < segments.length; i++) {
-        if (i % 2 === 1) {
-            const temp = segments[i].start;
-            segments[i].start = segments[i].end;
-            segments[i].end = temp;
+        const seg = segments[i];
+
+        if (i % 2 === 0) {
+            // Gerade Linien: start → end
+            pathPoints.push(new THREE.Vector3(seg.start.x, seg.start.y, 0));
+            pathPoints.push(new THREE.Vector3(seg.end.x, seg.end.y, 0));
+        } else {
+            // Ungerade Linien: end → start (Richtung umkehren für V-Muster)
+            pathPoints.push(new THREE.Vector3(seg.end.x, seg.end.y, 0));
+            pathPoints.push(new THREE.Vector3(seg.start.x, seg.start.y, 0));
         }
     }
 
-    // ========================================================================
-    // PHASE 3: Zeichnen und verbinden
-    // ========================================================================
-    const material = new THREE.LineBasicMaterial({ color: 0x00ff00 });
-
-    for (let i = 0; i < segments.length; i++) {
-        // Zeichne das Segment
-        const geometry = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(segments[i].start.x, segments[i].start.y, 0),
-            new THREE.Vector3(segments[i].end.x, segments[i].end.y, 0)
-        ]);
-        infillLines.push(new THREE.Line(geometry, material.clone()));
-
-        // Verbinde mit dem nächsten Segment
-        if (i < segments.length - 1) {
-            const connectStart = segments[i].end;
-            const connectEnd = segments[i + 1].start;
-
-            // Prüfe ob die Verbindung im Polygon liegt
-            if (isLineInsidePolygon(connectStart, connectEnd, polygon)) {
-                const connGeometry = new THREE.BufferGeometry().setFromPoints([
-                    new THREE.Vector3(connectStart.x, connectStart.y, 0),
-                    new THREE.Vector3(connectEnd.x, connectEnd.y, 0)
-                ]);
-                infillLines.push(new THREE.Line(connGeometry, material.clone()));
-            }
-        }
+    // Erstelle eine einzelne Linie aus allen Punkten
+    if (pathPoints.length >= 2) {
+        const material = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+        const geometry = new THREE.BufferGeometry().setFromPoints(pathPoints);
+        infillLines.push(new THREE.Line(geometry, material));
     }
 
-    console.log(`${infillLines.length} Zickzack-Linien und Verbindungen generiert`);
+    console.log(`Zigzag V-Muster: ${segments.length} Segmente, ${pathPoints.length} Punkte`);
     return infillLines;
-}
-
-// Hilfsfunktion: Prüft, ob eine Linie innerhalb eines Polygons liegt
-function isLineInsidePolygon(start: THREE.Vector2, end: THREE.Vector2, polygon: THREE.Vector2[]): boolean {
-    // Eine einfache Methode ist, die Mittelpunkte mehrerer Punkte entlang der Linie zu prüfen
-    const numPoints = 10; // Anzahl der zu prüfenden Punkte
-    
-    for (let i = 0; i <= numPoints; i++) {
-        const t = i / numPoints;
-        const x = start.x + t * (end.x - start.x);
-        const y = start.y + t * (end.y - start.y);
-        
-        if (!isPointInPolygon(new THREE.Vector2(x, y), polygon)) {
-            return false;
-        }
-    }
-    
-    return true;
 }
 
 /**
  * Generiere ein Honigwaben-Muster (Hexagons)
- * - Korrekter Stagger-Offset (0.5 statt 0.375)
+ * - Korrekte Tessellation ohne Überlappung
+ * - Zeichnet nur einzigartige Kanten (keine Duplikate)
  * - Unterstützt Angle-Parameter durch Rotation
- * - Echtes Line-Clipping am Polygon-Rand
  */
 function generateHoneycombInfill(
     polygon: THREE.Vector2[],
@@ -1096,21 +1061,27 @@ function generateHoneycombInfill(
 ): THREE.Line[] {
     const infillLines: THREE.Line[] = [];
 
-    // Berechne die Seitenlänge des Hexagons basierend auf der Dichte
-    // Direkte Zuordnung: density = Abstand zwischen Hexagon-Zentren
+    // Hexagon-Geometrie (flat-top orientation)
+    // hexSize = Radius (Abstand von Mitte zu Ecke)
     const hexSize = options.density;
 
-    // Die Höhe eines Hexagons ist sqrt(3) * Seitenlänge
+    // Flat-top Hexagon:
+    // - Breite (horizontal, Ecke zu Ecke) = 2 * hexSize
+    // - Höhe (vertikal, Seite zu Seite) = sqrt(3) * hexSize
     const hexHeight = Math.sqrt(3) * hexSize;
-    // Die Breite eines Hexagons ist 2 * Seitenlänge
-    const hexWidth = 2 * hexSize;
 
-    // Rotation für Angle-Support
+    // Tessellation-Abstände:
+    // - Horizontal: 3/2 * hexSize (= 0.75 * hexWidth)
+    // - Vertikal: hexHeight
+    // - Offset für ungerade Spalten: hexHeight / 2
+    const colSpacing = hexSize * 1.5;
+    const rowSpacing = hexHeight;
+
+    // Rotation
     const angleRad = options.angle * Math.PI / 180;
     const centerX = (bounds.minX + bounds.maxX) / 2;
     const centerY = (bounds.minY + bounds.maxY) / 2;
 
-    // Rotations-Hilfsfunktion
     const rotatePoint = (x: number, y: number): THREE.Vector2 => {
         if (angleRad === 0) return new THREE.Vector2(x, y);
         const dx = x - centerX;
@@ -1121,67 +1092,73 @@ function generateHoneycombInfill(
         );
     };
 
-    // Erweitere Bounds für Rotation
+    // Erweiterte Bounds für Rotation
     const diagonal = Math.sqrt(Math.pow(bounds.maxX - bounds.minX, 2) + Math.pow(bounds.maxY - bounds.minY, 2));
-    const extendedBounds = {
-        minX: centerX - diagonal / 2 - hexWidth,
-        maxX: centerX + diagonal / 2 + hexWidth,
-        minY: centerY - diagonal / 2 - hexHeight,
-        maxY: centerY + diagonal / 2 + hexHeight
+    const padding = hexSize * 2;
+    const extBounds = {
+        minX: centerX - diagonal / 2 - padding,
+        maxX: centerX + diagonal / 2 + padding,
+        minY: centerY - diagonal / 2 - padding,
+        maxY: centerY + diagonal / 2 + padding
     };
 
-    // Berechne die Anzahl der Hexagons
-    const numCols = Math.ceil((extendedBounds.maxX - extendedBounds.minX) / (hexWidth * 0.75)) + 2;
-    const numRows = Math.ceil((extendedBounds.maxY - extendedBounds.minY) / hexHeight) + 2;
+    const numCols = Math.ceil((extBounds.maxX - extBounds.minX) / colSpacing) + 2;
+    const numRows = Math.ceil((extBounds.maxY - extBounds.minY) / rowSpacing) + 2;
 
-    // Startpunkt
-    const startX = extendedBounds.minX;
-    const startY = extendedBounds.minY;
+    // Set zum Vermeiden von Duplikaten (Kanten-Schlüssel)
+    const drawnEdges = new Set<string>();
+    const edgeKey = (p1: THREE.Vector2, p2: THREE.Vector2) => {
+        const minX = Math.min(p1.x, p2.x).toFixed(2);
+        const minY = Math.min(p1.y, p2.y).toFixed(2);
+        const maxX = Math.max(p1.x, p2.x).toFixed(2);
+        const maxY = Math.max(p1.y, p2.y).toFixed(2);
+        return `${minX},${minY}-${maxX},${maxY}`;
+    };
 
-    console.log(`Erzeuge Honigwaben-Muster mit ${numRows}x${numCols}, Hexagongröße: ${hexSize}, Winkel: ${options.angle}°`);
+    console.log(`Honeycomb: ${numRows}x${numCols} Zellen, hexSize=${hexSize}mm`);
 
-    // Erstelle das Honigwaben-Muster
-    for (let row = 0; row < numRows; row++) {
-        for (let col = 0; col < numCols; col++) {
-            // Bestimme die Mitte des aktuellen Hexagons
-            // KORRIGIERT: 0.5 statt 0.375 für korrekten Honeycomb-Stagger
-            const rawCenterX = startX + col * (hexWidth * 0.75) + (row % 2 === 0 ? 0 : hexWidth * 0.5);
-            const rawCenterY = startY + row * hexHeight * 0.5;
+    for (let col = 0; col < numCols; col++) {
+        for (let row = 0; row < numRows; row++) {
+            // Hexagon-Zentrum
+            // Ungerade Spalten sind um halbe Höhe versetzt
+            const rawX = extBounds.minX + col * colSpacing;
+            const rawY = extBounds.minY + row * rowSpacing + (col % 2 === 1 ? rowSpacing / 2 : 0);
 
-            // Erstelle die 6 Punkte des Hexagons (flat-top orientation)
-            const hexPoints: THREE.Vector2[] = [];
+            // Die 6 Ecken des Hexagons (flat-top: Start oben rechts, gegen Uhrzeiger)
+            const corners: THREE.Vector2[] = [];
             for (let i = 0; i < 6; i++) {
-                // Start bei 30° für flat-top Hexagon
-                const angle = (Math.PI / 3) * i + Math.PI / 6;
-                const x = rawCenterX + hexSize * Math.cos(angle);
-                const y = rawCenterY + hexSize * Math.sin(angle);
-                // Rotiere den Punkt
-                hexPoints.push(rotatePoint(x, y));
+                // 0° = rechts, dann gegen Uhrzeiger. Für flat-top starten wir bei 0°
+                const angle = (Math.PI / 3) * i;
+                const x = rawX + hexSize * Math.cos(angle);
+                const y = rawY + hexSize * Math.sin(angle);
+                corners.push(rotatePoint(x, y));
             }
 
-            // Zeichne jedes Segment des Hexagons mit echtem Clipping
+            // Zeichne die 6 Kanten, aber überspringe Duplikate
             for (let i = 0; i < 6; i++) {
-                const p1 = hexPoints[i];
-                const p2 = hexPoints[(i + 1) % 6];
+                const p1 = corners[i];
+                const p2 = corners[(i + 1) % 6];
 
-                // Clippe das Segment am Polygon
-                const clippedSegments = clipLineToPolygonSimple(p1, p2, polygon);
+                const key = edgeKey(p1, p2);
+                if (drawnEdges.has(key)) continue;
+                drawnEdges.add(key);
 
-                for (const seg of clippedSegments) {
+                // Clippe an Polygon
+                const clipped = clipLineToPolygonSimple(p1, p2, polygon);
+
+                for (const seg of clipped) {
                     const geometry = new THREE.BufferGeometry().setFromPoints([
                         new THREE.Vector3(seg.start.x, seg.start.y, 0),
                         new THREE.Vector3(seg.end.x, seg.end.y, 0)
                     ]);
-
                     const material = new THREE.LineBasicMaterial({ color: 0x00ff00 });
-                    const line = new THREE.Line(geometry, material);
-                    infillLines.push(line);
+                    infillLines.push(new THREE.Line(geometry, material));
                 }
             }
         }
     }
 
-    console.log(`${infillLines.length} Honigwaben-Liniensegmente generiert`);
+    console.log(`${infillLines.length} Honeycomb-Segmente generiert (${drawnEdges.size} einzigartige Kanten)`);
     return infillLines;
 }
 
@@ -1368,61 +1345,55 @@ function generateFermatSpiralInfill(
 }
 
 /**
- * Resample a polygon to have exactly targetCount points, evenly distributed
+ * Finde den Index des Punktes im Ring, der am nächsten zur angegebenen Winkelrichtung vom Zentrum liegt
+ * Dies sorgt für konsistente "Naht"-Positionen bei allen Ringen
  */
-function resamplePolygon(polygon: THREE.Vector2[], targetCount: number): THREE.Vector2[] {
-    if (polygon.length < 2) return polygon;
+function findPointAtAngle(ring: THREE.Vector2[], center: THREE.Vector2, targetAngle: number): number {
+    let bestIdx = 0;
+    let bestAngleDiff = Infinity;
 
-    // Calculate total perimeter
-    let totalLength = 0;
-    for (let i = 0; i < polygon.length; i++) {
-        const next = (i + 1) % polygon.length;
-        totalLength += polygon[i].distanceTo(polygon[next]);
-    }
+    for (let i = 0; i < ring.length; i++) {
+        const dx = ring[i].x - center.x;
+        const dy = ring[i].y - center.y;
+        const angle = Math.atan2(dy, dx);
 
-    const segmentLength = totalLength / targetCount;
-    const result: THREE.Vector2[] = [];
+        // Winkel-Differenz (normalisiert auf -PI bis PI)
+        let diff = angle - targetAngle;
+        while (diff > Math.PI) diff -= 2 * Math.PI;
+        while (diff < -Math.PI) diff += 2 * Math.PI;
 
-    let currentDist = 0;
-    let edgeIndex = 0;
-    let edgeProgress = 0;
-
-    for (let i = 0; i < targetCount; i++) {
-        const targetDist = i * segmentLength;
-
-        // Walk along edges until we reach targetDist
-        while (currentDist < targetDist && edgeIndex < polygon.length) {
-            const nextIndex = (edgeIndex + 1) % polygon.length;
-            const edgeLength = polygon[edgeIndex].distanceTo(polygon[nextIndex]);
-            const remainingOnEdge = edgeLength * (1 - edgeProgress);
-
-            if (currentDist + remainingOnEdge >= targetDist) {
-                // Point is on this edge
-                const needed = targetDist - currentDist;
-                const t = edgeProgress + (needed / edgeLength);
-                const p = polygon[edgeIndex].clone().lerp(polygon[nextIndex], t);
-                result.push(p);
-                edgeProgress = t;
-                currentDist = targetDist;
-                break;
-            } else {
-                currentDist += remainingOnEdge;
-                edgeIndex = (edgeIndex + 1) % polygon.length;
-                edgeProgress = 0;
-            }
+        if (Math.abs(diff) < Math.abs(bestAngleDiff)) {
+            bestAngleDiff = diff;
+            bestIdx = i;
         }
     }
 
-    // Ensure we have enough points
-    while (result.length < targetCount && polygon.length > 0) {
-        result.push(polygon[result.length % polygon.length].clone());
-    }
-
-    return result;
+    return bestIdx;
 }
 
 /**
- * Generiere eine echte Spirale durch Interpolation zwischen konzentrischen Ringen
+ * Berechne das Zentrum eines Polygons
+ */
+function getPolygonCenter(polygon: THREE.Vector2[]): THREE.Vector2 {
+    let cx = 0, cy = 0;
+    for (const p of polygon) {
+        cx += p.x;
+        cy += p.y;
+    }
+    return new THREE.Vector2(cx / polygon.length, cy / polygon.length);
+}
+
+/**
+ * Rotiere Ring so dass er bei startIndex beginnt
+ */
+function rotateRing(ring: THREE.Vector2[], startIndex: number): THREE.Vector2[] {
+    if (startIndex === 0 || ring.length === 0) return ring;
+    return [...ring.slice(startIndex), ...ring.slice(0, startIndex)];
+}
+
+/**
+ * Generiere Spirale durch Verbinden von konzentrischen Ringen
+ * OHNE Punkt-Interpolation - originale Ring-Geometrie wird beibehalten
  * @param polygon Das zu füllende Polygon
  * @param options Infill-Optionen (density = Abstand zwischen Ringen)
  * @param fermatStyle Wenn true: geht raus UND zurück (kein Pen-Lift am Ende)
@@ -1434,13 +1405,12 @@ function generateContourSpiral(
 ): THREE.Line[] {
     const infillLines: THREE.Line[] = [];
 
-    // Sammle alle konzentrischen Ringe
-    const rings: THREE.Vector2[][] = [polygon]; // Start mit dem Original-Polygon
+    // Sammle alle konzentrischen Ringe mit ClipperOffset
+    const rings: THREE.Vector2[][] = [polygon];
     let currentPolygon = polygon;
-    const offsetAmount = -options.density; // Negativ für Inward-Offset
-    const maxRings = 200; // Sicherheitslimit
+    const offsetAmount = -options.density;
+    const maxRings = 200;
 
-    // Generiere konzentrische Ringe mit ClipperOffset
     while (rings.length < maxRings) {
         const offsetResults = offsetPolygon(currentPolygon, offsetAmount, 'miter');
 
@@ -1450,7 +1420,7 @@ function generateContourSpiral(
                 rings.push(offsetPoly);
                 currentPolygon = offsetPoly;
                 foundValid = true;
-                break; // Nimm nur den ersten gültigen Ring
+                break;
             }
         }
 
@@ -1459,73 +1429,62 @@ function generateContourSpiral(
 
     console.log(`Contour Spiral: ${rings.length} Ringe generiert`);
 
-    if (rings.length < 2) {
-        // Nicht genug Ringe für eine Spirale - gib die vorhandenen als normale Linien zurück
-        for (const ring of rings) {
-            const points = ring.map(p => new THREE.Vector3(p.x, p.y, 0));
-            points.push(points[0].clone()); // Schließen
-            const geometry = new THREE.BufferGeometry().setFromPoints(points);
-            const material = new THREE.LineBasicMaterial({ color: 0x00ff00 });
-            infillLines.push(new THREE.Line(geometry, material));
-        }
+    if (rings.length === 0) {
         return infillLines;
     }
 
-    // Resample alle Ringe auf die gleiche Punktanzahl
-    const pointsPerRing = Math.max(50, polygon.length * 2); // Genügend Punkte für Smoothness
-    const resampledRings = rings.map(ring => resamplePolygon(ring, pointsPerRing));
-
-    // Erstelle die Spirale durch Interpolation
-    const spiralPoints: THREE.Vector3[] = [];
-    const totalRings = resampledRings.length;
-
-    // Für jeden Punkt um das Polygon herum
-    for (let i = 0; i <= pointsPerRing * (totalRings - 1); i++) {
-        // Berechne welcher Ring und welche Position
-        const progress = i / (pointsPerRing * (totalRings - 1)); // 0 bis 1
-        const ringProgress = progress * (totalRings - 1); // 0 bis (totalRings-1)
-        const ringIndex = Math.min(Math.floor(ringProgress), totalRings - 2);
-        const ringT = ringProgress - ringIndex; // Interpolation zwischen zwei Ringen
-
-        const pointIndex = i % pointsPerRing;
-
-        // Interpoliere zwischen den zwei Ringen
-        const outerPoint = resampledRings[ringIndex][pointIndex];
-        const innerPoint = resampledRings[ringIndex + 1][pointIndex];
-
-        const x = outerPoint.x + (innerPoint.x - outerPoint.x) * ringT;
-        const y = outerPoint.y + (innerPoint.y - outerPoint.y) * ringT;
-
-        spiralPoints.push(new THREE.Vector3(x, y, 0));
+    // Wenn nur ein Ring: gib ihn als geschlossene Linie zurück
+    if (rings.length === 1) {
+        const points = rings[0].map(p => new THREE.Vector3(p.x, p.y, 0));
+        points.push(points[0].clone());
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const material = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+        infillLines.push(new THREE.Line(geometry, material));
+        return infillLines;
     }
 
-    // Fermat-Style: Gehe wieder nach außen
-    if (fermatStyle && spiralPoints.length > 0) {
-        // Füge den Rückweg hinzu (in umgekehrter Reihenfolge, aber mit Offset)
-        const returnPoints: THREE.Vector3[] = [];
+    // Berechne das gemeinsame Zentrum für konsistente Nahtpositionen
+    const center = getPolygonCenter(polygon);
 
-        for (let i = spiralPoints.length - 1; i >= 0; i--) {
-            // Leicht versetzt für den Rückweg
-            const progress = (spiralPoints.length - 1 - i) / (spiralPoints.length - 1);
-            const ringProgress = progress * (totalRings - 1);
-            const ringIndex = Math.min(Math.floor(ringProgress), totalRings - 2);
-            const ringT = ringProgress - ringIndex + 0.5; // Versetzt um halbe Ring-Distanz
+    // Nahtwinkel: Alle Ringe starten bei der gleichen Winkelposition
+    // Wir wählen den Winkel des ersten Punkts des äußeren Polygons
+    const seamAngle = Math.atan2(polygon[0].y - center.y, polygon[0].x - center.x);
 
-            const pointIndex = (spiralPoints.length - 1 - i + Math.floor(pointsPerRing / 2)) % pointsPerRing;
+    // Spirale erstellen: Ringe verbinden mit konsistenten Nahtpositionen
+    const spiralPoints: THREE.Vector3[] = [];
 
-            if (ringIndex < resampledRings.length - 1) {
-                const outerPoint = resampledRings[ringIndex][pointIndex];
-                const innerPoint = resampledRings[ringIndex + 1][pointIndex];
+    for (let ringIdx = 0; ringIdx < rings.length; ringIdx++) {
+        const ring = rings[ringIdx];
 
-                const effectiveT = Math.min(1, Math.max(0, ringT));
-                const x = outerPoint.x + (innerPoint.x - outerPoint.x) * effectiveT;
-                const y = outerPoint.y + (innerPoint.y - outerPoint.y) * effectiveT;
+        // Finde den Punkt bei der Nahtposition (gleicher Winkel für alle Ringe)
+        const startIdx = findPointAtAngle(ring, center, seamAngle);
 
-                returnPoints.push(new THREE.Vector3(x, y, 0));
+        // Rotiere den Ring so dass er bei der Nahtposition beginnt
+        const rotatedRing = rotateRing(ring, startIdx);
+
+        // Füge alle Punkte dieses Rings hinzu
+        for (const p of rotatedRing) {
+            spiralPoints.push(new THREE.Vector3(p.x, p.y, 0));
+        }
+    }
+
+    // Fermat-Style: Gehe wieder nach außen (in umgekehrter Reihenfolge)
+    if (fermatStyle && rings.length > 1) {
+        // Nahtwinkel für den Rückweg: gegenüberliegende Seite (180° versetzt)
+        const returnSeamAngle = seamAngle + Math.PI;
+
+        // Starte bei rings.length - 2, da wir gerade am innersten Ring (rings.length - 1) sind
+        for (let ringIdx = rings.length - 2; ringIdx >= 0; ringIdx--) {
+            const ring = rings[ringIdx];
+
+            // Starte auf der gegenüberliegenden Seite für den Rückweg
+            const startIdx = findPointAtAngle(ring, center, returnSeamAngle);
+            const rotatedRing = rotateRing(ring, startIdx);
+
+            for (const p of rotatedRing) {
+                spiralPoints.push(new THREE.Vector3(p.x, p.y, 0));
             }
         }
-
-        spiralPoints.push(...returnPoints);
     }
 
     // Erstelle die Linie
@@ -1556,36 +1515,35 @@ function generateHilbertInfill(
 
     const width = bounds.maxX - bounds.minX;
     const height = bounds.maxY - bounds.minY;
-    const size = Math.max(width, height);
 
     // Berechne die Order basierend auf Dichte
     // Höhere Order = mehr Details = dichteres Muster
-    // 2^order Segmente pro Seite, Abstand = size / 2^order
+    // 2^order Segmente pro Seite
     const targetSpacing = options.density;
-    const order = Math.max(1, Math.min(6, Math.round(Math.log2(size / targetSpacing))));
+    const avgSize = (width + height) / 2;
+    const order = Math.max(1, Math.min(6, Math.round(Math.log2(avgSize / targetSpacing))));
 
     console.log(`Hilbert: Order ${order}, Ziel-Abstand: ${targetSpacing}mm`);
 
     // Generiere Hilbert-Kurve
     const hilbertPoints = generateHilbertPoints(order);
 
-    // Skaliere und positioniere die Punkte
+    // Skaliere und positioniere die Punkte - SEPARATE X/Y Skalierung für Rechtecke
     const n = Math.pow(2, order);
-    const scaleFactor = size / n;
+    const scaleFactorX = width / n;
+    const scaleFactorY = height / n;
 
     // Zentrum für Rotation
     const centerX = (bounds.minX + bounds.maxX) / 2;
     const centerY = (bounds.minY + bounds.maxY) / 2;
     const angleRad = options.angle * Math.PI / 180;
 
-    const transformedPoints: THREE.Vector3[] = [];
-
+    // Transformiere alle Punkte
+    const transformedPoints: THREE.Vector2[] = [];
     for (const hp of hilbertPoints) {
-        // Skaliere zur Zielgröße
-        let x = bounds.minX + hp.x * scaleFactor + scaleFactor / 2;
-        let y = bounds.minY + hp.y * scaleFactor + scaleFactor / 2;
+        let x = bounds.minX + hp.x * scaleFactorX + scaleFactorX / 2;
+        let y = bounds.minY + hp.y * scaleFactorY + scaleFactorY / 2;
 
-        // Rotiere um Zentrum
         if (options.angle !== 0) {
             const dx = x - centerX;
             const dy = y - centerY;
@@ -1593,23 +1551,43 @@ function generateHilbertInfill(
             y = centerY + dx * Math.sin(angleRad) + dy * Math.cos(angleRad);
         }
 
-        const point = new THREE.Vector2(x, y);
+        transformedPoints.push(new THREE.Vector2(x, y));
+    }
 
-        if (isPointInPolygon(point, polygon)) {
-            transformedPoints.push(new THREE.Vector3(x, y, 0));
+    // Segment-basiertes Clipping: Nur zusammenhängende Segmente innerhalb des Polygons
+    // Statt alle Punkte zu filtern und dann zu verbinden
+    const material = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+    let currentSegment: THREE.Vector3[] = [];
+    let totalPoints = 0;
+
+    for (let i = 0; i < transformedPoints.length; i++) {
+        const point = transformedPoints[i];
+        const isInside = isPointInPolygon(point, polygon);
+
+        if (isInside) {
+            currentSegment.push(new THREE.Vector3(point.x, point.y, 0));
+            totalPoints++;
+        } else {
+            // Punkt ist außerhalb - aktuelles Segment beenden wenn vorhanden
+            if (currentSegment.length >= 2) {
+                const geometry = new THREE.BufferGeometry().setFromPoints(currentSegment);
+                const line = new THREE.Line(geometry, material.clone());
+                line.name = 'Infill_Hilbert';
+                infillLines.push(line);
+            }
+            currentSegment = [];
         }
     }
 
-    // Erstelle durchgehende Segmente (nur verbundene Punkte)
-    if (transformedPoints.length >= 2) {
-        const geometry = new THREE.BufferGeometry().setFromPoints(transformedPoints);
-        const material = new THREE.LineBasicMaterial({ color: 0x00ff00 });
-        const line = new THREE.Line(geometry, material);
+    // Letztes Segment hinzufügen
+    if (currentSegment.length >= 2) {
+        const geometry = new THREE.BufferGeometry().setFromPoints(currentSegment);
+        const line = new THREE.Line(geometry, material.clone());
         line.name = 'Infill_Hilbert';
         infillLines.push(line);
     }
 
-    console.log(`Hilbert: ${transformedPoints.length} Punkte innerhalb des Polygons`);
+    console.log(`Hilbert: ${totalPoints} Punkte, ${infillLines.length} Segmente`);
     return infillLines;
 }
 

@@ -95,9 +95,9 @@
                 <span class="text-xs text-slate-400 ml-1">mm/min</span>
             </div>
 
-            <!-- Path-Analyse (Hole Detection) -->
-            <div class="flex items-center justify-between">
-                <div v-if="item.isPathAnalyzed" class="flex items-center space-x-2">
+            <!-- Path-Analyse (Hole Detection) - automatisch beim Import -->
+            <div v-if="item.isPathAnalyzed && (item.pathAnalysis?.paths.length || 0) > 0" class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
                     <span class="text-xs text-slate-400">Pfade:</span>
                     <span class="text-xs px-1.5 py-0.5 rounded bg-green-600/30 text-green-300">
                         {{ item.pathAnalysis?.outerPaths.length || 0 }} Outer
@@ -111,17 +111,7 @@
                         {{ item.pathAnalysis?.nestedObjects.length }} Nested
                     </span>
                 </div>
-                <div v-else class="text-xs text-slate-400">
-                    Pfade nicht analysiert
-                </div>
-
-                <button v-if="!item.isPathAnalyzed"
-                    @click="$emit('analyze-paths')"
-                    class="px-2 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700">
-                    Pfade analysieren
-                </button>
-                <button v-else
-                    @click="pathDetailsExpanded = !pathDetailsExpanded"
+                <button @click="pathDetailsExpanded = !pathDetailsExpanded"
                     class="px-2 py-1 text-xs bg-slate-600 text-white rounded hover:bg-slate-500">
                     {{ pathDetailsExpanded ? 'Ausblenden' : 'Details' }}
                 </button>
@@ -196,7 +186,11 @@
                     @input="$emit('update-density', Number(($event.target as HTMLInputElement).value))"
                     :min="densityRange.min" :max="densityRange.max" :step="densityRange.step"
                     class="flex-grow" />
-                <span class="w-12 text-right text-xs text-slate-400">{{ item.infillOptions.density.toFixed(1) }}mm</span>
+                <input type="number" :value="item.infillOptions.density"
+                    @change="$emit('update-density', Number(($event.target as HTMLInputElement).value))"
+                    :min="densityRange.min" :max="densityRange.max" :step="densityRange.step"
+                    class="w-14 ml-2 p-1 text-xs border border-slate-500 rounded bg-slate-600 text-white text-right" />
+                <span class="text-xs text-slate-400 ml-1">mm</span>
             </div>
 
             <!-- Angle -->
@@ -205,7 +199,11 @@
                 <input type="range" :value="item.infillOptions.angle"
                     @input="$emit('update-angle', Number(($event.target as HTMLInputElement).value))"
                     min="0" max="180" step="5" class="flex-grow" />
-                <span class="w-12 text-right text-xs text-slate-400">{{ item.infillOptions.angle }}°</span>
+                <input type="number" :value="item.infillOptions.angle"
+                    @change="$emit('update-angle', Number(($event.target as HTMLInputElement).value))"
+                    min="0" max="180" step="1"
+                    class="w-14 ml-2 p-1 text-xs border border-slate-500 rounded bg-slate-600 text-white text-right" />
+                <span class="text-xs text-slate-400 ml-1">°</span>
             </div>
 
             <!-- Outline Offset -->
@@ -214,7 +212,11 @@
                 <input type="range" :value="item.infillOptions.outlineOffset"
                     @input="$emit('update-offset', Number(($event.target as HTMLInputElement).value))"
                     min="0" max="5" step="0.1" class="flex-grow" />
-                <span class="w-12 text-right text-xs text-slate-400">{{ item.infillOptions.outlineOffset.toFixed(1) }}mm</span>
+                <input type="number" :value="item.infillOptions.outlineOffset"
+                    @change="$emit('update-offset', Number(($event.target as HTMLInputElement).value))"
+                    min="0" max="5" step="0.1"
+                    class="w-14 ml-2 p-1 text-xs border border-slate-500 rounded bg-slate-600 text-white text-right" />
+                <span class="text-xs text-slate-400 ml-1">mm</span>
             </div>
 
             <!-- Action Buttons -->
@@ -225,7 +227,7 @@
                 </button>
                 <button @click="$emit('generate-preview')"
                     class="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700">
-                    Vorschau
+                    Generieren
                 </button>
             </div>
         </div>
@@ -297,7 +299,6 @@ const emit = defineEmits<{
     (e: 'remove-infill'): void;
     (e: 'generate-preview'): void;
     (e: 'analyze'): void;
-    (e: 'analyze-paths'): void;
     (e: 'set-path-role', pathId: string, role: PathRole | null): void;
     (e: 'update-workpiece-start', value: string | undefined): void;
 }>();

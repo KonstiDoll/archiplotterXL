@@ -88,6 +88,10 @@ export const useMainStore = defineStore('main', {
 
       // Update auch lineGeometry für Kompatibilität
       this.lineGeometry = geometry;
+
+      // Automatische Path-Analyse für Hole-Detection
+      const newIndex = this.svgItems.length - 1;
+      this.analyzePathRelationships(newIndex);
     },
     
     // Methode zum Aktualisieren des Werkzeugs eines SVG-Items

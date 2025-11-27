@@ -46,7 +46,6 @@
                         @remove-infill="removeInfill(index)"
                         @generate-preview="generatePreview(index)"
                         @analyze="store.analyzeColors(index)"
-                        @analyze-paths="store.analyzePathRelationships(index)"
                         @set-path-role="(pathId, role) => store.setPathRole(index, pathId, role)"
                         @update-workpiece-start="(v) => store.setSVGItemWorkpieceStart(index, v)"
                     />
