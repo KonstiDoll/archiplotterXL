@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import * as THREE from 'three';
 import { useMainStore } from './store';
 import { createGcodeFromLineGroup, createGcodeFromColorGroups, createGcodeWithColorInfill, type ToolConfig } from './utils/gcode_services';
-import { InfillPatternType, generateInfillForColor } from './utils/threejs_services';
+import { InfillPatternType } from './utils/threejs_services';
 import AppHeader from './components/AppHeader.vue';
 import Sidebar from './components/Sidebar.vue';
 import ThreejsScene from './components/ThreejsScene.vue';

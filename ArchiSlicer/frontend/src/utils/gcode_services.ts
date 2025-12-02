@@ -110,9 +110,10 @@ export function createGcodeFromLineGroup(
     });
     
     // Infill-Gruppe finden und Linien hinzufügen
+    // Unterstützt verschiedene Namen: "InfillGroup", "InfillGroupWithHoles", "InfillGroup_<color>"
     let infillGroup: THREE.Group | undefined;
     lineGeoGroup.children.forEach((child) => {
-        if (child instanceof THREE.Group && child.name === "InfillGroup") {
+        if (child instanceof THREE.Group && child.name.startsWith("InfillGroup")) {
             infillGroup = child;
         }
     });
@@ -277,9 +278,10 @@ export function createGcodeFromColorGroups(
     });
 
     // Infill-Linien sammeln (bekommen das erste Tool)
+    // Unterstützt verschiedene Namen: "InfillGroup", "InfillGroupWithHoles", "InfillGroup_<color>"
     const infillLines: THREE.Line[] = [];
     lineGeoGroup.children.forEach((child) => {
-        if (child instanceof THREE.Group && child.name === "InfillGroup") {
+        if (child instanceof THREE.Group && child.name.startsWith("InfillGroup")) {
             child.children.forEach((infillChild) => {
                 if (infillChild instanceof THREE.Line) {
                     infillLines.push(infillChild);
