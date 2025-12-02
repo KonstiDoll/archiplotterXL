@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import * as THREE from 'three';
-import { InfillOptions, defaultInfillOptions, analyzeColorsInGroup } from './utils/threejs_services';
+import { markRaw } from 'vue';
+import { InfillOptions, defaultInfillOptions, analyzeColorsInGroup, getThreejsObjectFromSvg } from './utils/threejs_services';
 import { PathAnalysisResult, PathRole, analyzePathRelationships, extractPolygonsFromGroup, getEffectiveRole } from './utils/geometry/path-analysis';
 
 // Interface für Farbgruppen (erkannte Farben mit Tool-Zuordnung)
@@ -42,6 +43,7 @@ export interface SVGItem {
   workpieceStartId?: string;   // Optional: Referenz zum gewählten Workpiece Start
   // DPI-Skalierung
   dpi: number;                 // DPI für px→mm Umrechnung (Default: 96)
+  svgContent?: string;         // Original SVG-Inhalt für Neuberechnung bei DPI-Änderung
 }
 
 export const useMainStore = defineStore('main', {
@@ -71,7 +73,8 @@ export const useMainStore = defineStore('main', {
       feedrate: number = 3000,  // Standard-Geschwindigkeit
       infillToolNumber: number = toolNumber,  // Standardmäßig das gleiche Werkzeug wie für Konturen
       drawingHeight: number = 0,  // Standard-Zeichenhöhe (0 = Plattform)
-      dpi: number = 96  // Standard-DPI für px→mm Umrechnung
+      dpi: number = 96,  // Standard-DPI für px→mm Umrechnung
+      svgContent?: string  // Original SVG-Inhalt für Neuberechnung bei DPI-Änderung
     ) {
       this.svgItems.push({
         geometry,
@@ -87,7 +90,8 @@ export const useMainStore = defineStore('main', {
         isPathAnalyzed: false,  // Path-Analyse noch nicht durchgeführt
         offsetX: 0,         // Kein Offset standardmäßig
         offsetY: 0,
-        dpi
+        dpi,
+        svgContent
       });
 
       // Update auch lineGeometry für Kompatibilität
@@ -185,55 +189,42 @@ export const useMainStore = defineStore('main', {
       }
     },
 
-    // Methode zum Aktualisieren der DPI eines SVG-Items (skaliert die Geometrie)
-    updateSVGItemDpi(index: number, newDpi: number) {
+    // Methode zum Aktualisieren der DPI eines SVG-Items (parst SVG neu)
+    async updateSVGItemDpi(index: number, newDpi: number) {
       if (index >= 0 && index < this.svgItems.length) {
         const item = this.svgItems[index];
         const oldDpi = item.dpi;
 
         if (oldDpi === newDpi) return;
 
-        // Relative Skalierung berechnen
-        const relativeScale = oldDpi / newDpi;
+        // Wenn SVG-Inhalt vorhanden, neu parsen
+        if (item.svgContent) {
+          console.log(`DPI für "${item.fileName}" geändert: ${oldDpi} → ${newDpi} - parse SVG neu...`);
 
-        // Alle Geometrien skalieren
-        item.geometry.children.forEach((child) => {
-          if (child instanceof THREE.Line) {
-            const positions = (child.geometry as THREE.BufferGeometry).attributes.position.array as Float32Array;
-            for (let i = 0; i < positions.length; i += 3) {
-              positions[i] *= relativeScale;      // X
-              positions[i + 1] *= relativeScale;  // Y
-            }
-            (child.geometry as THREE.BufferGeometry).attributes.position.needsUpdate = true;
-            child.geometry.computeBoundingBox();
+          // Neues Geometrie-Objekt mit neuer DPI erstellen
+          const newGeometry = await getThreejsObjectFromSvg(item.svgContent, 0, newDpi);
+
+          // Altes Infill entfernen (wird durch DPI-Änderung ungültig)
+          if (item.infillGroup) {
+            item.geometry.remove(item.infillGroup);
+            item.infillGroup = undefined;
           }
-        });
 
-        // Auch Infill-Gruppe skalieren falls vorhanden
-        if (item.infillGroup) {
-          item.infillGroup.children.forEach((child) => {
-            if (child instanceof THREE.Line) {
-              const positions = (child.geometry as THREE.BufferGeometry).attributes.position.array as Float32Array;
-              for (let i = 0; i < positions.length; i += 3) {
-                positions[i] *= relativeScale;
-                positions[i + 1] *= relativeScale;
-              }
-              (child.geometry as THREE.BufferGeometry).attributes.position.needsUpdate = true;
-              child.geometry.computeBoundingBox();
-            }
-          });
+          // Neue Geometrie setzen (markRaw für Vue-Reaktivität)
+          item.geometry = markRaw(newGeometry);
+          item.dpi = newDpi;
+
+          // Path-Analyse zurücksetzen und neu durchführen
+          item.isPathAnalyzed = false;
+          this.analyzePathRelationships(index);
+
+          // Trigger scene update durch Array-Referenz-Änderung
+          this.svgItems = [...this.svgItems];
+
+          console.log(`SVG "${item.fileName}" mit ${newDpi} DPI neu geparst`);
+        } else {
+          console.warn(`Kein SVG-Inhalt für "${item.fileName}" - kann DPI nicht ändern`);
         }
-
-        // userData Abmessungen aktualisieren
-        if (item.geometry.userData) {
-          item.geometry.userData.minX *= relativeScale;
-          item.geometry.userData.maxX *= relativeScale;
-          item.geometry.userData.minY *= relativeScale;
-          item.geometry.userData.maxY *= relativeScale;
-        }
-
-        item.dpi = newDpi;
-        console.log(`DPI für "${item.fileName}" geändert: ${oldDpi} → ${newDpi} (Skalierung: ${relativeScale.toFixed(4)})`);
       }
     },
 

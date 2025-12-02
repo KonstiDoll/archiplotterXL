@@ -173,7 +173,9 @@ const loadSVGFile = async (file: File) => {
                 { ...defaultInfillOptions },
                 3000,
                 props.activeToolIndex,
-                0
+                0,
+                96,       // Default DPI
+                contents  // SVG-Inhalt für Neuberechnung bei DPI-Änderung speichern
             );
             console.log(`SVG "${file.name}" geladen mit Tool #${props.activeToolIndex}`);
         }
