@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import * as THREE from 'three';
 import { useMainStore } from './store';
 import { createGcodeFromLineGroup, createGcodeFromColorGroups, createGcodeWithColorInfill, type ToolConfig } from './utils/gcode_services';
@@ -11,13 +11,43 @@ import GCodePanel from './components/GCodePanel.vue';
 
 const store = useMainStore();
 
+// LocalStorage Keys
+const STORAGE_KEY_TOOLS = 'archislicer_toolConfigs';
+
+// Default Tool-Konfiguration
+const createDefaultToolConfigs = (): ToolConfig[] =>
+    Array(9).fill(null).map(() => ({
+        penType: 'stabilo',
+        color: '#000000'
+    }));
+
 // State
 const activeToolIndex = ref(1);
-// Neue ToolConfig-basierte Konfiguration (Typ + Farbe getrennt)
-const toolConfigs = ref<ToolConfig[]>(Array(9).fill(null).map(() => ({
-    penType: 'stabilo',
-    color: '#000000'
-})));
+// Tool-Konfiguration aus localStorage laden oder Default verwenden
+const toolConfigs = ref<ToolConfig[]>(createDefaultToolConfigs());
+
+// Beim Start aus localStorage laden
+onMounted(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_TOOLS);
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length === 9) {
+                toolConfigs.value = parsed;
+                console.log('Tool-Konfiguration aus localStorage geladen');
+            }
+        } catch (e) {
+            console.warn('Fehler beim Laden der Tool-Konfiguration:', e);
+        }
+    }
+});
+
+// Bei Änderungen in localStorage speichern
+watch(toolConfigs, (newConfigs) => {
+    localStorage.setItem(STORAGE_KEY_TOOLS, JSON.stringify(newConfigs));
+    console.log('Tool-Konfiguration gespeichert');
+}, { deep: true });
+
 const globalDrawingHeight = ref(0);
 const gCode = ref('');
 // Hintergrund-Preset für die 3D-Vorschau

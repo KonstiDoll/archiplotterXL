@@ -140,9 +140,14 @@
                                 <input type="range"
                                     :value="colorGroup.infillOptions.density"
                                     @input="updateInfillDensity(colorIdx, Number(($event.target as HTMLInputElement).value))"
-                                    min="0.5" max="20" step="0.5"
+                                    min="0.1" max="20" step="0.1"
                                     class="flex-grow h-1 bg-slate-600 rounded appearance-none cursor-pointer" />
-                                <span class="w-12 text-xs text-right text-slate-300">{{ colorGroup.infillOptions.density }}mm</span>
+                                <input type="number"
+                                    :value="colorGroup.infillOptions.density"
+                                    @change="updateInfillDensity(colorIdx, Number(($event.target as HTMLInputElement).value))"
+                                    min="0.1" max="100" step="0.1"
+                                    class="w-14 px-1 py-0.5 text-xs text-right text-slate-300 bg-slate-600 border border-slate-500 rounded" />
+                                <span class="text-xs text-slate-400">mm</span>
                             </div>
                             <!-- Winkel -->
                             <div class="flex items-center space-x-2">
@@ -150,9 +155,14 @@
                                 <input type="range"
                                     :value="colorGroup.infillOptions.angle"
                                     @input="updateInfillAngle(colorIdx, Number(($event.target as HTMLInputElement).value))"
-                                    min="0" max="180" step="5"
+                                    min="0" max="180" step="1"
                                     class="flex-grow h-1 bg-slate-600 rounded appearance-none cursor-pointer" />
-                                <span class="w-12 text-xs text-right text-slate-300">{{ colorGroup.infillOptions.angle }}°</span>
+                                <input type="number"
+                                    :value="colorGroup.infillOptions.angle"
+                                    @change="updateInfillAngle(colorIdx, Number(($event.target as HTMLInputElement).value))"
+                                    min="0" max="360" step="1"
+                                    class="w-14 px-1 py-0.5 text-xs text-right text-slate-300 bg-slate-600 border border-slate-500 rounded" />
+                                <span class="text-xs text-slate-400">°</span>
                             </div>
                             <!-- Rand (Outline Offset) -->
                             <div class="flex items-center space-x-2">
@@ -160,9 +170,14 @@
                                 <input type="range"
                                     :value="colorGroup.infillOptions.outlineOffset"
                                     @input="updateInfillOutlineOffset(colorIdx, Number(($event.target as HTMLInputElement).value))"
-                                    min="0" max="10" step="0.5"
+                                    min="0" max="10" step="0.1"
                                     class="flex-grow h-1 bg-slate-600 rounded appearance-none cursor-pointer" />
-                                <span class="w-12 text-xs text-right text-slate-300">{{ colorGroup.infillOptions.outlineOffset }}mm</span>
+                                <input type="number"
+                                    :value="colorGroup.infillOptions.outlineOffset"
+                                    @change="updateInfillOutlineOffset(colorIdx, Number(($event.target as HTMLInputElement).value))"
+                                    min="0" max="50" step="0.1"
+                                    class="w-14 px-1 py-0.5 text-xs text-right text-slate-300 bg-slate-600 border border-slate-500 rounded" />
+                                <span class="text-xs text-slate-400">mm</span>
                             </div>
                         </div>
 
