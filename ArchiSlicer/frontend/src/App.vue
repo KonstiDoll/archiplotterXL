@@ -96,22 +96,18 @@ const generateGcode = () => {
             combinedGcode += `; Verwendete Tools: ${Array.from(usedTools).sort().join(', ')}\n`;
             combinedGcode += `; Feedrate ${item.feedrate} mm/min\n`;
 
-            // Prüfen ob farb-basiertes Infill aktiv ist
-            const hasColorInfill = item.colorGroups.some(cg => cg.infillEnabled);
+            // Prüfen ob farb-basiertes Infill aktiv ist (nur wenn bereits generiert)
+            const hasColorInfill = item.colorGroups.some(cg => cg.infillEnabled && cg.infillGroup && cg.infillGroup.children.length > 0);
 
             if (hasColorInfill) {
-                // Farb-basiertes Infill: Generiere Infill pro Farbe
+                // Farb-basiertes Infill: Verwende bereits generiertes Infill
                 const infillGroups = new Map<string, THREE.Group>();
                 const colorsWithInfill: string[] = [];
 
                 for (const colorGroup of item.colorGroups) {
-                    if (colorGroup.infillEnabled) {
-                        const infillGroup = generateInfillForColor(
-                            item.geometry,
-                            colorGroup.color,
-                            colorGroup.infillOptions
-                        );
-                        infillGroups.set(colorGroup.color.toLowerCase(), infillGroup);
+                    // Nur verwenden wenn Infill aktiviert UND bereits generiert wurde
+                    if (colorGroup.infillEnabled && colorGroup.infillGroup && colorGroup.infillGroup.children.length > 0) {
+                        infillGroups.set(colorGroup.color.toLowerCase(), colorGroup.infillGroup);
                         colorsWithInfill.push(colorGroup.color);
                     }
                 }
