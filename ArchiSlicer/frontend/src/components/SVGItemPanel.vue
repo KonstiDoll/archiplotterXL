@@ -95,6 +95,19 @@
                 <span class="text-xs text-slate-400 ml-1">mm/min</span>
             </div>
 
+            <!-- DPI-Skalierung und Abmessungen -->
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    <label class="text-xs text-slate-400 mr-1">DPI:</label>
+                    <input type="number" :value="item.dpi"
+                        @change="$emit('update-dpi', Number(($event.target as HTMLInputElement).value))"
+                        class="p-1 w-14 text-sm border border-slate-600 rounded bg-slate-700 text-white" min="1" max="600" step="1" />
+                </div>
+                <div class="text-xs text-slate-300">
+                    {{ dimensions.width.toFixed(0) }} × {{ dimensions.height.toFixed(0) }} mm
+                </div>
+            </div>
+
             <!-- Path-Analyse (Hole Detection) - automatisch beim Import -->
             <div v-if="item.isPathAnalyzed && (item.pathAnalysis?.paths.length || 0) > 0" class="flex items-center justify-between">
                 <div class="flex items-center space-x-2">
@@ -236,6 +249,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import type { Group } from 'three';
 import { InfillPatternType, patternDensityRanges } from '../utils/threejs_services';
 import { useMainStore, type ColorGroup } from '../store';
 import type { PathAnalysisResult, PathInfo, PathRole } from '../utils/geometry/path-analysis';
@@ -265,10 +279,32 @@ const props = defineProps<{
         offsetX: number;
         offsetY: number;
         workpieceStartId?: string;
+        // DPI-Skalierung
+        dpi: number;
+        // Geometrie für Abmessungen
+        geometry: Group;
     };
     isFirst: boolean;
     isLast: boolean;
 }>();
+
+// Berechne Abmessungen aus der Geometrie
+// Nutze item.dpi als Trigger für Reaktivität
+const dimensions = computed(() => {
+    const geo = props.item.geometry;
+    const _dpi = props.item.dpi; // Reaktivitäts-Trigger
+    void _dpi; // Unused variable warning vermeiden
+
+    if (!geo || !geo.userData) return { width: 0, height: 0 };
+
+    const { minX, maxX, minY, maxY } = geo.userData;
+    if (minX === undefined || maxX === undefined) return { width: 0, height: 0 };
+
+    return {
+        width: Math.abs(maxX - minX),
+        height: Math.abs(maxY - minY)
+    };
+});
 
 const expanded = ref(false);
 const pathDetailsExpanded = ref(false);
@@ -301,6 +337,7 @@ const emit = defineEmits<{
     (e: 'analyze'): void;
     (e: 'set-path-role', pathId: string, role: PathRole | null): void;
     (e: 'update-workpiece-start', value: string | undefined): void;
+    (e: 'update-dpi', value: number): void;
 }>();
 
 function handlePathRoleChange(path: PathInfo, value: string) {

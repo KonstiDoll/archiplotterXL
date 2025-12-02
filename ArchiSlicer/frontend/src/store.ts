@@ -40,6 +40,8 @@ export interface SVGItem {
   offsetX: number;             // X-Offset für Platzierung (mm)
   offsetY: number;             // Y-Offset für Platzierung (mm)
   workpieceStartId?: string;   // Optional: Referenz zum gewählten Workpiece Start
+  // DPI-Skalierung
+  dpi: number;                 // DPI für px→mm Umrechnung (Default: 96)
 }
 
 export const useMainStore = defineStore('main', {
@@ -68,7 +70,8 @@ export const useMainStore = defineStore('main', {
       infillOptions: InfillOptions = { ...defaultInfillOptions },
       feedrate: number = 3000,  // Standard-Geschwindigkeit
       infillToolNumber: number = toolNumber,  // Standardmäßig das gleiche Werkzeug wie für Konturen
-      drawingHeight: number = 0  // Standard-Zeichenhöhe (0 = Plattform)
+      drawingHeight: number = 0,  // Standard-Zeichenhöhe (0 = Plattform)
+      dpi: number = 96  // Standard-DPI für px→mm Umrechnung
     ) {
       this.svgItems.push({
         geometry,
@@ -83,7 +86,8 @@ export const useMainStore = defineStore('main', {
         isAnalyzed: false,  // Noch nicht analysiert
         isPathAnalyzed: false,  // Path-Analyse noch nicht durchgeführt
         offsetX: 0,         // Kein Offset standardmäßig
-        offsetY: 0
+        offsetY: 0,
+        dpi
       });
 
       // Update auch lineGeometry für Kompatibilität
@@ -178,6 +182,58 @@ export const useMainStore = defineStore('main', {
     updateSVGItemDrawingHeight(index: number, drawingHeight: number) {
       if (index >= 0 && index < this.svgItems.length) {
         this.svgItems[index].drawingHeight = drawingHeight;
+      }
+    },
+
+    // Methode zum Aktualisieren der DPI eines SVG-Items (skaliert die Geometrie)
+    updateSVGItemDpi(index: number, newDpi: number) {
+      if (index >= 0 && index < this.svgItems.length) {
+        const item = this.svgItems[index];
+        const oldDpi = item.dpi;
+
+        if (oldDpi === newDpi) return;
+
+        // Relative Skalierung berechnen
+        const relativeScale = oldDpi / newDpi;
+
+        // Alle Geometrien skalieren
+        item.geometry.children.forEach((child) => {
+          if (child instanceof THREE.Line) {
+            const positions = (child.geometry as THREE.BufferGeometry).attributes.position.array as Float32Array;
+            for (let i = 0; i < positions.length; i += 3) {
+              positions[i] *= relativeScale;      // X
+              positions[i + 1] *= relativeScale;  // Y
+            }
+            (child.geometry as THREE.BufferGeometry).attributes.position.needsUpdate = true;
+            child.geometry.computeBoundingBox();
+          }
+        });
+
+        // Auch Infill-Gruppe skalieren falls vorhanden
+        if (item.infillGroup) {
+          item.infillGroup.children.forEach((child) => {
+            if (child instanceof THREE.Line) {
+              const positions = (child.geometry as THREE.BufferGeometry).attributes.position.array as Float32Array;
+              for (let i = 0; i < positions.length; i += 3) {
+                positions[i] *= relativeScale;
+                positions[i + 1] *= relativeScale;
+              }
+              (child.geometry as THREE.BufferGeometry).attributes.position.needsUpdate = true;
+              child.geometry.computeBoundingBox();
+            }
+          });
+        }
+
+        // userData Abmessungen aktualisieren
+        if (item.geometry.userData) {
+          item.geometry.userData.minX *= relativeScale;
+          item.geometry.userData.maxX *= relativeScale;
+          item.geometry.userData.minY *= relativeScale;
+          item.geometry.userData.maxY *= relativeScale;
+        }
+
+        item.dpi = newDpi;
+        console.log(`DPI für "${item.fileName}" geändert: ${oldDpi} → ${newDpi} (Skalierung: ${relativeScale.toFixed(4)})`);
       }
     },
 
