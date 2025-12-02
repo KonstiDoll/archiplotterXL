@@ -17,6 +17,18 @@ export type ToolConfig = {
 
 const travelSpeed = 15000;
 
+// End-G-Code für sicheres Beenden
+// Hinweis: U-Achse wird nicht bewegt, da Tool-Ablage-Makros dies handhaben
+// X wird nicht auf 0 gefahren (Kollisionsgefahr mit Werkzeughalter)
+function generateEndGcode(): string {
+    return `
+; === END G-CODE ===
+G1 Y0 F${travelSpeed}        ; Y zur Ausgangsposition
+M400                 ; Warten bis alle Bewegungen fertig
+; === ENDE ===
+`;
+}
+
 // Verfügbare Stift-Typen (nur mechanische Eigenschaften)
 export const penTypes: { [key: string]: PenType } = {
     'stabilo':   { id: 'stabilo',   displayName: 'Stabilo Point 88', penDown: 13, penUp: 33 },
@@ -53,6 +65,7 @@ export function createGcodeFromLineGroup(
     toolConfig: ToolConfig = { penType: 'stabilo', color: '#000000' },
     customFeedrate: number = 3000,
     infillToolNumber: number = toolNumber,
+    infillToolConfig: ToolConfig = toolConfig,  // Separate Konfiguration für Infill-Tool
     drawingHeight: number = 0,
     offsetX: number = 0,
     offsetY: number = 0
@@ -61,9 +74,13 @@ export function createGcodeFromLineGroup(
     // Verwende die benutzerdefinierte Feedrate anstelle des Standardwerts
     const drawingSpeed = customFeedrate;
 
-    // Hole die PenType-Konfiguration (mechanische Eigenschaften)
+    // Hole die PenType-Konfiguration für Konturen
     const penTypeId = toolConfig.penType;
     const penTypeConfig = penTypes[penTypeId] || penTypes['stabilo'];
+
+    // Hole die PenType-Konfiguration für Infill
+    const infillPenTypeId = infillToolConfig.penType;
+    const infillPenTypeConfig = penTypes[infillPenTypeId] || penTypes['stabilo'];
 
     if (!penTypes[penTypeId]) {
         console.warn(`Stifttyp "${penTypeId}" nicht gefunden, verwende "stabilo"`);
@@ -182,46 +199,52 @@ export function createGcodeFromLineGroup(
             gCode += gcodeLine;
             gCode += moveUUp;
         });
-        
-        gCode += placeTool;
+
+        // Tool nur ablegen wenn kein Infill oder Infill anderes Tool verwendet
+        if (infillLines.length === 0 || infillToolNumber !== toolNumber) {
+            gCode += placeTool;
+        }
     }
-    
-    // Dann Infill mit separatem Werkzeug
+
+    // Dann Infill
     if (infillLines.length > 0) {
-        // Nur wenn Infill ein anderes Werkzeug verwendet oder noch kein Werkzeug geholt wurde
+        // Pen-Bewegungen für Infill-Tool
+        const infillPenUp = infillPenTypeConfig.penUp;
+        const infillPenDown = infillPenTypeConfig.penDown;
+        const moveInfillUUp = `G1 U${infillPenUp} F6000\n`;
+        const moveInfillUDown = `G1 U${infillPenDown} F6000\n`;
+
+        // Tool-Wechsel nur wenn anderes Werkzeug oder noch kein Werkzeug geholt wurde
         if (infillToolNumber !== toolNumber || allLines.length === 0) {
             const grabInfillTool = 'M98 P"/macros/grab_tool_' + infillToolNumber + '"\n'
-            // Makro-Name verwendet nur penTypeId (nicht Farbe)
-            const moveToDrawingHeight = 'M98 P"/macros/move_to_drawingHeight_' + penTypeId + '"\n'
+            const moveToDrawingHeight = 'M98 P"/macros/move_to_drawingHeight_' + infillPenTypeId + '"\n'
 
             gCode += grabInfillTool;
-            gCode += '; Stifttyp für Infill: ' + penTypeConfig.displayName + '\n';
+            gCode += '; Stifttyp für Infill: ' + infillPenTypeConfig.displayName + '\n';
             gCode += moveToDrawingHeight;
-            
+
             // Füge den Z-Offset für die Materialstärke nach dem Makro hinzu
             if (drawingHeight > 0) {
                 gCode += adjustMaterialHeight;
             }
-            
-            gCode += moveUUp;
+
+            gCode += moveInfillUUp;
         }
-        
+
         gCode += '\n; --- Infill zeichnen mit Tool #' + infillToolNumber + ' ---\n';
         infillLines.forEach((lineGeo) => {
-            const gcodeLine = createGcodeFromLine(lineGeo, moveUDown, drawingSpeed, offsetX, offsetY);
+            const gcodeLine = createGcodeFromLine(lineGeo, moveInfillUDown, drawingSpeed, offsetX, offsetY);
             gCode += gcodeLine;
-            gCode += moveUUp;
+            gCode += moveInfillUUp;
         });
-        
-        // Nur wenn Infill ein anderes Werkzeug verwendet oder keine Konturen gezeichnet wurden
-        if (infillToolNumber !== toolNumber || allLines.length === 0) {
-            const placeInfillTool = 'M98 P"/macros/place_tool_' + infillToolNumber + '"\n'
-            gCode += placeInfillTool;
-        }
+
+        // Tool ablegen (immer das Infill-Tool, da es das letzte verwendete ist)
+        const placeInfillTool = 'M98 P"/macros/place_tool_' + infillToolNumber + '"\n'
+        gCode += placeInfillTool;
     }
-    
-    gCode += 'G1 Y0 F15000\n';
-    
+
+    gCode += generateEndGcode();
+
     // Log der ersten und letzten G-Code-Zeilen
     const gcodeLines = gCode.split('\n');
     console.log(`G-Code Zeilen: ${gcodeLines.length}`);
@@ -250,7 +273,8 @@ export function createGcodeFromColorGroups(
     customFeedrate: number = 3000,
     drawingHeight: number = 0,
     offsetX: number = 0,
-    offsetY: number = 0
+    offsetY: number = 0,
+    infillToolNumber: number = 1  // Tool-Nummer für File-Level Infill
 ): string {
     // Map von Farbe zu Tool-Nummer erstellen
     const colorToTool = new Map<string, number>();
@@ -306,6 +330,9 @@ export function createGcodeFromColorGroups(
     // Sortiere Tools für konsistente Reihenfolge
     const sortedTools = Array.from(linesByTool.keys()).sort((a, b) => a - b);
 
+    // Tracking für Tool-Wechsel Optimierung
+    let lastToolNumber: number | null = null;
+
     // Für jedes Tool die Linien zeichnen
     sortedTools.forEach((toolNumber) => {
         const lines = linesByTool.get(toolNumber)!;
@@ -321,14 +348,19 @@ export function createGcodeFromColorGroups(
         const moveUUp = `G1 U${penUp} F6000\n`;
         const moveUDown = `G1 U${penDown} F6000\n`;
 
-        // Tool wechseln
         gCode += `\n; === Tool #${toolNumber} (${penTypeConfig.displayName}, ${toolConfig.color}) ===\n`;
-        gCode += `M98 P"/macros/grab_tool_${toolNumber}"\n`;
-        // Makro-Name verwendet nur penTypeId (nicht Farbe)
-        gCode += `M98 P"/macros/move_to_drawingHeight_${penTypeId}"\n`;
 
-        if (drawingHeight > 0) {
-            gCode += adjustMaterialHeight;
+        // Tool-Wechsel nur wenn nötig
+        if (lastToolNumber !== toolNumber) {
+            if (lastToolNumber !== null) {
+                gCode += `M98 P"/macros/place_tool_${lastToolNumber}"\n`;
+            }
+            gCode += `M98 P"/macros/grab_tool_${toolNumber}"\n`;
+            gCode += `M98 P"/macros/move_to_drawingHeight_${penTypeId}"\n`;
+            if (drawingHeight > 0) {
+                gCode += adjustMaterialHeight;
+            }
+            lastToolNumber = toolNumber;
         }
 
         gCode += moveUUp;
@@ -352,15 +384,11 @@ export function createGcodeFromColorGroups(
             gCode += gcodeLine;
             gCode += moveUUp;
         });
-
-        // Tool ablegen
-        gCode += `M98 P"/macros/place_tool_${toolNumber}"\n`;
     });
 
-    // Infill separat (mit Tool 1 oder separatem Infill-Tool)
+    // Infill separat (mit konfiguriertem Infill-Tool)
     if (infillLines.length > 0) {
-        const infillTool = 1; // Könnte später konfigurierbar sein
-        const infillToolConfig = toolConfigs[infillTool - 1] || { penType: 'stabilo', color: '#000000' };
+        const infillToolConfig = toolConfigs[infillToolNumber - 1] || { penType: 'stabilo', color: '#000000' };
         const infillPenTypeId = infillToolConfig.penType;
         const infillPenTypeConfig = penTypes[infillPenTypeId] || penTypes['stabilo'];
 
@@ -369,13 +397,19 @@ export function createGcodeFromColorGroups(
         const moveUUp = `G1 U${penUp} F6000\n`;
         const moveUDown = `G1 U${penDown} F6000\n`;
 
-        gCode += `\n; === Infill mit Tool #${infillTool} ===\n`;
-        gCode += `M98 P"/macros/grab_tool_${infillTool}"\n`;
-        // Makro-Name verwendet nur penTypeId (nicht Farbe)
-        gCode += `M98 P"/macros/move_to_drawingHeight_${infillPenTypeId}"\n`;
+        gCode += `\n; === Infill mit Tool #${infillToolNumber} ===\n`;
 
-        if (drawingHeight > 0) {
-            gCode += adjustMaterialHeight;
+        // Tool-Wechsel nur wenn nötig
+        if (lastToolNumber !== infillToolNumber) {
+            if (lastToolNumber !== null) {
+                gCode += `M98 P"/macros/place_tool_${lastToolNumber}"\n`;
+            }
+            gCode += `M98 P"/macros/grab_tool_${infillToolNumber}"\n`;
+            gCode += `M98 P"/macros/move_to_drawingHeight_${infillPenTypeId}"\n`;
+            if (drawingHeight > 0) {
+                gCode += adjustMaterialHeight;
+            }
+            lastToolNumber = infillToolNumber;
         }
 
         gCode += moveUUp;
@@ -386,11 +420,14 @@ export function createGcodeFromColorGroups(
             gCode += gcodeLine;
             gCode += moveUUp;
         });
-
-        gCode += `M98 P"/macros/place_tool_${infillTool}"\n`;
     }
 
-    gCode += 'G1 Y0 F15000\n';
+    // Letztes Tool ablegen
+    if (lastToolNumber !== null) {
+        gCode += `M98 P"/macros/place_tool_${lastToolNumber}"\n`;
+    }
+
+    gCode += generateEndGcode();
 
     console.log(`Multi-Color G-Code generiert: ${sortedTools.length} Tools verwendet`);
 
@@ -555,7 +592,7 @@ export function createGcodeWithColorInfill(
         gCode += `M98 P"/macros/place_tool_${lastToolNumber}"\n`;
     }
 
-    gCode += 'G1 Y0 F15000\n';
+    gCode += generateEndGcode();
 
     console.log(`G-Code mit farb-basiertem Infill generiert`);
 

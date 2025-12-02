@@ -157,7 +157,7 @@ const generateGcode = () => {
 
                 combinedGcode += svgGcode;
             } else {
-                // Kein farb-basiertes Infill: Standard Multi-Color G-Code
+                // Kein farb-basiertes Infill: Standard Multi-Color G-Code (mit File-Level Infill falls vorhanden)
                 const svgGcode = createGcodeFromColorGroups(
                     item.geometry,
                     item.colorGroups,
@@ -165,7 +165,8 @@ const generateGcode = () => {
                     item.feedrate,
                     globalDrawingHeight.value,
                     item.offsetX,
-                    item.offsetY
+                    item.offsetY,
+                    item.infillToolNumber
                 );
 
                 combinedGcode += svgGcode;
@@ -173,11 +174,12 @@ const generateGcode = () => {
         } else {
             // Standard Single-Tool G-Code
             const currentToolConfig = toolConfigs.value[item.toolNumber - 1];
+            const infillToolConfig = toolConfigs.value[item.infillToolNumber - 1];
 
             combinedGcode += `; Single-Tool Modus\n`;
             combinedGcode += `; Kontur mit Tool #${item.toolNumber}, Typ "${currentToolConfig.penType}", Farbe "${currentToolConfig.color}"\n`;
             if (item.infillOptions.patternType !== InfillPatternType.NONE) {
-                combinedGcode += `; Infill (${item.infillOptions.patternType}) mit Tool #${item.infillToolNumber}\n`;
+                combinedGcode += `; Infill (${item.infillOptions.patternType}) mit Tool #${item.infillToolNumber}, Typ "${infillToolConfig.penType}"\n`;
             }
             combinedGcode += `; Feedrate ${item.feedrate} mm/min\n`;
 
@@ -187,6 +189,7 @@ const generateGcode = () => {
                 currentToolConfig,
                 item.feedrate,
                 item.infillToolNumber,
+                infillToolConfig,
                 globalDrawingHeight.value,
                 item.offsetX,
                 item.offsetY
