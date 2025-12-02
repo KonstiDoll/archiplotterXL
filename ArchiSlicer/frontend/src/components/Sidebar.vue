@@ -31,6 +31,7 @@
                         v-for="(item, index) in store.svgItems"
                         :key="index"
                         :item="item"
+                        :tool-configs="toolConfigs"
                         :is-first="index === 0"
                         :is-last="index === store.svgItems.length - 1"
                         @move-up="store.moveItemUp(index)"
@@ -54,7 +55,7 @@
             </div>
 
             <!-- Color Assignment Panel -->
-            <ColorAssignmentPanel v-if="store.svgItems.length > 0" />
+            <ColorAssignmentPanel v-if="store.svgItems.length > 0" :tool-configs="toolConfigs" />
 
             <!-- Workpiece Starts Panel -->
             <WorkpieceStartPanel />
@@ -78,6 +79,15 @@
                         @change="$emit('update-drawing-height', Number(($event.target as HTMLInputElement).value))"
                         class="p-1 w-16 border rounded text-sm bg-white" min="0" max="50" step="0.5" />
                     <span class="text-white text-xs ml-1">mm</span>
+                </div>
+
+                <!-- Default DPI -->
+                <div class="flex items-center p-2 bg-slate-700 rounded mt-2">
+                    <span class="text-white text-xs mr-2">Default DPI:</span>
+                    <input type="number" :value="store.defaultDpi"
+                        @change="store.setDefaultDpi(Number(($event.target as HTMLInputElement).value))"
+                        class="p-1 w-16 border rounded text-sm bg-white" min="72" max="600" step="1" />
+                    <span class="text-slate-400 text-xs ml-2">(für neue Imports)</span>
                 </div>
 
                 <!-- Hintergrund-Preset -->
@@ -162,7 +172,7 @@ const loadSVGFile = async (file: File) => {
     reader.onload = async (event) => {
         if (event.target) {
             const contents = event.target.result as string;
-            const lineGeoGroup = await getThreejsObjectFromSvg(contents);
+            const lineGeoGroup = await getThreejsObjectFromSvg(contents, 0, store.defaultDpi);
             const currentToolConfig = props.toolConfigs[props.activeToolIndex - 1];
 
             store.addSVGItem(
@@ -174,7 +184,7 @@ const loadSVGFile = async (file: File) => {
                 3000,
                 props.activeToolIndex,
                 0,
-                96,       // Default DPI
+                store.defaultDpi,  // Default DPI aus Store
                 contents  // SVG-Inhalt für Neuberechnung bei DPI-Änderung speichern
             );
             console.log(`SVG "${file.name}" geladen mit Tool #${props.activeToolIndex}`);

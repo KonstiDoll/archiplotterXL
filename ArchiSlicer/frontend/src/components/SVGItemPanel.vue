@@ -1,7 +1,7 @@
 <template>
-    <div class="bg-slate-800 rounded-lg overflow-hidden">
+    <div class="bg-slate-800 rounded-lg">
         <!-- Header -->
-        <div class="flex items-center justify-between p-3 bg-slate-700">
+        <div class="flex items-center justify-between p-3 bg-slate-700 rounded-t-lg">
             <span class="text-white font-medium text-sm truncate max-w-[140px]" :title="item.fileName">
                 {{ item.fileName }}
             </span>
@@ -38,15 +38,16 @@
                 </select>
             </div>
 
-            <!-- Tool & Feedrate Row (nur wenn NICHT analysiert) -->
-            <div v-if="!item.isAnalyzed" class="flex items-center space-x-3">
+            <!-- Tool & Feedrate Row -->
+            <div class="flex items-center space-x-3">
                 <div class="flex items-center">
                     <label class="text-xs text-slate-400 mr-1">Tool:</label>
-                    <select :value="item.toolNumber"
-                        @change="$emit('update-tool', Number(($event.target as HTMLSelectElement).value))"
-                        class="p-1 w-14 text-sm border border-slate-600 rounded bg-slate-700 text-white">
-                        <option v-for="i in 9" :key="i" :value="i">{{ i }}</option>
-                    </select>
+                    <ToolSelect
+                        :model-value="item.toolNumber"
+                        :tool-configs="toolConfigs"
+                        @update:model-value="(v: number) => $emit('update-tool', v)"
+                        button-class="w-16"
+                    />
                 </div>
                 <div class="flex items-center flex-grow">
                     <label class="text-xs text-slate-400 mr-1">Speed:</label>
@@ -84,15 +85,6 @@
                 <span v-else class="text-xs text-green-400">
                     ✓ {{ item.colorGroups.length }} Farben
                 </span>
-            </div>
-
-            <!-- Feedrate (auch wenn analysiert) -->
-            <div v-if="item.isAnalyzed" class="flex items-center">
-                <label class="text-xs text-slate-400 mr-1">Speed:</label>
-                <input type="number" :value="item.feedrate"
-                    @change="$emit('update-feedrate', Number(($event.target as HTMLInputElement).value))"
-                    class="p-1 w-20 text-sm border border-slate-600 rounded bg-slate-700 text-white" min="100" max="30000" step="100" />
-                <span class="text-xs text-slate-400 ml-1">mm/min</span>
             </div>
 
             <!-- DPI-Skalierung und Abmessungen -->
@@ -171,7 +163,7 @@
         </div>
 
         <!-- Infill Options (Expandable) -->
-        <div v-if="expanded" class="p-3 bg-slate-700/50 border-t border-slate-600 space-y-3">
+        <div v-if="expanded" class="p-3 bg-slate-700/50 border-t border-slate-600 space-y-3 rounded-b-lg">
             <!-- Pattern Type -->
             <div class="flex items-center">
                 <label class="w-20 text-xs text-slate-400">Pattern:</label>
@@ -185,11 +177,12 @@
             <!-- Infill Tool -->
             <div class="flex items-center">
                 <label class="w-20 text-xs text-slate-400">Infill Tool:</label>
-                <select :value="item.infillToolNumber"
-                    @change="$emit('update-infill-tool', Number(($event.target as HTMLSelectElement).value))"
-                    class="flex-grow p-1 text-sm border border-slate-600 rounded bg-slate-600 text-white">
-                    <option v-for="i in 9" :key="i" :value="i">{{ i }}</option>
-                </select>
+                <ToolSelect
+                    :model-value="item.infillToolNumber"
+                    :tool-configs="toolConfigs"
+                    @update:model-value="(v: number) => $emit('update-infill-tool', v)"
+                    button-class="flex-grow"
+                />
             </div>
 
             <!-- Density -->
@@ -254,8 +247,15 @@ import { InfillPatternType, patternDensityRanges } from '../utils/threejs_servic
 import { useMainStore, type ColorGroup } from '../store';
 import type { PathAnalysisResult, PathInfo, PathRole } from '../utils/geometry/path-analysis';
 import { getEffectiveRole } from '../utils/geometry/path-analysis';
+import ToolSelect from './ToolSelect.vue';
 
 const store = useMainStore();
+
+// ToolConfig Interface (gleiche Struktur wie in gcode_services)
+interface ToolConfig {
+    penType: string;
+    color: string;
+}
 
 const props = defineProps<{
     item: {
@@ -284,6 +284,7 @@ const props = defineProps<{
         // Geometrie für Abmessungen
         geometry: Group;
     };
+    toolConfigs: ToolConfig[];
     isFirst: boolean;
     isLast: boolean;
 }>();

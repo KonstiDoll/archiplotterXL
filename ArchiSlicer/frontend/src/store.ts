@@ -1,15 +1,20 @@
 import { defineStore } from 'pinia'
 import * as THREE from 'three';
 import { markRaw } from 'vue';
-import { InfillOptions, defaultInfillOptions, analyzeColorsInGroup, getThreejsObjectFromSvg } from './utils/threejs_services';
+import { InfillOptions, InfillPatternType, defaultInfillOptions, analyzeColorsInGroup, getThreejsObjectFromSvg, generateInfillForColor } from './utils/threejs_services';
 import { PathAnalysisResult, PathRole, analyzePathRelationships, extractPolygonsFromGroup, getEffectiveRole } from './utils/geometry/path-analysis';
 
 // Interface für Farbgruppen (erkannte Farben mit Tool-Zuordnung)
 export interface ColorGroup {
   color: string;           // Hex-Farbe z.B. "#ff0000"
-  toolNumber: number;      // Zugeordnetes Tool (1-9), default: 1
+  toolNumber: number;      // Zugeordnetes Tool für Konturen (1-9), default: 1
   lineCount: number;       // Anzahl Linien mit dieser Farbe
   visible: boolean;        // Sichtbarkeit in Vorschau
+  // Infill-Einstellungen pro Farbe
+  infillEnabled: boolean;           // Infill an/aus für diese Farbe
+  infillToolNumber: number;         // Tool für Infill (kann anders sein als Kontur-Tool)
+  infillOptions: InfillOptions;     // Pattern, Dichte, Winkel, etc.
+  infillGroup?: THREE.Group;        // Generierte Infill-Geometrie (optional)
 }
 
 // Interface für Workpiece Starts (Platzierungspunkte)
@@ -42,7 +47,7 @@ export interface SVGItem {
   offsetY: number;             // Y-Offset für Platzierung (mm)
   workpieceStartId?: string;   // Optional: Referenz zum gewählten Workpiece Start
   // DPI-Skalierung
-  dpi: number;                 // DPI für px→mm Umrechnung (Default: 96)
+  dpi: number;                 // DPI für px→mm Umrechnung (Default: 72)
   svgContent?: string;         // Original SVG-Inhalt für Neuberechnung bei DPI-Änderung
 }
 
@@ -55,7 +60,9 @@ export const useMainStore = defineStore('main', {
     // Workpiece Starts (Platzierungspunkte)
     workpieceStarts: [
       { id: 'default_start_1', name: 'Start 1', x: 100, y: 100 }
-    ] as WorkpieceStart[]
+    ] as WorkpieceStart[],
+    // Default DPI für neue SVG-Imports
+    defaultDpi: 72
   }),
   actions: {
     // Altes setLineGeometry für Kompatibilität
@@ -228,6 +235,12 @@ export const useMainStore = defineStore('main', {
       }
     },
 
+    // Default DPI für neue Imports setzen
+    setDefaultDpi(dpi: number) {
+      this.defaultDpi = dpi;
+      console.log(`Default DPI auf ${dpi} gesetzt`);
+    },
+
     // ===== NEU: Farb-Analyse Actions =====
 
     // Farbanalyse für ein SVG-Item durchführen
@@ -236,16 +249,23 @@ export const useMainStore = defineStore('main', {
         const item = this.svgItems[index];
         const colorInfos = analyzeColorsInGroup(item.geometry);
 
-        // ColorGroups erstellen mit Default Tool 1
+        // ColorGroups erstellen - erben das Tool der Datei als Default
+        const defaultTool = item.toolNumber;
+        const defaultInfillTool = item.infillToolNumber;
+
         item.colorGroups = colorInfos.map(info => ({
           color: info.color,
-          toolNumber: 1,  // Default: alle Farben bekommen Tool 1
+          toolNumber: defaultTool,  // Erbe Kontur-Tool von der Datei
           lineCount: info.lineCount,
-          visible: true
+          visible: true,
+          // Infill-Defaults - erben von Datei
+          infillEnabled: false,
+          infillToolNumber: defaultInfillTool,  // Erbe Infill-Tool von der Datei
+          infillOptions: { ...defaultInfillOptions }
         }));
 
         item.isAnalyzed = true;
-        console.log(`Farbanalyse für "${item.fileName}": ${item.colorGroups.length} Farben gefunden`);
+        console.log(`Farbanalyse für "${item.fileName}": ${item.colorGroups.length} Farben gefunden (Default-Tool: ${defaultTool})`);
       }
     },
 
@@ -274,6 +294,107 @@ export const useMainStore = defineStore('main', {
       if (index >= 0 && index < this.svgItems.length) {
         this.svgItems[index].colorGroups = [];
         this.svgItems[index].isAnalyzed = false;
+      }
+    },
+
+    // ===== Farb-basierte Infill Actions =====
+
+    // Infill für eine Farbgruppe aktivieren/deaktivieren
+    toggleColorInfill(svgIndex: number, colorIndex: number) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          item.colorGroups[colorIndex].infillEnabled = !item.colorGroups[colorIndex].infillEnabled;
+        }
+      }
+    },
+
+    // Infill-Tool für eine Farbgruppe setzen
+    setColorInfillTool(svgIndex: number, colorIndex: number, toolNumber: number) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          item.colorGroups[colorIndex].infillToolNumber = toolNumber;
+        }
+      }
+    },
+
+    // Infill-Pattern für eine Farbgruppe setzen
+    setColorInfillPattern(svgIndex: number, colorIndex: number, patternType: InfillPatternType) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          item.colorGroups[colorIndex].infillOptions.patternType = patternType;
+        }
+      }
+    },
+
+    // Infill-Optionen für eine Farbgruppe aktualisieren
+    updateColorInfillOptions(svgIndex: number, colorIndex: number, options: Partial<InfillOptions>) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          item.colorGroups[colorIndex].infillOptions = {
+            ...item.colorGroups[colorIndex].infillOptions,
+            ...options
+          };
+        }
+      }
+    },
+
+    // Infill für eine Farbgruppe generieren
+    generateColorInfill(svgIndex: number, colorIndex: number) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          const colorGroup = item.colorGroups[colorIndex];
+
+          // Vorhandenes Infill entfernen
+          if (colorGroup.infillGroup) {
+            item.geometry.remove(colorGroup.infillGroup);
+            colorGroup.infillGroup = undefined;
+          }
+
+          // Neues Infill generieren (mit automatischer Hole-Detection pro Farbe)
+          const infillGroup = generateInfillForColor(
+            item.geometry,
+            colorGroup.color,
+            colorGroup.infillOptions
+          );
+
+          if (infillGroup.children.length > 0) {
+            // Mit markRaw für Vue-Reaktivität
+            colorGroup.infillGroup = markRaw(infillGroup);
+            // Zur Szene hinzufügen
+            item.geometry.add(infillGroup);
+            console.log(`Infill für Farbe ${colorGroup.color} generiert: ${infillGroup.children.length} Linien`);
+          } else {
+            console.warn(`Kein Infill für Farbe ${colorGroup.color} generiert (keine geschlossenen Pfade?)`);
+          }
+
+          // Trigger scene update
+          this.svgItems = [...this.svgItems];
+        }
+      }
+    },
+
+    // Infill für eine Farbgruppe löschen
+    deleteColorInfill(svgIndex: number, colorIndex: number) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          const colorGroup = item.colorGroups[colorIndex];
+
+          if (colorGroup.infillGroup) {
+            // Aus Szene entfernen
+            item.geometry.remove(colorGroup.infillGroup);
+            colorGroup.infillGroup = undefined;
+            console.log(`Infill für Farbe ${colorGroup.color} gelöscht`);
+
+            // Trigger scene update
+            this.svgItems = [...this.svgItems];
+          }
+        }
       }
     },
 

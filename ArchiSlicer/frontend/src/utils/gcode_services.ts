@@ -395,6 +395,171 @@ export function createGcodeFromColorGroups(
     return gCode;
 }
 
+// Interface für ColorGroup mit Infill-Einstellungen
+interface ColorGroupWithInfill {
+    color: string;
+    toolNumber: number;
+    lineCount: number;
+    visible: boolean;
+    infillEnabled: boolean;
+    infillToolNumber: number;
+    infillOptions: {
+        patternType: string;
+        density: number;
+        angle: number;
+        outlineOffset: number;
+    };
+}
+
+/**
+ * Generiert G-Code mit farb-basiertem Infill
+ *
+ * Reihenfolge pro Farbe:
+ * 1. Konturen dieser Farbe (mit Kontur-Tool)
+ * 2. Infill dieser Farbe (mit Infill-Tool, falls aktiviert)
+ * 3. Nächste Farbe...
+ *
+ * @param lineGeoGroup Die THREE.Group mit allen SVG-Linien
+ * @param colorGroups ColorGroups mit Infill-Einstellungen
+ * @param infillGroups Map von Farbe → Infill-Gruppe
+ * @param toolConfigs Tool-Konfigurationen (Index 0 = Tool 1)
+ * @param customFeedrate Zeichengeschwindigkeit
+ * @param drawingHeight Z-Höhe für Materialstärke
+ * @param offsetX X-Offset
+ * @param offsetY Y-Offset
+ */
+export function createGcodeWithColorInfill(
+    lineGeoGroup: THREE.Group,
+    colorGroups: ColorGroupWithInfill[],
+    infillGroups: Map<string, THREE.Group>,
+    toolConfigs: ToolConfig[],
+    customFeedrate: number = 3000,
+    drawingHeight: number = 0,
+    offsetX: number = 0,
+    offsetY: number = 0
+): string {
+    let gCode = 'G90\nG21\n'; // Absolute positioning, millimeters
+
+    if (drawingHeight > 0) {
+        gCode += `; Material-/Zeichenhöhe: ${drawingHeight.toFixed(2)}mm\n`;
+    }
+
+    // Z-Offset für die Materialdicke
+    const adjustMaterialHeight = drawingHeight > 0
+        ? `G91\nG1 Z${drawingHeight.toFixed(2)} F6000\nG90\n`
+        : '';
+
+    // Gruppiere Konturen nach Farbe
+    const linesByColor = new Map<string, THREE.Line[]>();
+
+    lineGeoGroup.children.forEach((child) => {
+        if (child instanceof THREE.Line && !child.name.startsWith('Infill_')) {
+            const color = (child.userData?.effectiveColor || '#000000').toLowerCase();
+            if (!linesByColor.has(color)) {
+                linesByColor.set(color, []);
+            }
+            linesByColor.get(color)!.push(child);
+        }
+    });
+
+    let lastToolNumber: number | null = null;
+
+    // Verarbeite jede Farbgruppe
+    for (const colorGroup of colorGroups) {
+        // Überspringe unsichtbare Farben
+        if (!colorGroup.visible) continue;
+
+        const color = colorGroup.color.toLowerCase();
+        const contourLines = linesByColor.get(color) || [];
+        const infillGroup = infillGroups.get(color);
+        const hasInfill = colorGroup.infillEnabled && infillGroup && infillGroup.children.length > 0;
+
+        // Überspringe wenn weder Konturen noch Infill vorhanden
+        if (contourLines.length === 0 && !hasInfill) continue;
+
+        gCode += `\n; === Farbe ${colorGroup.color} ===\n`;
+
+        // --- KONTUREN ---
+        if (contourLines.length > 0) {
+            const contourTool = colorGroup.toolNumber;
+            const toolConfig = toolConfigs[contourTool - 1] || { penType: 'stabilo', color: '#000000' };
+            const penTypeConfig = penTypes[toolConfig.penType] || penTypes['stabilo'];
+
+            // Tool-Wechsel falls nötig
+            if (lastToolNumber !== contourTool) {
+                // Vorheriges Tool ablegen
+                if (lastToolNumber !== null) {
+                    gCode += `M98 P"/macros/place_tool_${lastToolNumber}"\n`;
+                }
+                // Neues Tool holen
+                gCode += `M98 P"/macros/grab_tool_${contourTool}"\n`;
+                gCode += `M98 P"/macros/move_to_drawingHeight_${toolConfig.penType}"\n`;
+                if (drawingHeight > 0) {
+                    gCode += adjustMaterialHeight;
+                }
+                lastToolNumber = contourTool;
+            }
+
+            const moveUUp = `G1 U${penTypeConfig.penUp} F6000\n`;
+            const moveUDown = `G1 U${penTypeConfig.penDown} F6000\n`;
+
+            gCode += moveUUp;
+            gCode += `; Konturen (${contourLines.length} Linien) mit Tool #${contourTool}\n`;
+
+            contourLines.forEach((lineGeo) => {
+                gCode += createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY);
+                gCode += moveUUp;
+            });
+        }
+
+        // --- INFILL ---
+        if (hasInfill) {
+            const infillTool = colorGroup.infillToolNumber;
+            const toolConfig = toolConfigs[infillTool - 1] || { penType: 'stabilo', color: '#000000' };
+            const penTypeConfig = penTypes[toolConfig.penType] || penTypes['stabilo'];
+
+            // Tool-Wechsel falls nötig
+            if (lastToolNumber !== infillTool) {
+                // Vorheriges Tool ablegen
+                if (lastToolNumber !== null) {
+                    gCode += `M98 P"/macros/place_tool_${lastToolNumber}"\n`;
+                }
+                // Neues Tool holen
+                gCode += `M98 P"/macros/grab_tool_${infillTool}"\n`;
+                gCode += `M98 P"/macros/move_to_drawingHeight_${toolConfig.penType}"\n`;
+                if (drawingHeight > 0) {
+                    gCode += adjustMaterialHeight;
+                }
+                lastToolNumber = infillTool;
+            }
+
+            const moveUUp = `G1 U${penTypeConfig.penUp} F6000\n`;
+            const moveUDown = `G1 U${penTypeConfig.penDown} F6000\n`;
+
+            gCode += moveUUp;
+            gCode += `; Infill (${colorGroup.infillOptions.patternType}, ${infillGroup!.children.length} Linien) mit Tool #${infillTool}\n`;
+
+            infillGroup!.children.forEach((child) => {
+                if (child instanceof THREE.Line) {
+                    gCode += createGcodeFromLine(child, moveUDown, customFeedrate, offsetX, offsetY);
+                    gCode += moveUUp;
+                }
+            });
+        }
+    }
+
+    // Letztes Tool ablegen
+    if (lastToolNumber !== null) {
+        gCode += `M98 P"/macros/place_tool_${lastToolNumber}"\n`;
+    }
+
+    gCode += 'G1 Y0 F15000\n';
+
+    console.log(`G-Code mit farb-basiertem Infill generiert`);
+
+    return gCode;
+}
+
 // Helper function for creating G-code from a single line
 function createGcodeFromLine(
     lineGeo: THREE.Line,

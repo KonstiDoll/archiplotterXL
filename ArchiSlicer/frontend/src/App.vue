@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import * as THREE from 'three';
 import { useMainStore } from './store';
-import { createGcodeFromLineGroup, createGcodeFromColorGroups, type ToolConfig } from './utils/gcode_services';
-import { InfillPatternType } from './utils/threejs_services';
+import { createGcodeFromLineGroup, createGcodeFromColorGroups, createGcodeWithColorInfill, type ToolConfig } from './utils/gcode_services';
+import { InfillPatternType, generateInfillForColor } from './utils/threejs_services';
 import AppHeader from './components/AppHeader.vue';
 import Sidebar from './components/Sidebar.vue';
 import ThreejsScene from './components/ThreejsScene.vue';
@@ -95,17 +96,54 @@ const generateGcode = () => {
             combinedGcode += `; Verwendete Tools: ${Array.from(usedTools).sort().join(', ')}\n`;
             combinedGcode += `; Feedrate ${item.feedrate} mm/min\n`;
 
-            const svgGcode = createGcodeFromColorGroups(
-                item.geometry,
-                item.colorGroups,
-                toolConfigs.value,
-                item.feedrate,
-                globalDrawingHeight.value,
-                item.offsetX,
-                item.offsetY
-            );
+            // Prüfen ob farb-basiertes Infill aktiv ist
+            const hasColorInfill = item.colorGroups.some(cg => cg.infillEnabled);
 
-            combinedGcode += svgGcode;
+            if (hasColorInfill) {
+                // Farb-basiertes Infill: Generiere Infill pro Farbe
+                const infillGroups = new Map<string, THREE.Group>();
+                const colorsWithInfill: string[] = [];
+
+                for (const colorGroup of item.colorGroups) {
+                    if (colorGroup.infillEnabled) {
+                        const infillGroup = generateInfillForColor(
+                            item.geometry,
+                            colorGroup.color,
+                            colorGroup.infillOptions
+                        );
+                        infillGroups.set(colorGroup.color.toLowerCase(), infillGroup);
+                        colorsWithInfill.push(colorGroup.color);
+                    }
+                }
+
+                combinedGcode += `; Farb-basiertes Infill für: ${colorsWithInfill.join(', ')}\n`;
+
+                const svgGcode = createGcodeWithColorInfill(
+                    item.geometry,
+                    item.colorGroups,
+                    infillGroups,
+                    toolConfigs.value,
+                    item.feedrate,
+                    globalDrawingHeight.value,
+                    item.offsetX,
+                    item.offsetY
+                );
+
+                combinedGcode += svgGcode;
+            } else {
+                // Kein farb-basiertes Infill: Standard Multi-Color G-Code
+                const svgGcode = createGcodeFromColorGroups(
+                    item.geometry,
+                    item.colorGroups,
+                    toolConfigs.value,
+                    item.feedrate,
+                    globalDrawingHeight.value,
+                    item.offsetX,
+                    item.offsetY
+                );
+
+                combinedGcode += svgGcode;
+            }
         } else {
             // Standard Single-Tool G-Code
             const currentToolConfig = toolConfigs.value[item.toolNumber - 1];

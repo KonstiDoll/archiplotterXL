@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
 import { computed } from 'vue';
 import { offsetPolygon, isValidPolygon, clipLineToPolygon } from './geometry/clipper-utils';
-import { PathAnalysisResult, getPolygonsWithHoles } from './geometry/path-analysis';
+import { PathAnalysisResult, getPolygonsWithHoles, analyzePathRelationships } from './geometry/path-analysis';
 
 // Enum für Füllmuster-Typen
 export enum InfillPatternType {
@@ -700,6 +700,159 @@ export function generateInfillWithHoles(
 }
 
 /**
+ * Generiert Infill nur für geschlossene Pfade einer bestimmten Farbe
+ * Mit automatischer Hole-Detection innerhalb der Farbgruppe
+ *
+ * @param group Die THREE.Group mit allen SVG-Linien
+ * @param color Die Hex-Farbe (z.B. "#ff0000") für die Infill generiert werden soll
+ * @param options Infill-Optionen (Pattern, Dichte, etc.)
+ * @returns Eine neue THREE.Group mit den Infill-Linien für diese Farbe
+ */
+export function generateInfillForColor(
+    group: THREE.Group,
+    color: string,
+    options: InfillOptions
+): THREE.Group {
+    const infillGroup = new THREE.Group();
+    infillGroup.name = `InfillGroup_${color.replace('#', '')}`;
+
+    // Wenn kein Infill gewünscht ist, leere Gruppe zurückgeben
+    if (options.patternType === InfillPatternType.NONE) {
+        console.log(`Kein Infill für Farbe ${color} (Pattern: NONE)`);
+        return infillGroup;
+    }
+
+    // Normalisiere die Zielfarbe für Vergleich
+    const targetColor = color.toLowerCase();
+
+    // Finde alle geschlossenen Pfade mit der angegebenen Farbe und extrahiere Polygone
+    const polygonsForColor: THREE.Vector2[][] = [];
+
+    group.children.forEach((child) => {
+        if (child instanceof THREE.Line && child.userData?.isClosed) {
+            const pathColor = (child.userData?.effectiveColor || '#000000').toLowerCase();
+            if (pathColor === targetColor) {
+                const points = extractPathPoints(child);
+                if (points.length >= 3) {
+                    polygonsForColor.push(points);
+                }
+            }
+        }
+    });
+
+    console.log(`Infill für Farbe ${color}: ${polygonsForColor.length} geschlossene Pfade gefunden`);
+
+    if (polygonsForColor.length === 0) {
+        return infillGroup;
+    }
+
+    // Path-Analyse für Hole-Detection NUR innerhalb dieser Farbgruppe
+    const colorPathAnalysis = analyzePathRelationships(polygonsForColor);
+    const polygonsWithHoles = getPolygonsWithHoles(colorPathAnalysis);
+
+    console.log(`Farbe ${color}: ${colorPathAnalysis.outerPaths.length} Outer, ${colorPathAnalysis.holes.length} Holes, ${colorPathAnalysis.nestedObjects.length} Nested`);
+
+    // Generiere Infill für jedes Polygon (outer + nested objects) mit Hole-Clipping
+    polygonsWithHoles.forEach((item, itemIndex) => {
+        let { outer, holes } = item;
+
+        console.log(`Polygon ${itemIndex} (Farbe ${color}): ${outer.length} Punkte, ${holes.length} Holes`);
+
+        if (outer.length < 3) {
+            console.warn(`Zu wenig Punkte für Polygon ${itemIndex}`);
+            return;
+        }
+
+        // Outline Offset anwenden (Polygon nach innen versetzen)
+        if (options.outlineOffset > 0) {
+            const offsetResult = offsetPolygon(outer, -options.outlineOffset, 'miter');
+            if (offsetResult.length > 0 && offsetResult[0].length >= 3) {
+                outer = offsetResult[0];
+            } else {
+                console.warn(`Outline Offset zu groß für Polygon ${itemIndex} - überspringe`);
+                return;
+            }
+
+            // Holes auch nach außen versetzen (damit Abstand zum Hole eingehalten wird)
+            holes = holes.map(hole => {
+                const holeOffset = offsetPolygon(hole, options.outlineOffset, 'miter');
+                return holeOffset.length > 0 && holeOffset[0].length >= 3 ? holeOffset[0] : hole;
+            });
+        }
+
+        // Berechne Bounding Box
+        const bounds = calculateBounds(outer);
+
+        // Generiere Infill basierend auf dem gewählten Muster
+        let infillLines: THREE.Line[] = [];
+
+        try {
+            switch (options.patternType) {
+                case InfillPatternType.LINES:
+                    infillLines = generateLineInfill(outer, bounds, options);
+                    break;
+                case InfillPatternType.GRID:
+                    const gridA = generateLineInfill(outer, bounds, { ...options, angle: 0 });
+                    const gridB = generateLineInfill(outer, bounds, { ...options, angle: 90 });
+                    infillLines = [...gridA, ...gridB];
+                    break;
+                case InfillPatternType.ZIGZAG:
+                    infillLines = generateZigzagInfill(outer, bounds, options);
+                    break;
+                case InfillPatternType.HONEYCOMB:
+                    infillLines = generateHoneycombInfill(outer, bounds, options);
+                    break;
+                case InfillPatternType.CONCENTRIC:
+                    infillLines = generateConcentricInfill(outer, bounds, options);
+                    break;
+                case InfillPatternType.SPIRAL:
+                    infillLines = generateSpiralInfill(outer, bounds, options);
+                    break;
+                case InfillPatternType.FERMAT_SPIRAL:
+                    infillLines = generateFermatSpiralInfill(outer, bounds, options);
+                    break;
+                case InfillPatternType.CROSSHATCH:
+                    const crossA = generateLineInfill(outer, bounds, { ...options, angle: options.angle });
+                    const crossB = generateLineInfill(outer, bounds, { ...options, angle: options.angle + 45 });
+                    infillLines = [...crossA, ...crossB];
+                    break;
+                case InfillPatternType.HILBERT:
+                    infillLines = generateHilbertInfill(outer, bounds, options);
+                    break;
+                default:
+                    console.warn(`Unbekannter Infill-Typ: ${options.patternType}`);
+                    break;
+            }
+        } catch (error) {
+            console.error(`Fehler bei der Infill-Generierung für Polygon ${itemIndex}:`, error);
+        }
+
+        // Hole-Clipping: Infill-Linien um Holes herum clippen
+        if (holes.length > 0 && infillLines.length > 0) {
+            console.log(`Clippe ${infillLines.length} Linien um ${holes.length} Holes`);
+            infillLines = clipInfillLinesToHoles(infillLines, holes);
+        }
+
+        // Benenne die Linien und füge sie zur Gruppe hinzu
+        infillLines.forEach((line, lineIndex) => {
+            line.name = `Infill_${color.replace('#', '')}_Poly${itemIndex}_Line${lineIndex}`;
+            (line.material as THREE.LineBasicMaterial).color = new THREE.Color(0x4287f5);
+            line.userData = {
+                ...line.userData,
+                sourceColor: color,
+                isInfill: true
+            };
+            infillGroup.add(line);
+        });
+
+        console.log(`${infillLines.length} Infill-Linien generiert für Polygon ${itemIndex} (Farbe: ${color})`);
+    });
+
+    console.log(`Insgesamt ${infillGroup.children.length} Infill-Linien für Farbe ${color}`);
+    return infillGroup;
+}
+
+/**
  * Clippt Infill-Linien um Holes herum
  *
  * Für jede Linie:
@@ -837,7 +990,7 @@ function clipInfillLinesToHoles(
 }
 
 // Extraktion der Pfadpunkte aus einer THREE.Line
-function extractPathPoints(path: THREE.Line): THREE.Vector2[] {
+export function extractPathPoints(path: THREE.Line): THREE.Vector2[] {
     const positions = path.geometry.attributes.position.array;
     const points: THREE.Vector2[] = [];
     
