@@ -48,6 +48,7 @@
                         @analyze="store.analyzeColors(index)"
                         @set-path-role="(pathId, role) => store.setPathRole(index, pathId, role)"
                         @update-workpiece-start="(v) => store.setSVGItemWorkpieceStart(index, v)"
+                        @update-dpi="(v) => store.updateSVGItemDpi(index, v)"
                     />
                 </div>
             </div>

@@ -110,27 +110,49 @@ export function cssColorToHex(color: string): string {
 }
 
 // Funktion zum Extrahieren aller einzigartigen Farben aus SVG-Inhalt
+// Berücksichtigt sowohl stroke- als auch fill-Attribute
 export function extractColorsFromSVG(svgContent: string): string[] {
     const parser = new DOMParser();
     const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
     const colors = new Set<string>();
 
-    // Alle Elemente mit stroke-Attribut finden
-    const elements = svgDoc.querySelectorAll('[stroke]');
-    elements.forEach(el => {
-        const stroke = el.getAttribute('stroke');
-        if (stroke && stroke !== 'none') {
-            colors.add(cssColorToHex(stroke));
-        }
-    });
+    // Alle zeichenbaren SVG-Elemente finden
+    const allElements = svgDoc.querySelectorAll(
+        'path, line, polyline, polygon, rect, circle, ellipse'
+    );
 
-    // Auch style-Attribute prüfen
-    const styledElements = svgDoc.querySelectorAll('[style]');
-    styledElements.forEach(el => {
+    allElements.forEach(el => {
+        let strokeColor: string | null = null;
+        let fillColor: string | null = null;
+
+        // Direkte Attribute prüfen
+        const strokeAttr = el.getAttribute('stroke');
+        if (strokeAttr && strokeAttr !== 'none') {
+            strokeColor = strokeAttr;
+        }
+
+        const fillAttr = el.getAttribute('fill');
+        if (fillAttr && fillAttr !== 'none') {
+            fillColor = fillAttr;
+        }
+
+        // Style-Attribut prüfen (überschreibt direkte Attribute)
         const style = el.getAttribute('style') || '';
         const strokeMatch = style.match(/stroke:\s*([^;]+)/);
-        if (strokeMatch && strokeMatch[1] !== 'none') {
-            colors.add(cssColorToHex(strokeMatch[1].trim()));
+        if (strokeMatch && strokeMatch[1].trim() !== 'none') {
+            strokeColor = strokeMatch[1].trim();
+        }
+
+        const fillMatch = style.match(/fill:\s*([^;]+)/);
+        if (fillMatch && fillMatch[1].trim() !== 'none') {
+            fillColor = fillMatch[1].trim();
+        }
+
+        // Priorität anwenden: stroke > fill
+        if (strokeColor) {
+            colors.add(cssColorToHex(strokeColor));
+        } else if (fillColor) {
+            colors.add(cssColorToHex(fillColor));
         }
     });
 
@@ -154,9 +176,13 @@ export function analyzeColorsInGroup(group: THREE.Group): ColorInfo[] {
 
     group.children.forEach(child => {
         if (child instanceof THREE.Line) {
-            const strokeColor = child.userData?.strokeColor || '#000000';
-            const count = colorCounts.get(strokeColor) || 0;
-            colorCounts.set(strokeColor, count + 1);
+            // Verwende effectiveColor (berücksichtigt stroke/fill Priorität)
+            // Fallback auf strokeColor für Abwärtskompatibilität
+            const color = child.userData?.effectiveColor
+                       || child.userData?.strokeColor
+                       || '#000000';
+            const count = colorCounts.get(color) || 0;
+            colorCounts.set(color, count + 1);
         }
     });
 
@@ -172,8 +198,9 @@ export function analyzeColorsInGroup(group: THREE.Group): ColorInfo[] {
     return colorInfos;
 }
 
-export function getThreejsObjectFromSvg(svgContent: string, _offsetX: number = 0): Promise<THREE.Group> {
+export function getThreejsObjectFromSvg(svgContent: string, _offsetX: number = 0, dpi: number = 96): Promise<THREE.Group> {
     console.log("--- SVG Analyse Start ---");
+    console.log(`DPI: ${dpi} (Skalierungsfaktor px→mm: ${(25.4 / dpi).toFixed(4)})`);
     // _offsetX parameter is kept for compatibility but not used anymore
     
     // SVG Metadaten extrahieren (viewBox, width, height, transform)
@@ -233,14 +260,26 @@ export function getThreejsObjectFromSvg(svgContent: string, _offsetX: number = 0
     const group = new THREE.Group();
     
     paths.forEach((shapePath) => {
-        // Extrahiere die stroke-Farbe aus den SVG-Daten
+        // Extrahiere stroke- und fill-Farben aus den SVG-Daten
         // SVGLoader speichert Style-Infos in userData.style
         //@ts-ignore
         const style = shapePath.userData?.style || {};
         const strokeColor = style.stroke;
+        const fillColor = style.fill;
+
+        // Bestimme die effektive Farbe für diesen Pfad
+        // Priorität: stroke > fill > schwarz
+        let effectiveColor: string;
+        if (strokeColor && strokeColor !== 'none') {
+            effectiveColor = strokeColor;
+        } else if (fillColor && fillColor !== 'none') {
+            effectiveColor = fillColor;
+        } else {
+            effectiveColor = '#000000';
+        }
 
         // Konvertiere die Farbe zu Hex
-        const hexColor = cssColorToHex(strokeColor);
+        const hexColor = cssColorToHex(effectiveColor);
         const threeColor = new THREE.Color(hexColor);
 
         const material = new THREE.LineBasicMaterial({
@@ -258,8 +297,12 @@ export function getThreejsObjectFromSvg(svgContent: string, _offsetX: number = 0
             const line = new THREE.Line(geometry, material);
             //@ts-ignore
             line.userData = { ...shapePath.userData };
-            // Speichere die Original-Stroke-Farbe für spätere Verwendung
-            line.userData.strokeColor = hexColor;
+            // Speichere alle Farbinformationen für spätere Verwendung
+            line.userData.strokeColor = strokeColor && strokeColor !== 'none'
+                ? cssColorToHex(strokeColor) : null;
+            line.userData.fillColor = fillColor && fillColor !== 'none'
+                ? cssColorToHex(fillColor) : null;
+            line.userData.effectiveColor = hexColor;
             
             if (subPath.curves.length > 1) {
                 const isClosed = computed(() => {
@@ -327,17 +370,17 @@ export function getThreejsObjectFromSvg(svgContent: string, _offsetX: number = 0
         });
     }
     
-    // Ermittle die Abmessungen der transformierten Gruppe
+    // Ermittle die Abmessungen VOR der Koordinatentransformation
     let minX = Infinity, maxX = -Infinity;
     let minY = Infinity, maxY = -Infinity;
-    
+
     group.children.forEach((child) => {
         if (child instanceof THREE.Line) {
             const positions = child.geometry.attributes.position.array;
             for (let i = 0; i < positions.length; i += 3) {
                 const x = positions[i];
                 const y = positions[i + 1];
-                
+
                 if (x < minX) minX = x;
                 if (x > maxX) maxX = x;
                 if (y < minY) minY = y;
@@ -345,8 +388,82 @@ export function getThreejsObjectFromSvg(svgContent: string, _offsetX: number = 0
             }
         }
     });
-    
-    console.log("Finale ThreeJS-Gruppe Abmessungen:");
+
+    console.log("SVG Abmessungen (vor Transformation):");
+    console.log(`X: Min=${minX.toFixed(2)}, Max=${maxX.toFixed(2)}, Breite=${(maxX - minX).toFixed(2)}`);
+    console.log(`Y: Min=${minY.toFixed(2)}, Max=${maxY.toFixed(2)}, Höhe=${(maxY - minY).toFixed(2)}`);
+
+    // ============================================================
+    // Koordinatentransformation: SVG → Slicer-Vorschau
+    // SVG/Inkscape: Nullpunkt links oben, X nach rechts, Y nach unten
+    // Slicer (Three.js): Nullpunkt links unten, X nach rechts, Y nach oben
+    //
+    // Transformation:
+    //   X bleibt X (Offset vom Ursprung wird beibehalten)
+    //   Y wird gespiegelt: Y_neu = viewBox.height - Y_alt
+    //   → Abstand vom oberen Rand (Inkscape) = Abstand vom unteren Rand (Slicer)
+    //
+    // Hinweis: X↔Y Tausch für Maschine erfolgt im G-Code Export
+    // ============================================================
+    console.log(`Y-Spiegelung mit viewBox.height: ${viewBox.height}`);
+
+    group.children.forEach((child) => {
+        if (child instanceof THREE.Line) {
+            const positions = child.geometry.attributes.position.array;
+            for (let i = 0; i < positions.length; i += 3) {
+                const x_alt = positions[i];
+                const y_alt = positions[i + 1];
+
+                // SVG → Slicer Koordinatentransformation (nur Y spiegeln)
+                positions[i] = x_alt;                        // X bleibt (Offset beibehalten)
+                positions[i + 1] = viewBox.height - y_alt;   // Y invertieren (Offset erhalten)
+            }
+            child.geometry.attributes.position.needsUpdate = true;
+        }
+    });
+
+    // DPI-Skalierung anwenden: px → mm
+    // Bei 96 DPI: 1 inch = 96 px, 1 inch = 25.4 mm → 1 px = 25.4/96 mm
+    const dpiScale = 25.4 / dpi;
+    console.log(`Wende DPI-Skalierung an: ${dpiScale.toFixed(4)} (${dpi} DPI)`);
+
+    group.children.forEach((child) => {
+        if (child instanceof THREE.Line) {
+            const positions = child.geometry.attributes.position.array;
+            for (let i = 0; i < positions.length; i += 3) {
+                positions[i] *= dpiScale;      // X skalieren
+                positions[i + 1] *= dpiScale;  // Y skalieren
+            }
+            child.geometry.attributes.position.needsUpdate = true;
+        }
+    });
+
+    // Bounding Box nach Transformation neu berechnen
+    let newMinX = Infinity, newMaxX = -Infinity;
+    let newMinY = Infinity, newMaxY = -Infinity;
+
+    group.children.forEach((child) => {
+        if (child instanceof THREE.Line) {
+            const positions = child.geometry.attributes.position.array;
+            for (let i = 0; i < positions.length; i += 3) {
+                const x = positions[i];
+                const y = positions[i + 1];
+
+                if (x < newMinX) newMinX = x;
+                if (x > newMaxX) newMaxX = x;
+                if (y < newMinY) newMinY = y;
+                if (y > newMaxY) newMaxY = y;
+            }
+        }
+    });
+
+    // Aktualisiere die Werte für die userData
+    minX = newMinX;
+    maxX = newMaxX;
+    minY = newMinY;
+    maxY = newMaxY;
+
+    console.log("Finale ThreeJS-Gruppe Abmessungen (nach SVG→Maschine Transformation):");
     console.log(`X: Min=${minX.toFixed(2)}, Max=${maxX.toFixed(2)}, Breite=${(maxX - minX).toFixed(2)}`);
     console.log(`Y: Min=${minY.toFixed(2)}, Max=${maxY.toFixed(2)}, Höhe=${(maxY - minY).toFixed(2)}`);
     

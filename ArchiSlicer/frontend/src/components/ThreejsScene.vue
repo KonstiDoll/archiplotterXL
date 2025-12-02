@@ -50,9 +50,9 @@ controller.update();
 // Kein Three.js Hintergrund - CSS übernimmt
 scene.background = null;
 
-// Zeichenfläche erstellen (1000x1000mm)
-const CANVAS_WIDTH = 1000;
-const CANVAS_HEIGHT = 1000;
+// Zeichenfläche erstellen (1200x1800mm)
+const CANVAS_WIDTH = 1864;
+const CANVAS_HEIGHT = 1210;
 
 const createDrawingCanvas = () => {
     const canvasGroup = new THREE.Group();

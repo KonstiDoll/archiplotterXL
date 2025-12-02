@@ -27,7 +27,7 @@
                         Farben analysieren
                     </button>
                     <div class="text-xs text-slate-400 mt-2">
-                        Analysiert die Stroke-Farben im SVG
+                        Analysiert die Farben im SVG (Stroke und Fill)
                     </div>
                 </div>
 

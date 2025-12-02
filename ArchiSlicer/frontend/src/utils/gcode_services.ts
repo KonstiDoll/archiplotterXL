@@ -263,8 +263,11 @@ export function createGcodeFromColorGroups(
     // Sammle alle Linien (außer Infill)
     lineGeoGroup.children.forEach((child) => {
         if (child instanceof THREE.Line && child.name.indexOf('Infill_') !== 0) {
-            const strokeColor = child.userData?.strokeColor || '#000000';
-            const toolNumber = colorToTool.get(strokeColor) || 1;
+            // Verwende effectiveColor (berücksichtigt stroke/fill Priorität)
+            const color = child.userData?.effectiveColor
+                       || child.userData?.strokeColor
+                       || '#000000';
+            const toolNumber = colorToTool.get(color) || 1;
 
             if (!linesByTool.has(toolNumber)) {
                 linesByTool.set(toolNumber, []);
@@ -413,11 +416,17 @@ function createGcodeFromLine(
     }
 
     for (let index = 0; index < positions.length; index += 3) {
-        // Offset auf Koordinaten anwenden
-        const x = (positions[index] + offsetX).toFixed(2);
-        const y = (positions[index + 1] + offsetY).toFixed(2);
-        // Z-Wert wird nicht im Bewegungsbefehl gesetzt, da dieser bereits durch setMaterialHeight gesetzt wurde
-        const gcodeLine = `G1 X${x} Y${y} F${speed}\n`;
+        // Koordinaten im Slicer-System (X horizontal, Y vertikal)
+        const slicerX = positions[index] + offsetX;
+        const slicerY = positions[index + 1] + offsetY;
+
+        // Transformation zum Maschinen-System: X↔Y tauschen
+        // Maschine: X vertikal (nach oben), Y horizontal (nach rechts)
+        // Slicer:   X horizontal (nach rechts), Y vertikal (nach oben)
+        const machineX = slicerY.toFixed(2);  // Slicer Y → Maschine X (vertikal)
+        const machineY = slicerX.toFixed(2);  // Slicer X → Maschine Y (horizontal)
+
+        const gcodeLine = `G1 X${machineX} Y${machineY} F${speed}\n`;
         gcode += gcodeLine;
         if (first.value) {
             gcode += moveUDown;
