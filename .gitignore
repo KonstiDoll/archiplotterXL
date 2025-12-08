@@ -1,5 +1,6 @@
 
-Gcodes/
+Gcodes/*
+!Gcodes/.gitkeep
 .DS_Store
 *.pyc
 env/
