@@ -5,10 +5,11 @@
             <div class="text-xs text-slate-400">Multi-Layer SVG to G-Code</div>
         </div>
         <div class="flex items-center space-x-4">
-            <span class="text-xs text-slate-500">v0.3.1</span>
+            <span class="text-xs text-slate-500">v{{ version }}</span>
         </div>
     </header>
 </template>
 
 <script setup lang="ts">
+import { version } from '../../package.json';
 </script>
