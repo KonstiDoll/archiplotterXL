@@ -1,14 +1,46 @@
-from typing import Union
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from alembic.config import Config
+from alembic import command
 
-app = FastAPI()
+from routers import pen_types, tool_presets
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Run database migrations on startup."""
+    alembic_cfg = Config("alembic.ini")
+    command.upgrade(alembic_cfg, "head")
+    yield
+
+
+app = FastAPI(
+    title="ArchiSlicer API",
+    description="Backend API for ArchiSlicer pen plotter",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+# CORS configuration for frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(pen_types.router)
+app.include_router(tool_presets.router)
+
 
 @app.get("/")
 def read_root():
-    print("Hello World")
-    return {"Hello": "World"}
-
-
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: Union[str, None] = None):
-    return {"item_id": item_id, "q": q}
+    """Health check endpoint."""
+    return {"status": "ok", "service": "ArchiSlicer API"}

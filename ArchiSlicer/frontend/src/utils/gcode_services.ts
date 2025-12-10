@@ -1,12 +1,17 @@
 import * as THREE from 'three';
-import { ref } from 'vue';
+import { ref, reactive } from 'vue';
 
-// Stift-Typ (mechanische Eigenschaften)
+// API base URL
+const API_BASE_URL = 'http://localhost:8035';
+
+// Stift-Typ (mechanische Eigenschaften + Pump-Einstellungen)
 export type PenType = {
     id: string;           // z.B. "stabilo"
     displayName: string;  // z.B. "Stabilo Point 88"
     penUp: number;
     penDown: number;
+    pumpDistanceThreshold: number;  // mm, 0 = disabled
+    pumpHeight: number;             // mm
 }
 
 // Tool-Konfiguration (pro Tool 1-9)
@@ -29,17 +34,128 @@ M400                 ; Warten bis alle Bewegungen fertig
 `;
 }
 
-// Verfügbare Stift-Typen (nur mechanische Eigenschaften)
-export const penTypes: { [key: string]: PenType } = {
-    'stabilo':   { id: 'stabilo',   displayName: 'Stabilo Point 88', penDown: 13, penUp: 33 },
-    'posca':     { id: 'posca',     displayName: 'POSCA Marker',     penDown: 13, penUp: 33 },
-    'fineliner': { id: 'fineliner', displayName: 'Fineliner',        penDown: 15, penUp: 35 },
-    'brushpen':  { id: 'brushpen',  displayName: 'Brushpen',         penDown: 8,  penUp: 33 },
-    'marker':    { id: 'marker',    displayName: 'Marker (dick)',    penDown: 11, penUp: 36 },
+// Fallback pen types (used when API is unavailable)
+const fallbackPenTypes: { [key: string]: PenType } = {
+    'stabilo':   { id: 'stabilo',   displayName: 'Stabilo Point 88', penDown: 13, penUp: 33, pumpDistanceThreshold: 0, pumpHeight: 50 },
+    'posca':     { id: 'posca',     displayName: 'POSCA Marker',     penDown: 13, penUp: 33, pumpDistanceThreshold: 0, pumpHeight: 50 },
+    'fineliner': { id: 'fineliner', displayName: 'Fineliner',        penDown: 15, penUp: 35, pumpDistanceThreshold: 0, pumpHeight: 50 },
+    'brushpen':  { id: 'brushpen',  displayName: 'Brushpen',         penDown: 8,  penUp: 33, pumpDistanceThreshold: 0, pumpHeight: 50 },
+    'marker':    { id: 'marker',    displayName: 'Marker (dick)',    penDown: 11, penUp: 36, pumpDistanceThreshold: 0, pumpHeight: 50 },
 };
 
-// Liste aller verfügbaren Stift-Typen für UI-Auswahl
-export const availablePenTypes = Object.keys(penTypes);
+// Reactive pen types store (loaded from API)
+export const penTypes = reactive<{ [key: string]: PenType }>({ ...fallbackPenTypes });
+
+// Loading state for pen types
+export const penTypesLoading = ref(false);
+export const penTypesError = ref<string | null>(null);
+
+// Fetch pen types from API
+export async function fetchPenTypes(): Promise<void> {
+    penTypesLoading.value = true;
+    penTypesError.value = null;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/pen-types`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        // Clear existing and add fetched pen types
+        Object.keys(penTypes).forEach(key => delete penTypes[key]);
+        data.forEach((pt: any) => {
+            penTypes[pt.id] = {
+                id: pt.id,
+                displayName: pt.display_name,
+                penUp: pt.pen_up,
+                penDown: pt.pen_down,
+                pumpDistanceThreshold: pt.pump_distance_threshold,
+                pumpHeight: pt.pump_height,
+            };
+        });
+
+        console.log(`Loaded ${data.length} pen types from API`);
+    } catch (error) {
+        console.error('Failed to fetch pen types from API, using fallback:', error);
+        penTypesError.value = error instanceof Error ? error.message : 'Unknown error';
+
+        // Restore fallback pen types
+        Object.keys(penTypes).forEach(key => delete penTypes[key]);
+        Object.assign(penTypes, fallbackPenTypes);
+    } finally {
+        penTypesLoading.value = false;
+    }
+}
+
+// API functions for pen type management
+export async function createPenType(penType: Omit<PenType, 'id'> & { id: string }): Promise<PenType> {
+    const response = await fetch(`${API_BASE_URL}/api/pen-types`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            id: penType.id,
+            display_name: penType.displayName,
+            pen_up: penType.penUp,
+            pen_down: penType.penDown,
+            pump_distance_threshold: penType.pumpDistanceThreshold,
+            pump_height: penType.pumpHeight,
+        }),
+    });
+
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to create pen type');
+    }
+
+    await fetchPenTypes(); // Refresh the list
+    return await response.json();
+}
+
+export async function updatePenType(id: string, updates: Partial<PenType>): Promise<PenType> {
+    const body: any = {};
+    if (updates.displayName !== undefined) body.display_name = updates.displayName;
+    if (updates.penUp !== undefined) body.pen_up = updates.penUp;
+    if (updates.penDown !== undefined) body.pen_down = updates.penDown;
+    if (updates.pumpDistanceThreshold !== undefined) body.pump_distance_threshold = updates.pumpDistanceThreshold;
+    if (updates.pumpHeight !== undefined) body.pump_height = updates.pumpHeight;
+
+    const response = await fetch(`${API_BASE_URL}/api/pen-types/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to update pen type');
+    }
+
+    await fetchPenTypes(); // Refresh the list
+    return await response.json();
+}
+
+export async function deletePenType(id: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/api/pen-types/${id}`, {
+        method: 'DELETE',
+    });
+
+    if (!response.ok && response.status !== 204) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to delete pen type');
+    }
+
+    await fetchPenTypes(); // Refresh the list
+}
+
+// Liste aller verfügbaren Stift-Typen für UI-Auswahl (computed from reactive penTypes)
+export function getAvailablePenTypes(): string[] {
+    return Object.keys(penTypes);
+}
+
+// For backwards compatibility
+export const availablePenTypes = Object.keys(fallbackPenTypes);
 
 // Hilfsfunktion um PenType-Config zu bekommen
 export function getPenTypeConfig(penTypeId: string): PenType | undefined {
@@ -57,6 +173,109 @@ export function createDefaultToolConfig(): ToolConfig {
 // Alle PenType-Configs für UI
 export function getAllPenTypes(): { [key: string]: PenType } {
     return penTypes;
+}
+
+// --- Tool Presets ---
+
+export type ToolPreset = {
+    id: number;
+    name: string;
+    tool_configs: ToolConfig[];
+};
+
+// Reactive store for tool presets
+export const toolPresets = reactive<ToolPreset[]>([]);
+export const toolPresetsLoading = ref(false);
+export const toolPresetsError = ref<string | null>(null);
+
+export async function fetchToolPresets(): Promise<void> {
+    toolPresetsLoading.value = true;
+    toolPresetsError.value = null;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/tool-presets/`);
+        if (!response.ok) {
+            throw new Error('Failed to fetch tool presets');
+        }
+        const data = await response.json();
+        toolPresets.length = 0;
+        toolPresets.push(...data);
+    } catch (e) {
+        toolPresetsError.value = e instanceof Error ? e.message : 'Unknown error';
+    } finally {
+        toolPresetsLoading.value = false;
+    }
+}
+
+export async function createToolPreset(name: string, configs: ToolConfig[]): Promise<ToolPreset> {
+    const response = await fetch(`${API_BASE_URL}/tool-presets/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, tool_configs: configs }),
+    });
+
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to create tool preset');
+    }
+
+    const created = await response.json();
+    await fetchToolPresets();
+    return created;
+}
+
+export async function updateToolPreset(id: number, name: string, configs: ToolConfig[]): Promise<ToolPreset> {
+    const response = await fetch(`${API_BASE_URL}/tool-presets/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, tool_configs: configs }),
+    });
+
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to update tool preset');
+    }
+
+    const updated = await response.json();
+    await fetchToolPresets();
+    return updated;
+}
+
+export async function deleteToolPreset(id: number): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/tool-presets/${id}`, {
+        method: 'DELETE',
+    });
+
+    if (!response.ok && response.status !== 204) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Failed to delete tool preset');
+    }
+
+    await fetchToolPresets();
+}
+
+// Calculate line length from positions array
+function calculateLineLength(positions: ArrayLike<number>): number {
+    let length = 0;
+    for (let i = 3; i < positions.length; i += 3) {
+        const dx = positions[i] - positions[i - 3];
+        const dy = positions[i + 1] - positions[i - 2];
+        length += Math.sqrt(dx * dx + dy * dy);
+    }
+    return length;
+}
+
+// Generate pump G-code
+// pumpTravel is the distance in mm to move Z down (relative) for pumping
+function generatePumpGcode(penUp: number, pumpTravel: number): string {
+    return `; === PUMP ACTION ===
+G1 U${penUp} F6000
+G91 ; relative positioning
+G1 Z-${pumpTravel.toFixed(2)} F6000
+G1 Z${pumpTravel.toFixed(2)} F6000
+G90 ; back to absolute positioning
+; === END PUMP ===
+`;
 }
 
 export function createGcodeFromLineGroup(
@@ -194,10 +413,23 @@ export function createGcodeFromLineGroup(
         if (offsetX !== 0 || offsetY !== 0) {
             gCode += `; Offset: X+${offsetX.toFixed(2)}, Y+${offsetY.toFixed(2)}\n`;
         }
+
+        // Pump context for this tool
+        const pumpCtx: PumpContext = {
+            accumulatedDistance: 0,
+            pumpDistanceThreshold: penTypeConfig.pumpDistanceThreshold || 0,
+            pumpHeight: penTypeConfig.pumpHeight || 50,
+            penUp: penUp,
+        };
+
         allLines.forEach((lineGeo) => {
-            const gcodeLine = createGcodeFromLine(lineGeo, moveUDown, drawingSpeed, offsetX, offsetY);
+            const { gcode: gcodeLine, lineLength } = createGcodeFromLine(lineGeo, moveUDown, drawingSpeed, offsetX, offsetY);
             gCode += gcodeLine;
             gCode += moveUUp;
+
+            // Track distance and check for pump (at_node mode)
+            pumpCtx.accumulatedDistance += lineLength;
+            gCode += checkAndGeneratePump(pumpCtx, moveUUp);
         });
 
         // Tool nur ablegen wenn kein Infill oder Infill anderes Tool verwendet
@@ -231,11 +463,23 @@ export function createGcodeFromLineGroup(
             gCode += moveInfillUUp;
         }
 
+        // Pump context for infill tool
+        const infillPumpCtx: PumpContext = {
+            accumulatedDistance: 0,
+            pumpDistanceThreshold: infillPenTypeConfig.pumpDistanceThreshold || 0,
+            pumpHeight: infillPenTypeConfig.pumpHeight || 50,
+            penUp: infillPenUp,
+        };
+
         gCode += '\n; --- Infill zeichnen mit Tool #' + infillToolNumber + ' ---\n';
         infillLines.forEach((lineGeo) => {
-            const gcodeLine = createGcodeFromLine(lineGeo, moveInfillUDown, drawingSpeed, offsetX, offsetY);
+            const { gcode: gcodeLine, lineLength } = createGcodeFromLine(lineGeo, moveInfillUDown, drawingSpeed, offsetX, offsetY);
             gCode += gcodeLine;
             gCode += moveInfillUUp;
+
+            // Track distance and check for pump (at_node mode)
+            infillPumpCtx.accumulatedDistance += lineLength;
+            gCode += checkAndGeneratePump(infillPumpCtx, moveInfillUUp);
         });
 
         // Tool ablegen (immer das Infill-Tool, da es das letzte verwendete ist)
@@ -378,11 +622,23 @@ export function createGcodeFromColorGroups(
             gCode += `; Offset: X+${offsetX.toFixed(2)}, Y+${offsetY.toFixed(2)}\n`;
         }
 
+        // Pump context for this tool
+        const pumpCtx: PumpContext = {
+            accumulatedDistance: 0,
+            pumpDistanceThreshold: penTypeConfig.pumpDistanceThreshold || 0,
+            pumpHeight: penTypeConfig.pumpHeight || 50,
+            penUp: penUp,
+        };
+
         // Linien zeichnen
         lines.forEach((lineGeo) => {
-            const gcodeLine = createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY);
+            const { gcode: gcodeLine, lineLength } = createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY);
             gCode += gcodeLine;
             gCode += moveUUp;
+
+            // Track distance and check for pump (at_node mode)
+            pumpCtx.accumulatedDistance += lineLength;
+            gCode += checkAndGeneratePump(pumpCtx, moveUUp);
         });
     });
 
@@ -412,13 +668,25 @@ export function createGcodeFromColorGroups(
             lastToolNumber = infillToolNumber;
         }
 
+        // Pump context for infill tool
+        const infillPumpCtx: PumpContext = {
+            accumulatedDistance: 0,
+            pumpDistanceThreshold: infillPenTypeConfig.pumpDistanceThreshold || 0,
+            pumpHeight: infillPenTypeConfig.pumpHeight || 50,
+            penUp: penUp,
+        };
+
         gCode += moveUUp;
         gCode += `; ${infillLines.length} Infill-Linien\n`;
 
         infillLines.forEach((lineGeo) => {
-            const gcodeLine = createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY);
+            const { gcode: gcodeLine, lineLength } = createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY);
             gCode += gcodeLine;
             gCode += moveUUp;
+
+            // Track distance and check for pump (at_node mode)
+            infillPumpCtx.accumulatedDistance += lineLength;
+            gCode += checkAndGeneratePump(infillPumpCtx, moveUUp);
         });
     }
 
@@ -542,12 +810,25 @@ export function createGcodeWithColorInfill(
             const moveUUp = `G1 U${penTypeConfig.penUp} F6000\n`;
             const moveUDown = `G1 U${penTypeConfig.penDown} F6000\n`;
 
+            // Pump context for contour tool
+            const contourPumpCtx: PumpContext = {
+                accumulatedDistance: 0,
+                pumpDistanceThreshold: penTypeConfig.pumpDistanceThreshold || 0,
+                pumpHeight: penTypeConfig.pumpHeight || 50,
+                penUp: penTypeConfig.penUp,
+            };
+
             gCode += moveUUp;
             gCode += `; Konturen (${contourLines.length} Linien) mit Tool #${contourTool}\n`;
 
             contourLines.forEach((lineGeo) => {
-                gCode += createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY);
+                const { gcode: gcodeLine, lineLength } = createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY);
+                gCode += gcodeLine;
                 gCode += moveUUp;
+
+                // Track distance and check for pump (at_node mode)
+                contourPumpCtx.accumulatedDistance += lineLength;
+                gCode += checkAndGeneratePump(contourPumpCtx, moveUUp);
             });
         }
 
@@ -575,13 +856,26 @@ export function createGcodeWithColorInfill(
             const moveUUp = `G1 U${penTypeConfig.penUp} F6000\n`;
             const moveUDown = `G1 U${penTypeConfig.penDown} F6000\n`;
 
+            // Pump context for infill tool
+            const infillPumpCtx: PumpContext = {
+                accumulatedDistance: 0,
+                pumpDistanceThreshold: penTypeConfig.pumpDistanceThreshold || 0,
+                pumpHeight: penTypeConfig.pumpHeight || 50,
+                penUp: penTypeConfig.penUp,
+            };
+
             gCode += moveUUp;
             gCode += `; Infill (${colorGroup.infillOptions.patternType}, ${infillGroup!.children.length} Linien) mit Tool #${infillTool}\n`;
 
             infillGroup!.children.forEach((child) => {
                 if (child instanceof THREE.Line) {
-                    gCode += createGcodeFromLine(child, moveUDown, customFeedrate, offsetX, offsetY);
+                    const { gcode: gcodeLine, lineLength } = createGcodeFromLine(child, moveUDown, customFeedrate, offsetX, offsetY);
+                    gCode += gcodeLine;
                     gCode += moveUUp;
+
+                    // Track distance and check for pump (at_node mode)
+                    infillPumpCtx.accumulatedDistance += lineLength;
+                    gCode += checkAndGeneratePump(infillPumpCtx, moveUUp);
                 }
             });
         }
@@ -599,16 +893,25 @@ export function createGcodeWithColorInfill(
     return gCode;
 }
 
+// Context for pump tracking during G-code generation
+interface PumpContext {
+    accumulatedDistance: number;
+    pumpDistanceThreshold: number;  // 0 = disabled
+    pumpHeight: number;  // relative Z travel distance for pumping (moves down then back up)
+    penUp: number;
+}
+
 // Helper function for creating G-code from a single line
+// Returns { gcode, lineLength } for pump tracking
 function createGcodeFromLine(
     lineGeo: THREE.Line,
     moveUDown: string,
     customFeedrate: number = 3000,
     offsetX: number = 0,
     offsetY: number = 0
-): string {
+): { gcode: string; lineLength: number } {
     let gcode = '';
-    const first = ref(true);
+    let first = true;
     let speed = travelSpeed;
 
     // Erste und letzte Position für Logging
@@ -632,12 +935,28 @@ function createGcodeFromLine(
 
         const gcodeLine = `G1 X${machineX} Y${machineY} F${speed}\n`;
         gcode += gcodeLine;
-        if (first.value) {
+        if (first) {
             gcode += moveUDown;
-            first.value = false;
+            first = false;
             speed = customFeedrate; // Verwende benutzerdefinierte Feedrate
         }
     }
 
-    return gcode;
+    const lineLength = calculateLineLength(positions);
+    return { gcode, lineLength };
+}
+
+// Helper to check and generate pump action if needed (at_node mode - after line ends)
+function checkAndGeneratePump(pumpCtx: PumpContext, moveUUp: string): string {
+    if (pumpCtx.pumpDistanceThreshold <= 0) {
+        return ''; // Pump disabled
+    }
+
+    if (pumpCtx.accumulatedDistance >= pumpCtx.pumpDistanceThreshold) {
+        pumpCtx.accumulatedDistance = 0; // Reset counter
+        // pumpHeight is now used as relative travel distance (Z moves down by this amount, then back up)
+        return moveUUp + generatePumpGcode(pumpCtx.penUp, pumpCtx.pumpHeight);
+    }
+
+    return '';
 }

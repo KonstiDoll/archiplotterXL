@@ -3,9 +3,9 @@ Gcodes/*
 !Gcodes/.gitkeep
 .DS_Store
 *.pyc
-env/
 node_modules/
 .vscode/
 dist/
 Designs/
 .playwright-mcp/
+.venv/

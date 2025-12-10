@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import * as THREE from 'three';
 import { useMainStore } from './store';
-import { createGcodeFromLineGroup, createGcodeFromColorGroups, createGcodeWithColorInfill, type ToolConfig } from './utils/gcode_services';
+import { createGcodeFromLineGroup, createGcodeFromColorGroups, createGcodeWithColorInfill, fetchPenTypes, type ToolConfig } from './utils/gcode_services';
 import { InfillPatternType } from './utils/threejs_services';
 import AppHeader from './components/AppHeader.vue';
 import Sidebar from './components/Sidebar.vue';
@@ -26,8 +26,12 @@ const activeToolIndex = ref(1);
 // Tool-Konfiguration aus localStorage laden oder Default verwenden
 const toolConfigs = ref<ToolConfig[]>(createDefaultToolConfigs());
 
-// Beim Start aus localStorage laden
-onMounted(() => {
+// Beim Start aus localStorage laden und PenTypes von API laden
+onMounted(async () => {
+    // Load pen types from API
+    await fetchPenTypes();
+
+    // Load tool configs from localStorage
     const saved = localStorage.getItem(STORAGE_KEY_TOOLS);
     if (saved) {
         try {
@@ -95,6 +99,15 @@ const handleUpdateBackgroundPreset = (preset: string) => {
 
 const handleUpdateCustomColor = (color: string) => {
     customBackgroundColor.value = color;
+};
+
+const handleLoadPreset = (configs: ToolConfig[]) => {
+    // Load all tool configs from preset
+    configs.forEach((config, index) => {
+        if (index < toolConfigs.value.length) {
+            toolConfigs.value[index] = config;
+        }
+    });
 };
 
 // G-Code generation
@@ -222,6 +235,7 @@ const generateGcode = () => {
                 @update-drawing-height="handleUpdateDrawingHeight"
                 @update-background-preset="handleUpdateBackgroundPreset"
                 @update-custom-color="handleUpdateCustomColor"
+                @load-preset="handleLoadPreset"
             />
 
             <!-- Main Area -->

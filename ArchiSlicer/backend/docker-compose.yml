@@ -1,0 +1,20 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: archislicer-db
+    environment:
+      POSTGRES_USER: archislicer
+      POSTGRES_PASSWORD: archislicer
+      POSTGRES_DB: archislicer
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U archislicer"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

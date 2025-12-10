@@ -66,15 +66,28 @@
                 :tool-configs="toolConfigs"
                 @select-tool="(v) => $emit('select-tool', v)"
                 @update-tool-config="(i, c) => $emit('update-tool-config', i, c)"
+                @load-preset="(configs) => $emit('load-preset', configs)"
             />
+
+            <!-- Pen Type Admin (collapsible) -->
+            <details class="group">
+                <summary class="cursor-pointer text-slate-400 text-xs hover:text-white py-2 px-3 bg-slate-800 rounded-lg">
+                    Stifttypen verwalten
+                    <span class="ml-1 group-open:hidden">+</span>
+                    <span class="ml-1 hidden group-open:inline">-</span>
+                </summary>
+                <div class="mt-2">
+                    <PenTypeAdmin />
+                </div>
+            </details>
 
             <!-- Global Settings -->
             <div class="bg-slate-800 p-3 rounded-lg">
                 <h3 class="text-white text-sm font-semibold mb-3 text-center">Globale Einstellungen</h3>
 
-                <!-- Z-Höhe -->
+                <!-- Materialstärke -->
                 <div class="flex items-center p-2 bg-slate-700 rounded">
-                    <span class="text-white text-xs mr-2">Z-Höhe:</span>
+                    <span class="text-white text-xs mr-2">Materialstärke:</span>
                     <input type="number" :value="globalDrawingHeight"
                         @change="$emit('update-drawing-height', Number(($event.target as HTMLInputElement).value))"
                         class="p-1 w-16 border rounded text-sm bg-white" min="0" max="50" step="0.5" />
@@ -112,7 +125,7 @@
                 </div>
 
                 <div class="mt-2 text-xs text-slate-400 p-2 bg-slate-700/50 rounded">
-                    Z-Höhe = Materialstärke
+                    Hebt Z um diesen Wert an (für dickeres Material)
                 </div>
             </div>
         </div>
@@ -129,6 +142,7 @@ import ToolPanel from './ToolPanel.vue';
 import SVGItemPanel from './SVGItemPanel.vue';
 import ColorAssignmentPanel from './ColorAssignmentPanel.vue';
 import WorkpieceStartPanel from './WorkpieceStartPanel.vue';
+import PenTypeAdmin from './PenTypeAdmin.vue';
 
 const props = defineProps<{
     activeToolIndex: number;
@@ -144,6 +158,7 @@ const emit = defineEmits<{
     (e: 'update-drawing-height', value: number): void;
     (e: 'update-background-preset', preset: string): void;
     (e: 'update-custom-color', color: string): void;
+    (e: 'load-preset', configs: ToolConfig[]): void;
 }>();
 
 // Gradient-Presets importieren
