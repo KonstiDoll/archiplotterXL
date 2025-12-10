@@ -1,4 +1,4 @@
-.PHONY: init sync db-up db-down db-logs migrate seed run setup clean
+.PHONY: init sync db-up db-down db-logs migrate seed run setup clean test test-cov
 
 # Python environment (using uv)
 init:
@@ -34,6 +34,13 @@ run:
 # Full setup
 setup: db-up sync migrate seed
 	@echo "Setup complete! Run 'make run' to start the server."
+
+# Testing
+test:
+	uv run --extra test pytest -v
+
+test-cov:
+	uv run --extra test pytest -v --cov=. --cov-report=term-missing
 
 # Clean up
 clean:
