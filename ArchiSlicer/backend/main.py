@@ -45,3 +45,9 @@ app.include_router(projects.router)
 def read_root():
     """Health check endpoint."""
     return {"status": "ok", "service": "ArchiSlicer API"}
+
+
+@app.get("/api/")
+def api_root():
+    """API health check endpoint for Caddy proxy."""
+    return {"status": "ok", "service": "ArchiSlicer API", "version": "0.6.1"}
