@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { ref, reactive } from 'vue';
 
-// API base URL
-const API_BASE_URL = 'http://localhost:8035';
+// API base URL - use env var for dev, empty for production (relative URLs)
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 // Stift-Typ (mechanische Eigenschaften + Pump-Einstellungen)
 export type PenType = {
@@ -193,7 +193,7 @@ export async function fetchToolPresets(): Promise<void> {
     toolPresetsError.value = null;
 
     try {
-        const response = await fetch(`${API_BASE_URL}/tool-presets/`);
+        const response = await fetch(`${API_BASE_URL}/api/tool-presets/`);
         if (!response.ok) {
             throw new Error('Failed to fetch tool presets');
         }
@@ -208,7 +208,7 @@ export async function fetchToolPresets(): Promise<void> {
 }
 
 export async function createToolPreset(name: string, configs: ToolConfig[]): Promise<ToolPreset> {
-    const response = await fetch(`${API_BASE_URL}/tool-presets/`, {
+    const response = await fetch(`${API_BASE_URL}/api/tool-presets/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, tool_configs: configs }),
@@ -225,7 +225,7 @@ export async function createToolPreset(name: string, configs: ToolConfig[]): Pro
 }
 
 export async function updateToolPreset(id: number, name: string, configs: ToolConfig[]): Promise<ToolPreset> {
-    const response = await fetch(`${API_BASE_URL}/tool-presets/${id}`, {
+    const response = await fetch(`${API_BASE_URL}/api/tool-presets/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, tool_configs: configs }),
@@ -242,7 +242,7 @@ export async function updateToolPreset(id: number, name: string, configs: ToolCo
 }
 
 export async function deleteToolPreset(id: number): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/tool-presets/${id}`, {
+    const response = await fetch(`${API_BASE_URL}/api/tool-presets/${id}`, {
         method: 'DELETE',
     });
 

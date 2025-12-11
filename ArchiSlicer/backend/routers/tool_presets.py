@@ -5,7 +5,7 @@ from database import get_db
 from schemas import ToolPresetCreate, ToolPresetUpdate, ToolPresetResponse
 import crud
 
-router = APIRouter(prefix="/tool-presets", tags=["tool-presets"])
+router = APIRouter(prefix="/api/tool-presets", tags=["tool-presets"])
 
 
 @router.get("/", response_model=list[ToolPresetResponse])
