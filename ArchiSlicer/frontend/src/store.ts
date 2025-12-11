@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { markRaw } from 'vue';
 import { InfillOptions, InfillPatternType, defaultInfillOptions, analyzeColorsInGroup, getThreejsObjectFromSvg, generateInfillForColor } from './utils/threejs_services';
 import { PathAnalysisResult, PathRole, analyzePathRelationships, extractPolygonsFromGroup, getEffectiveRole } from './utils/geometry/path-analysis';
+import type { ProjectData, SerializedSVGItem, SerializedColorGroup, SerializedInfillLine } from './utils/project_services';
+import { deserializeInfillGroup } from './utils/project_services';
 
 // Interface für Farbgruppen (erkannte Farben mit Tool-Zuordnung)
 export interface ColorGroup {
@@ -531,6 +533,192 @@ export const useMainStore = defineStore('main', {
         this.svgItems[index].pathAnalysis = undefined;
         this.svgItems[index].isPathAnalyzed = false;
       }
+    },
+
+    // ===== Project Save/Load Actions =====
+
+    /**
+     * Serialize the current project state to a ProjectData object.
+     * Used for saving to API or downloading as file.
+     */
+    getProjectData(projectName: string): ProjectData {
+      const now = new Date().toISOString();
+
+      // Helper to extract points from a THREE.Line
+      const extractLinePoints = (line: THREE.Line): [number, number][] => {
+        const geometry = line.geometry as THREE.BufferGeometry;
+        const positionAttr = geometry.getAttribute('position');
+        const points: [number, number][] = [];
+        if (positionAttr) {
+          for (let i = 0; i < positionAttr.count; i++) {
+            points.push([positionAttr.getX(i), positionAttr.getY(i)]);
+          }
+        }
+        return points;
+      };
+
+      // Helper to serialize infill group
+      const serializeInfillGroup = (infillGroup: THREE.Group): SerializedInfillLine[] => {
+        const lines: SerializedInfillLine[] = [];
+        infillGroup.children.forEach((child) => {
+          if (child instanceof THREE.Line) {
+            const points = extractLinePoints(child);
+            if (points.length >= 2) {
+              const material = child.material as THREE.LineBasicMaterial;
+              const color = material.color ? material.color.getHex() : 0x00ff00;
+              lines.push({ points, color });
+            }
+          }
+        });
+        return lines;
+      };
+
+      const serializedItems: SerializedSVGItem[] = this.svgItems
+        .filter(item => item.svgContent) // Only items with svgContent can be serialized
+        .map(item => ({
+          fileName: item.fileName,
+          svgContent: item.svgContent!,
+          dpi: item.dpi,
+          toolNumber: item.toolNumber,
+          infillToolNumber: item.infillToolNumber,
+          penType: item.penType,
+          feedrate: item.feedrate,
+          drawingHeight: item.drawingHeight,
+          offsetX: item.offsetX,
+          offsetY: item.offsetY,
+          workpieceStartId: item.workpieceStartId,
+          infillOptions: { ...item.infillOptions },
+          colorGroups: item.colorGroups.map((cg): SerializedColorGroup => {
+            const serialized: SerializedColorGroup = {
+              color: cg.color,
+              toolNumber: cg.toolNumber,
+              lineCount: cg.lineCount,
+              visible: cg.visible,
+              infillEnabled: cg.infillEnabled,
+              infillToolNumber: cg.infillToolNumber,
+              infillOptions: { ...cg.infillOptions },
+            };
+            // Serialize infill geometry if present
+            if (cg.infillGroup && cg.infillGroup.children.length > 0) {
+              serialized.infillLines = serializeInfillGroup(cg.infillGroup);
+              console.log(`Serialized ${serialized.infillLines.length} infill lines for color ${cg.color}`);
+            }
+            return serialized;
+          }),
+          isAnalyzed: item.isAnalyzed,
+        }));
+
+      return {
+        version: '1.1',
+        name: projectName,
+        createdAt: now,
+        updatedAt: now,
+        defaultDpi: this.defaultDpi,
+        workpieceStarts: this.workpieceStarts.map(ws => ({ ...ws })),
+        svgItems: serializedItems,
+      };
+    },
+
+    /**
+     * Load project data and restore the store state.
+     * Parses SVG content and recreates THREE.js geometry objects.
+     */
+    async loadProjectData(projectData: ProjectData) {
+      // Clear current state
+      this.svgItems = [];
+      this.lineGeometry = null;
+
+      // Restore workpiece starts
+      this.workpieceStarts = projectData.workpieceStarts.map(ws => ({ ...ws }));
+
+      // Restore default DPI
+      this.defaultDpi = projectData.defaultDpi || 72;
+
+      // Restore SVG items (requires parsing SVG content)
+      for (const serialized of projectData.svgItems) {
+        try {
+          // Parse SVG to create THREE.js geometry
+          const geometry = await getThreejsObjectFromSvg(
+            serialized.svgContent,
+            0, // offset
+            serialized.dpi
+          );
+
+          // Restore color groups with infill geometry
+          const colorGroups: ColorGroup[] = serialized.colorGroups.map(cg => {
+            let infillGroup: THREE.Group | undefined = undefined;
+
+            // Reconstruct infill geometry if it was saved
+            if (cg.infillLines && cg.infillLines.length > 0) {
+              infillGroup = markRaw(deserializeInfillGroup(cg.infillLines, cg.color));
+              // Add the infill group to the main geometry so it renders
+              geometry.add(infillGroup);
+              console.log(`Restored ${cg.infillLines.length} infill lines for color ${cg.color}`);
+            }
+
+            return {
+              color: cg.color,
+              toolNumber: cg.toolNumber,
+              lineCount: cg.lineCount,
+              visible: cg.visible,
+              infillEnabled: cg.infillEnabled,
+              infillToolNumber: cg.infillToolNumber,
+              infillOptions: { ...cg.infillOptions },
+              infillGroup,
+            };
+          });
+
+          // Create the SVGItem with restored settings
+          const item: SVGItem = {
+            geometry: markRaw(geometry),
+            toolNumber: serialized.toolNumber,
+            infillToolNumber: serialized.infillToolNumber,
+            fileName: serialized.fileName,
+            penType: serialized.penType,
+            feedrate: serialized.feedrate,
+            drawingHeight: serialized.drawingHeight,
+            infillOptions: { ...serialized.infillOptions },
+            colorGroups,
+            isAnalyzed: serialized.isAnalyzed,
+            isPathAnalyzed: false, // Will be re-analyzed
+            offsetX: serialized.offsetX,
+            offsetY: serialized.offsetY,
+            workpieceStartId: serialized.workpieceStartId,
+            dpi: serialized.dpi,
+            svgContent: serialized.svgContent,
+          };
+
+          this.svgItems.push(item);
+
+          // Run path analysis for the new item
+          const newIndex = this.svgItems.length - 1;
+          this.analyzePathRelationships(newIndex);
+
+          console.log(`Loaded SVG "${serialized.fileName}" from project`);
+        } catch (error) {
+          console.error(`Failed to load SVG "${serialized.fileName}":`, error);
+        }
+      }
+
+      // Update lineGeometry for compatibility
+      this.lineGeometry = this.svgItems.length > 0
+        ? this.svgItems[this.svgItems.length - 1].geometry
+        : null;
+
+      console.log(`Project loaded: ${this.svgItems.length} SVGs, ${this.workpieceStarts.length} workpiece starts`);
+    },
+
+    /**
+     * Clear all project data and reset to initial state.
+     */
+    clearProject() {
+      this.svgItems = [];
+      this.lineGeometry = null;
+      this.workpieceStarts = [
+        { id: 'default_start_1', name: 'Start 1', x: 100, y: 100 }
+      ];
+      this.defaultDpi = 72;
+      console.log('Project cleared');
     }
   }
 });

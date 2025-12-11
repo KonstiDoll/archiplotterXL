@@ -1,3 +1,5 @@
+from datetime import datetime
+from typing import Any
 from pydantic import BaseModel
 
 
@@ -59,5 +61,44 @@ class ToolPresetUpdate(BaseModel):
 class ToolPresetResponse(ToolPresetBase):
     """Schema for tool preset response."""
     id: int
+
+    model_config = {"from_attributes": True}
+
+
+# --- Project Schemas ---
+
+class ProjectBase(BaseModel):
+    """Base schema for project data."""
+    name: str
+    description: str | None = None
+
+
+class ProjectCreate(ProjectBase):
+    """Schema for creating a new project."""
+    project_data: dict[str, Any]
+
+
+class ProjectUpdate(BaseModel):
+    """Schema for updating an existing project."""
+    name: str | None = None
+    description: str | None = None
+    project_data: dict[str, Any] | None = None
+
+
+class ProjectListItem(ProjectBase):
+    """Schema for project list item (without full data)."""
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ProjectResponse(ProjectBase):
+    """Schema for full project response."""
+    id: int
+    project_data: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}

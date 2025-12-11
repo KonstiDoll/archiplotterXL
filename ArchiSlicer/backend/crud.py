@@ -1,6 +1,10 @@
 from sqlalchemy.orm import Session
-from models import PenType, ToolPreset
-from schemas import PenTypeCreate, PenTypeUpdate, ToolPresetCreate, ToolPresetUpdate
+from models import PenType, ToolPreset, Project
+from schemas import (
+    PenTypeCreate, PenTypeUpdate,
+    ToolPresetCreate, ToolPresetUpdate,
+    ProjectCreate, ProjectUpdate
+)
 
 
 def get_pen_types(db: Session) -> list[PenType]:
@@ -99,5 +103,59 @@ def delete_tool_preset(db: Session, preset_id: int) -> bool:
         return False
 
     db.delete(db_preset)
+    db.commit()
+    return True
+
+
+# --- Project CRUD ---
+
+def get_projects(db: Session) -> list[Project]:
+    """Get all projects (ordered by updated_at descending)."""
+    return db.query(Project).order_by(Project.updated_at.desc()).all()
+
+
+def get_project(db: Session, project_id: int) -> Project | None:
+    """Get a single project by ID."""
+    return db.query(Project).filter(Project.id == project_id).first()
+
+
+def create_project(db: Session, project: ProjectCreate) -> Project:
+    """Create a new project."""
+    db_project = Project(
+        name=project.name,
+        description=project.description,
+        project_data=project.project_data
+    )
+    db.add(db_project)
+    db.commit()
+    db.refresh(db_project)
+    return db_project
+
+
+def update_project(db: Session, project_id: int, project: ProjectUpdate) -> Project | None:
+    """Update an existing project."""
+    db_project = get_project(db, project_id)
+    if db_project is None:
+        return None
+
+    if project.name is not None:
+        db_project.name = project.name
+    if project.description is not None:
+        db_project.description = project.description
+    if project.project_data is not None:
+        db_project.project_data = project.project_data
+
+    db.commit()
+    db.refresh(db_project)
+    return db_project
+
+
+def delete_project(db: Session, project_id: int) -> bool:
+    """Delete a project. Returns True if deleted, False if not found."""
+    db_project = get_project(db, project_id)
+    if db_project is None:
+        return False
+
+    db.delete(db_project)
     db.commit()
     return True

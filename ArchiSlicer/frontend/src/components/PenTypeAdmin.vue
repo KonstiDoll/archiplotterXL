@@ -168,7 +168,6 @@
 import { ref, computed } from 'vue';
 import {
     penTypes,
-    penTypesLoading,
     penTypesError,
     createPenType,
     updatePenType,

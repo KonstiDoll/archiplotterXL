@@ -214,6 +214,7 @@ function closeSaveDialog() {
 }
 
 // When opening save dialog with a selected preset, prefill for update
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function openSaveDialog() {
     if (selectedPresetId.value) {
         const preset = toolPresets.find(p => p.id === selectedPresetId.value);
@@ -224,4 +225,5 @@ function openSaveDialog() {
     }
     showSaveDialog.value = true;
 }
+void openSaveDialog; // Silence unused warning - function available for future use
 </script>

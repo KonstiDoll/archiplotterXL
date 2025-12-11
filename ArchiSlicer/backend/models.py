@@ -1,4 +1,5 @@
-from sqlalchemy import Column, String, Float, Integer, JSON
+from sqlalchemy import Column, String, Float, Integer, JSON, Text, DateTime
+from sqlalchemy.sql import func
 from database import Base
 
 
@@ -39,3 +40,25 @@ class ToolPreset(Base):
     name = Column(String, nullable=False, unique=True)
     # JSON array: [{"penType": "stabilo", "color": "#000000"}, ...]
     tool_configs = Column(JSON, nullable=False)
+
+
+class Project(Base):
+    """
+    Saved project/session containing all workspace state.
+
+    Attributes:
+        id: Auto-increment primary key
+        name: Project name
+        description: Optional project description
+        project_data: Full project state as JSON (SVGs, settings, etc.)
+        created_at: Creation timestamp
+        updated_at: Last update timestamp
+    """
+    __tablename__ = "projects"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    project_data = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

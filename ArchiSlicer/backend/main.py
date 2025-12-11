@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from alembic.config import Config
 from alembic import command
 
-from routers import pen_types, tool_presets
+from routers import pen_types, tool_presets, projects
 
 
 @asynccontextmanager
@@ -18,7 +18,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="ArchiSlicer API",
     description="Backend API for ArchiSlicer pen plotter",
-    version="0.4.0",
+    version="0.5.0",
     lifespan=lifespan,
 )
 
@@ -38,6 +38,7 @@ app.add_middleware(
 # Include routers
 app.include_router(pen_types.router)
 app.include_router(tool_presets.router)
+app.include_router(projects.router)
 
 
 @app.get("/")
