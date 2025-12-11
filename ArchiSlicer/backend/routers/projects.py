@@ -11,7 +11,7 @@ import crud
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 
-@router.get("/", response_model=list[ProjectListItem])
+@router.get("", response_model=list[ProjectListItem])
 def list_projects(db: Session = Depends(get_db)):
     """Get all projects (summary without full project_data)."""
     return crud.get_projects(db)
@@ -26,7 +26,7 @@ def get_project(project_id: int, db: Session = Depends(get_db)):
     return project
 
 
-@router.post("/", response_model=ProjectResponse, status_code=201)
+@router.post("", response_model=ProjectResponse, status_code=201)
 def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
     """Create a new project."""
     return crud.create_project(db, project)

@@ -8,7 +8,7 @@ import crud
 router = APIRouter(prefix="/api/tool-presets", tags=["tool-presets"])
 
 
-@router.get("/", response_model=list[ToolPresetResponse])
+@router.get("", response_model=list[ToolPresetResponse])
 def list_tool_presets(db: Session = Depends(get_db)):
     """Get all tool presets."""
     return crud.get_tool_presets(db)
@@ -23,7 +23,7 @@ def get_tool_preset(preset_id: int, db: Session = Depends(get_db)):
     return preset
 
 
-@router.post("/", response_model=ToolPresetResponse, status_code=201)
+@router.post("", response_model=ToolPresetResponse, status_code=201)
 def create_tool_preset(preset: ToolPresetCreate, db: Session = Depends(get_db)):
     """Create a new tool preset."""
     # Check if name already exists

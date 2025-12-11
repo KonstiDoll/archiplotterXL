@@ -20,6 +20,7 @@ app = FastAPI(
     description="Backend API for ArchiSlicer pen plotter",
     version="0.6.1",
     lifespan=lifespan,
+    redirect_slashes=False,
 )
 
 # CORS configuration for frontend
