@@ -193,7 +193,7 @@ export async function fetchToolPresets(): Promise<void> {
     toolPresetsError.value = null;
 
     try {
-        const response = await fetch(`${API_BASE_URL}/api/tool-presets/`);
+        const response = await fetch(`${API_BASE_URL}/api/tool-presets`);
         if (!response.ok) {
             throw new Error('Failed to fetch tool presets');
         }
@@ -208,7 +208,7 @@ export async function fetchToolPresets(): Promise<void> {
 }
 
 export async function createToolPreset(name: string, configs: ToolConfig[]): Promise<ToolPreset> {
-    const response = await fetch(`${API_BASE_URL}/api/tool-presets/`, {
+    const response = await fetch(`${API_BASE_URL}/api/tool-presets`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, tool_configs: configs }),
