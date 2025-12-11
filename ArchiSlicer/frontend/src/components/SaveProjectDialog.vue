@@ -19,14 +19,24 @@
                         @keydown.enter="save" />
                 </div>
 
-                <!-- Description (optional) -->
-                <div>
+                <!-- Description (optional, only for new projects) -->
+                <div v-if="mode === 'saveAs' || !currentProjectId">
                     <label class="block text-slate-300 text-sm mb-1">Beschreibung (optional)</label>
                     <textarea
                         v-model="description"
                         rows="2"
                         placeholder="Projektbeschreibung..."
                         class="w-full px-3 py-2 bg-slate-700 text-white rounded border border-slate-600 focus:border-blue-500 focus:outline-none resize-none" />
+                </div>
+
+                <!-- Version message (optional, only when updating existing project) -->
+                <div v-if="mode === 'save' && currentProjectId && (saveLocation === 'server' || saveLocation === 'both')">
+                    <label class="block text-slate-300 text-sm mb-1">Änderungsnotiz (optional)</label>
+                    <input
+                        v-model="versionMessage"
+                        type="text"
+                        placeholder="z.B. Farben angepasst, neue SVG hinzugefügt..."
+                        class="w-full px-3 py-2 bg-slate-700 text-white rounded border border-slate-600 focus:border-blue-500 focus:outline-none" />
                 </div>
 
                 <!-- Save location choice -->
@@ -120,6 +130,7 @@ const store = useMainStore();
 
 const projectName = ref('');
 const description = ref('');
+const versionMessage = ref('');
 const saveLocation = ref<'server' | 'local' | 'both'>('server');
 const isSaving = ref(false);
 const error = ref<string | null>(null);
@@ -137,6 +148,7 @@ watch(() => props.isOpen, (open) => {
             projectName.value = currentProjectName.value || 'Neues Projekt';
         }
         description.value = '';
+        versionMessage.value = '';
         error.value = null;
         successMessage.value = null;
     }
@@ -163,6 +175,7 @@ async function save() {
                     name,
                     description: description.value || undefined,
                     project_data: projectData,
+                    version_message: versionMessage.value || undefined,
                 });
                 console.log(`Project ${currentProjectId.value} updated`);
             } else {

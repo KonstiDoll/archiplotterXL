@@ -89,18 +89,23 @@
                             <div v-else-if="versions.length === 0" class="p-3 text-slate-400 text-sm text-center">
                                 Keine früheren Versionen
                             </div>
-                            <div v-else class="p-2 space-y-1 max-h-40 overflow-y-auto">
+                            <div v-else class="p-2 space-y-1 max-h-48 overflow-y-auto">
                                 <div
                                     v-for="version in versions"
                                     :key="version.id"
-                                    class="flex items-center justify-between px-2 py-1.5 rounded hover:bg-slate-700 text-sm">
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-slate-300">Version {{ version.version }}</span>
-                                        <span class="text-slate-500 text-xs">{{ formatDate(version.created_at) }}</span>
+                                    class="flex items-center justify-between px-2 py-1.5 rounded hover:bg-slate-700 text-sm gap-2">
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-slate-300 whitespace-nowrap">v{{ version.version }}</span>
+                                            <span class="text-slate-500 text-xs whitespace-nowrap">{{ formatDate(version.created_at) }}</span>
+                                        </div>
+                                        <p v-if="version.message" class="text-slate-400 text-xs truncate mt-0.5">
+                                            {{ version.message }}
+                                        </p>
                                     </div>
                                     <button
                                         @click="confirmRestore(project, version.version)"
-                                        class="px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded">
+                                        class="px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded whitespace-nowrap">
                                         Wiederherstellen
                                     </button>
                                 </div>

@@ -77,6 +77,7 @@ class ProjectVersion(Base):
         project_id: Reference to the parent project
         version: Version number (1, 2, 3, ...)
         project_data: Project state at this version
+        message: Optional version message describing changes
         created_at: When this version was created
     """
     __tablename__ = "project_versions"
@@ -85,4 +86,5 @@ class ProjectVersion(Base):
     project_id = Column(Integer, nullable=False, index=True)
     version = Column(Integer, nullable=False)
     project_data = Column(JSON, nullable=False)
+    message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

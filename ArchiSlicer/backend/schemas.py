@@ -83,6 +83,7 @@ class ProjectUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     project_data: dict[str, Any] | None = None
+    version_message: str | None = None  # Optional message for this version
 
 
 class ProjectListItem(ProjectBase):
@@ -112,6 +113,7 @@ class ProjectVersionListItem(BaseModel):
     """Schema for version list item."""
     id: int
     version: int
+    message: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -122,6 +124,7 @@ class ProjectVersionResponse(BaseModel):
     id: int
     project_id: int
     version: int
+    message: str | None = None
     project_data: dict[str, Any]
     created_at: datetime
 

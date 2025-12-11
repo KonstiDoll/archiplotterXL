@@ -144,7 +144,8 @@ def update_project(db: Session, project_id: int, project: ProjectUpdate) -> Proj
         db_version = ProjectVersion(
             project_id=db_project.id,
             version=db_project.current_version,
-            project_data=db_project.project_data
+            project_data=db_project.project_data,
+            message=project.version_message
         )
         db.add(db_version)
         # Increment version number
@@ -206,7 +207,8 @@ def restore_project_version(db: Session, project_id: int, version: int) -> Proje
     archive_version = ProjectVersion(
         project_id=db_project.id,
         version=db_project.current_version,
-        project_data=db_project.project_data
+        project_data=db_project.project_data,
+        message=f"Vor Wiederherstellung von v{version}"
     )
     db.add(archive_version)
 

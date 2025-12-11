@@ -80,6 +80,7 @@ export interface ProjectResponse extends ProjectListItem {
 export interface ProjectVersionListItem {
   id: number;
   version: number;
+  message: string | null;
   created_at: string;
 }
 
@@ -379,6 +380,7 @@ export async function updateProject(
     name?: string;
     description?: string;
     project_data?: ProjectData;
+    version_message?: string;
   }
 ): Promise<ProjectResponse> {
   projectsLoading.value = true;
