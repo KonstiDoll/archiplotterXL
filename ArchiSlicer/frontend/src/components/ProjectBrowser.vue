@@ -310,9 +310,10 @@ async function restoreConfirmed() {
     if (!restoreInfo.value) return;
 
     isRestoring.value = true;
+    const projectId = restoreInfo.value.projectId;
     try {
         const response = await restoreProjectVersion(
-            restoreInfo.value.projectId,
+            projectId,
             restoreInfo.value.version
         );
         // Load the restored project
@@ -321,7 +322,12 @@ async function restoreConfirmed() {
         currentProjectName.value = response.name;
         emit('project-loaded');
         restoreInfo.value = null;
-        close();
+
+        // Refresh project list and version history
+        await loadProjects();
+        if (expandedProjectId.value === projectId) {
+            versions.value = await fetchProjectVersions(projectId);
+        }
     } catch (e) {
         error.value = e instanceof Error ? e.message : 'Fehler beim Wiederherstellen';
     } finally {
