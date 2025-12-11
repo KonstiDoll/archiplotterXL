@@ -67,11 +67,24 @@ export interface ProjectListItem {
   id: number;
   name: string;
   description: string | null;
+  current_version: number;
   created_at: string;
   updated_at: string;
 }
 
 export interface ProjectResponse extends ProjectListItem {
+  project_data: ProjectData;
+}
+
+// Version-related types
+export interface ProjectVersionListItem {
+  id: number;
+  version: number;
+  created_at: string;
+}
+
+export interface ProjectVersionResponse extends ProjectVersionListItem {
+  project_id: number;
   project_data: ProjectData;
 }
 
@@ -446,6 +459,90 @@ export async function deleteProject(projectId: number): Promise<void> {
 export function clearCurrentProject(): void {
   currentProjectId.value = null;
   currentProjectName.value = '';
+}
+
+// --- Version API Functions ---
+
+/**
+ * Fetch all versions of a project.
+ */
+export async function fetchProjectVersions(projectId: number): Promise<ProjectVersionListItem[]> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/projects/${projectId}/versions`);
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Project not found');
+      }
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+    console.log(`Loaded ${data.length} versions for project ${projectId}`);
+    return data;
+  } catch (error) {
+    console.error('Failed to fetch project versions:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch a specific version of a project (with full data).
+ */
+export async function fetchProjectVersion(
+  projectId: number,
+  version: number
+): Promise<ProjectVersionResponse> {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/projects/${projectId}/versions/${version}`
+    );
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Project or version not found');
+      }
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to fetch project version:', error);
+    throw error;
+  }
+}
+
+/**
+ * Restore a project to a previous version.
+ * The current state is archived before restoring.
+ */
+export async function restoreProjectVersion(
+  projectId: number,
+  version: number
+): Promise<ProjectResponse> {
+  projectsLoading.value = true;
+  projectsError.value = null;
+
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/api/projects/${projectId}/versions/${version}/restore`,
+      { method: 'POST' }
+    );
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Project or version not found');
+      }
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log(`Restored project ${projectId} to version ${version}`);
+    return data;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Failed to restore project version:', error);
+    projectsError.value = message;
+    throw error;
+  } finally {
+    projectsLoading.value = false;
+  }
 }
 
 // --- Deserialization Functions ---

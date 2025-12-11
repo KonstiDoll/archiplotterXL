@@ -88,6 +88,7 @@ class ProjectUpdate(BaseModel):
 class ProjectListItem(ProjectBase):
     """Schema for project list item (without full data)."""
     id: int
+    current_version: int
     created_at: datetime
     updated_at: datetime
 
@@ -98,7 +99,30 @@ class ProjectResponse(ProjectBase):
     """Schema for full project response."""
     id: int
     project_data: dict[str, Any]
+    current_version: int
     created_at: datetime
     updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# --- Project Version Schemas ---
+
+class ProjectVersionListItem(BaseModel):
+    """Schema for version list item."""
+    id: int
+    version: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ProjectVersionResponse(BaseModel):
+    """Schema for full version response (with project data)."""
+    id: int
+    project_id: int
+    version: int
+    project_data: dict[str, Any]
+    created_at: datetime
 
     model_config = {"from_attributes": True}

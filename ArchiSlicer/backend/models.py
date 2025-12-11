@@ -45,12 +45,14 @@ class ToolPreset(Base):
 class Project(Base):
     """
     Saved project/session containing all workspace state.
+    This represents the current/latest version of a project.
 
     Attributes:
         id: Auto-increment primary key
         name: Project name
         description: Optional project description
         project_data: Full project state as JSON (SVGs, settings, etc.)
+        current_version: Current version number (increments on each save)
         created_at: Creation timestamp
         updated_at: Last update timestamp
     """
@@ -60,5 +62,27 @@ class Project(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     project_data = Column(JSON, nullable=False)
+    current_version = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class ProjectVersion(Base):
+    """
+    Historical version of a project.
+    Stores previous states when a project is updated.
+
+    Attributes:
+        id: Auto-increment primary key
+        project_id: Reference to the parent project
+        version: Version number (1, 2, 3, ...)
+        project_data: Project state at this version
+        created_at: When this version was created
+    """
+    __tablename__ = "project_versions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, nullable=False, index=True)
+    version = Column(Integer, nullable=False)
+    project_data = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

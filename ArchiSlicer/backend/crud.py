@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from models import PenType, ToolPreset, Project
+from models import PenType, ToolPreset, Project, ProjectVersion
 from schemas import (
     PenTypeCreate, PenTypeUpdate,
     ToolPresetCreate, ToolPresetUpdate,
@@ -133,10 +133,22 @@ def create_project(db: Session, project: ProjectCreate) -> Project:
 
 
 def update_project(db: Session, project_id: int, project: ProjectUpdate) -> Project | None:
-    """Update an existing project."""
+    """Update an existing project. Creates a version snapshot before updating."""
     db_project = get_project(db, project_id)
     if db_project is None:
         return None
+
+    # If project_data is being updated, archive current version first
+    if project.project_data is not None:
+        # Create version snapshot of current state
+        db_version = ProjectVersion(
+            project_id=db_project.id,
+            version=db_project.current_version,
+            project_data=db_project.project_data
+        )
+        db.add(db_version)
+        # Increment version number
+        db_project.current_version += 1
 
     if project.name is not None:
         db_project.name = project.name
@@ -151,11 +163,57 @@ def update_project(db: Session, project_id: int, project: ProjectUpdate) -> Proj
 
 
 def delete_project(db: Session, project_id: int) -> bool:
-    """Delete a project. Returns True if deleted, False if not found."""
+    """Delete a project and all its versions. Returns True if deleted, False if not found."""
     db_project = get_project(db, project_id)
     if db_project is None:
         return False
 
+    # Delete all versions first
+    db.query(ProjectVersion).filter(ProjectVersion.project_id == project_id).delete()
     db.delete(db_project)
     db.commit()
     return True
+
+
+# --- Project Version CRUD ---
+
+def get_project_versions(db: Session, project_id: int) -> list[ProjectVersion]:
+    """Get all versions of a project (ordered by version descending)."""
+    return db.query(ProjectVersion).filter(
+        ProjectVersion.project_id == project_id
+    ).order_by(ProjectVersion.version.desc()).all()
+
+
+def get_project_version(db: Session, project_id: int, version: int) -> ProjectVersion | None:
+    """Get a specific version of a project."""
+    return db.query(ProjectVersion).filter(
+        ProjectVersion.project_id == project_id,
+        ProjectVersion.version == version
+    ).first()
+
+
+def restore_project_version(db: Session, project_id: int, version: int) -> Project | None:
+    """Restore a project to a previous version. Archives current state first."""
+    db_project = get_project(db, project_id)
+    if db_project is None:
+        return None
+
+    db_version = get_project_version(db, project_id, version)
+    if db_version is None:
+        return None
+
+    # Archive current state before restoring
+    archive_version = ProjectVersion(
+        project_id=db_project.id,
+        version=db_project.current_version,
+        project_data=db_project.project_data
+    )
+    db.add(archive_version)
+
+    # Restore old data and increment version
+    db_project.project_data = db_version.project_data
+    db_project.current_version += 1
+
+    db.commit()
+    db.refresh(db_project)
+    return db_project
