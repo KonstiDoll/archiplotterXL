@@ -198,14 +198,104 @@ export function analyzeColorsInGroup(group: THREE.Group): ColorInfo[] {
     return colorInfos;
 }
 
+/**
+ * Pre-process SVG content to resolve CSS class styles to inline styles.
+ * THREE.js SVGLoader doesn't resolve <style> blocks with class selectors,
+ * so we need to do it manually before parsing.
+ */
+function preprocessSvgStyles(svgContent: string): string {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgContent, 'image/svg+xml');
+
+    // Find all <style> elements and extract CSS rules
+    const styleElements = doc.querySelectorAll('style');
+    const classStyles = new Map<string, { [key: string]: string }>();
+
+    styleElements.forEach(styleEl => {
+        const cssText = styleEl.textContent || '';
+
+        // Parse CSS rules (simple parser for class selectors)
+        // Matches: .className { property: value; ... }
+        const ruleRegex = /\.([a-zA-Z0-9_-]+)\s*\{([^}]+)\}/g;
+        let match;
+
+        while ((match = ruleRegex.exec(cssText)) !== null) {
+            const className = match[1];
+            const declarations = match[2];
+            const styles: { [key: string]: string } = {};
+
+            // Parse individual declarations
+            declarations.split(';').forEach(decl => {
+                const [prop, val] = decl.split(':').map(s => s.trim());
+                if (prop && val) {
+                    styles[prop] = val;
+                }
+            });
+
+            classStyles.set(className, styles);
+        }
+    });
+
+    if (classStyles.size > 0) {
+        console.log(`Resolved ${classStyles.size} CSS class styles:`, Object.fromEntries(classStyles));
+    }
+
+    // Apply class styles to elements as inline styles
+    classStyles.forEach((styles, className) => {
+        const elements = doc.querySelectorAll(`.${className}`);
+        elements.forEach(el => {
+            // Get existing inline style
+            const existingStyle = el.getAttribute('style') || '';
+            const existingStyles: { [key: string]: string } = {};
+
+            existingStyle.split(';').forEach(decl => {
+                const [prop, val] = decl.split(':').map(s => s.trim());
+                if (prop && val) {
+                    existingStyles[prop] = val;
+                }
+            });
+
+            // Merge: existing inline styles override class styles
+            const mergedStyles = { ...styles, ...existingStyles };
+
+            // Also set as direct attributes for SVGLoader compatibility
+            if (mergedStyles['fill'] && !el.hasAttribute('fill')) {
+                el.setAttribute('fill', mergedStyles['fill']);
+            }
+            if (mergedStyles['stroke'] && !el.hasAttribute('stroke')) {
+                el.setAttribute('stroke', mergedStyles['stroke']);
+            }
+            if (mergedStyles['stroke-width'] && !el.hasAttribute('stroke-width')) {
+                el.setAttribute('stroke-width', mergedStyles['stroke-width']);
+            }
+
+            // Build new style string
+            const newStyle = Object.entries(mergedStyles)
+                .map(([k, v]) => `${k}: ${v}`)
+                .join('; ');
+
+            if (newStyle) {
+                el.setAttribute('style', newStyle);
+            }
+        });
+    });
+
+    // Serialize back to string
+    const serializer = new XMLSerializer();
+    return serializer.serializeToString(doc);
+}
+
 export function getThreejsObjectFromSvg(svgContent: string, _offsetX: number = 0, dpi: number = 96): Promise<THREE.Group> {
     console.log("--- SVG Analyse Start ---");
     console.log(`DPI: ${dpi} (Skalierungsfaktor px→mm: ${(25.4 / dpi).toFixed(4)})`);
     // _offsetX parameter is kept for compatibility but not used anymore
-    
+
+    // Pre-process SVG to resolve CSS class styles
+    const processedSvg = preprocessSvgStyles(svgContent);
+
     // SVG Metadaten extrahieren (viewBox, width, height, transform)
     const parser = new DOMParser();
-    const svgDoc = parser.parseFromString(svgContent, 'image/svg+xml');
+    const svgDoc = parser.parseFromString(processedSvg, 'image/svg+xml');
     const svgElement = svgDoc.querySelector('svg');
     
     // Standard-Werte
@@ -249,7 +339,7 @@ export function getThreejsObjectFromSvg(svgContent: string, _offsetX: number = 0
     }
     
     const loader = new SVGLoader();
-    const svg = loader.parse(svgContent);
+    const svg = loader.parse(processedSvg);
     
     console.log("SVG Loader Infos:");
     console.log(`SVG Paths gefunden: ${svg.paths.length}`);

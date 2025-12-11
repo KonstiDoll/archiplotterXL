@@ -18,7 +18,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="ArchiSlicer API",
     description="Backend API for ArchiSlicer pen plotter",
-    version="0.5.0",
+    version="0.5.1",
     lifespan=lifespan,
 )
 
