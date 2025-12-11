@@ -575,38 +575,48 @@ export const useMainStore = defineStore('main', {
 
       const serializedItems: SerializedSVGItem[] = this.svgItems
         .filter(item => item.svgContent) // Only items with svgContent can be serialized
-        .map(item => ({
-          fileName: item.fileName,
-          svgContent: item.svgContent!,
-          dpi: item.dpi,
-          toolNumber: item.toolNumber,
-          infillToolNumber: item.infillToolNumber,
-          penType: item.penType,
-          feedrate: item.feedrate,
-          drawingHeight: item.drawingHeight,
-          offsetX: item.offsetX,
-          offsetY: item.offsetY,
-          workpieceStartId: item.workpieceStartId,
-          infillOptions: { ...item.infillOptions },
-          colorGroups: item.colorGroups.map((cg): SerializedColorGroup => {
-            const serialized: SerializedColorGroup = {
-              color: cg.color,
-              toolNumber: cg.toolNumber,
-              lineCount: cg.lineCount,
-              visible: cg.visible,
-              infillEnabled: cg.infillEnabled,
-              infillToolNumber: cg.infillToolNumber,
-              infillOptions: { ...cg.infillOptions },
-            };
-            // Serialize infill geometry if present
-            if (cg.infillGroup && cg.infillGroup.children.length > 0) {
-              serialized.infillLines = serializeInfillGroup(cg.infillGroup);
-              console.log(`Serialized ${serialized.infillLines.length} infill lines for color ${cg.color}`);
-            }
-            return serialized;
-          }),
-          isAnalyzed: item.isAnalyzed,
-        }));
+        .map(item => {
+          // Serialize file-level infill if present
+          let fileInfillLines: SerializedInfillLine[] | undefined = undefined;
+          if (item.infillGroup && item.infillGroup.children.length > 0) {
+            fileInfillLines = serializeInfillGroup(item.infillGroup);
+            console.log(`Serialized ${fileInfillLines.length} file-level infill lines for ${item.fileName}`);
+          }
+
+          return {
+            fileName: item.fileName,
+            svgContent: item.svgContent!,
+            dpi: item.dpi,
+            toolNumber: item.toolNumber,
+            infillToolNumber: item.infillToolNumber,
+            penType: item.penType,
+            feedrate: item.feedrate,
+            drawingHeight: item.drawingHeight,
+            offsetX: item.offsetX,
+            offsetY: item.offsetY,
+            workpieceStartId: item.workpieceStartId,
+            infillOptions: { ...item.infillOptions },
+            infillLines: fileInfillLines, // File-level infill
+            colorGroups: item.colorGroups.map((cg): SerializedColorGroup => {
+              const serialized: SerializedColorGroup = {
+                color: cg.color,
+                toolNumber: cg.toolNumber,
+                lineCount: cg.lineCount,
+                visible: cg.visible,
+                infillEnabled: cg.infillEnabled,
+                infillToolNumber: cg.infillToolNumber,
+                infillOptions: { ...cg.infillOptions },
+              };
+              // Serialize infill geometry if present
+              if (cg.infillGroup && cg.infillGroup.children.length > 0) {
+                serialized.infillLines = serializeInfillGroup(cg.infillGroup);
+                console.log(`Serialized ${serialized.infillLines.length} infill lines for color ${cg.color}`);
+              }
+              return serialized;
+            }),
+            isAnalyzed: item.isAnalyzed,
+          };
+        });
 
       return {
         version: '1.1',
@@ -644,6 +654,14 @@ export const useMainStore = defineStore('main', {
             serialized.dpi
           );
 
+          // Restore file-level infill geometry if present
+          let fileInfillGroup: THREE.Group | undefined = undefined;
+          if (serialized.infillLines && serialized.infillLines.length > 0) {
+            fileInfillGroup = markRaw(deserializeInfillGroup(serialized.infillLines, '#00ff00'));
+            geometry.add(fileInfillGroup);
+            console.log(`Restored ${serialized.infillLines.length} file-level infill lines for ${serialized.fileName}`);
+          }
+
           // Restore color groups with infill geometry
           const colorGroups: ColorGroup[] = serialized.colorGroups.map(cg => {
             let infillGroup: THREE.Group | undefined = undefined;
@@ -678,6 +696,7 @@ export const useMainStore = defineStore('main', {
             feedrate: serialized.feedrate,
             drawingHeight: serialized.drawingHeight,
             infillOptions: { ...serialized.infillOptions },
+            infillGroup: fileInfillGroup, // Restore file-level infill
             colorGroups,
             isAnalyzed: serialized.isAnalyzed,
             isPathAnalyzed: false, // Will be re-analyzed

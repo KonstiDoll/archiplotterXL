@@ -39,6 +39,7 @@ export interface SerializedSVGItem {
   offsetY: number;
   workpieceStartId?: string;
   infillOptions: InfillOptions;
+  infillLines?: SerializedInfillLine[]; // File-level infill (from FilePanel)
   colorGroups: SerializedColorGroup[];
   isAnalyzed: boolean;
 }
