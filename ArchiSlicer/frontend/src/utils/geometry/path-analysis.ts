@@ -38,6 +38,15 @@ export interface PathInfo {
     minY: number;
     maxY: number;
   };
+  color?: string;                    // Optional: Farbe des Pfads (für globale Analyse)
+}
+
+/**
+ * Input für analyzePathRelationshipsWithColors
+ */
+export interface PolygonWithColor {
+  polygon: THREE.Vector2[];
+  color: string;
 }
 
 export interface PathAnalysisResult {
@@ -137,6 +146,103 @@ export function analyzePathRelationships(polygons: THREE.Vector2[][]): PathAnaly
   paths.sort((a, b) => Math.abs(b.signedArea) - Math.abs(a.signedArea));
 
   // Build containment tree
+  for (let i = 0; i < paths.length; i++) {
+    const innerPath = paths[i];
+
+    // Find the smallest containing path (most immediate parent)
+    let smallestParent: PathInfo | null = null;
+    let smallestParentArea = Infinity;
+
+    for (let j = 0; j < paths.length; j++) {
+      if (i === j) continue;
+
+      const outerPath = paths[j];
+      const outerArea = Math.abs(outerPath.signedArea);
+
+      // Can't be contained by something smaller
+      if (outerArea <= Math.abs(innerPath.signedArea)) continue;
+
+      if (isPathInsidePath(innerPath, outerPath)) {
+        if (outerArea < smallestParentArea) {
+          smallestParent = outerPath;
+          smallestParentArea = outerArea;
+        }
+      }
+    }
+
+    if (smallestParent) {
+      innerPath.parentPathId = smallestParent.id;
+      smallestParent.childPathIds.push(innerPath.id);
+    }
+  }
+
+  // Calculate containment depths
+  function calculateDepth(path: PathInfo): number {
+    if (!path.parentPathId) return 0;
+    const parent = paths.find(p => p.id === path.parentPathId);
+    if (!parent) return 0;
+    return 1 + calculateDepth(parent);
+  }
+
+  for (const path of paths) {
+    path.containmentDepth = calculateDepth(path);
+  }
+
+  // Determine roles
+  for (const path of paths) {
+    const parent = path.parentPathId
+      ? paths.find(p => p.id === path.parentPathId) || null
+      : null;
+    path.autoDetectedRole = determineRole(path, parent);
+  }
+
+  // Categorize
+  const outerPaths = paths.filter(p => getEffectiveRole(p) === 'outer');
+  const holes = paths.filter(p => getEffectiveRole(p) === 'hole');
+  const nestedObjects = paths.filter(p => getEffectiveRole(p) === 'nested-object');
+
+  return {
+    paths,
+    outerPaths,
+    holes,
+    nestedObjects
+  };
+}
+
+/**
+ * Analyze relationships between paths WITH COLOR INFORMATION
+ *
+ * Diese Funktion analysiert Pfade aller Farben gemeinsam, damit Holes korrekt
+ * erkannt werden auch wenn sie eine andere Farbe haben als ihr Parent-Pfad.
+ *
+ * @param polygonsWithColors Array von Polygonen mit Farbinformation
+ * @returns PathAnalysisResult mit Farb-Info in jedem PathInfo
+ */
+export function analyzePathRelationshipsWithColors(
+  polygonsWithColors: PolygonWithColor[]
+): PathAnalysisResult {
+  // Create PathInfo for each polygon WITH color
+  const paths: PathInfo[] = polygonsWithColors.map(({ polygon, color }) => {
+    const bounds = calculateBounds(polygon);
+    return {
+      id: generatePathId(),
+      polygon,
+      color, // NEU: Farbe speichern
+      windingDirection: getWindingDirection(polygon),
+      signedArea: calculateSignedArea(polygon),
+      containmentDepth: 0,
+      parentPathId: null,
+      childPathIds: [],
+      autoDetectedRole: 'outer' as PathRole,
+      userOverriddenRole: null,
+      bounds
+    };
+  });
+
+  // Sort by area (largest first) - larger shapes are more likely to be parents
+  paths.sort((a, b) => Math.abs(b.signedArea) - Math.abs(a.signedArea));
+
+  // Build containment tree (identical to analyzePathRelationships)
   for (let i = 0; i < paths.length; i++) {
     const innerPath = paths[i];
 
@@ -310,6 +416,49 @@ export function getPolygonsWithHoles(
 
     result.push({
       outer: nestedPath.polygon,
+      holes
+    });
+  }
+
+  return result;
+}
+
+/**
+ * Get outer polygons of a specific color with ALL their holes (any color)
+ *
+ * Diese Funktion ist speziell für die Infill-Generierung gedacht:
+ * - Filtert Outer-Pfade nach der angegebenen Farbe
+ * - Sammelt ALLE Holes die geometrisch innerhalb liegen (unabhängig von deren Farbe)
+ *
+ * @param analysisResult Ergebnis von analyzePathRelationshipsWithColors
+ * @param targetColor Die Farbe für die Infill generiert werden soll
+ * @returns Array von {outer, holes} wobei holes alle Farben enthalten kann
+ */
+export function getPolygonsWithHolesForColor(
+  analysisResult: PathAnalysisResult,
+  targetColor: string
+): { outer: THREE.Vector2[]; holes: THREE.Vector2[][] }[] {
+  const result: { outer: THREE.Vector2[]; holes: THREE.Vector2[][] }[] = [];
+  const normalizedTargetColor = targetColor.toLowerCase();
+
+  // Sammle alle Pfade dieser Farbe die "outer" oder "nested-object" sind
+  // (diese können Infill bekommen)
+  const fillablePaths = [...analysisResult.outerPaths, ...analysisResult.nestedObjects]
+    .filter(p => p.color?.toLowerCase() === normalizedTargetColor);
+
+  for (const outerPath of fillablePaths) {
+    const holes: THREE.Vector2[][] = [];
+
+    // Sammle ALLE direkten Kind-Holes (unabhängig von deren Farbe!)
+    for (const childId of outerPath.childPathIds) {
+      const childPath = analysisResult.paths.find(p => p.id === childId);
+      if (childPath && getEffectiveRole(childPath) === 'hole') {
+        holes.push(childPath.polygon);
+      }
+    }
+
+    result.push({
+      outer: outerPath.polygon,
       holes
     });
   }

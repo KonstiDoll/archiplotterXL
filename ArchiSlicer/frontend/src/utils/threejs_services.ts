@@ -1,9 +1,8 @@
 import * as THREE from 'three';
 //@ts-ignore
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
-import { computed } from 'vue';
 import { offsetPolygon, isValidPolygon, clipLineToPolygon } from './geometry/clipper-utils';
-import { PathAnalysisResult, getPolygonsWithHoles, analyzePathRelationships } from './geometry/path-analysis';
+import { PathAnalysisResult, getPolygonsWithHoles, analyzePathRelationships, analyzePathRelationshipsWithColors, getPolygonsWithHolesForColor, PolygonWithColor } from './geometry/path-analysis';
 
 // Enum für Füllmuster-Typen
 export enum InfillPatternType {
@@ -393,22 +392,65 @@ export function getThreejsObjectFromSvg(svgContent: string, _offsetX: number = 0
             line.userData.fillColor = fillColor && fillColor !== 'none'
                 ? cssColorToHex(fillColor) : null;
             line.userData.effectiveColor = hexColor;
-            
-            if (subPath.curves.length > 1) {
-                const isClosed = computed(() => {
-                    if (subPath.autoClose) {
-                        return true;
+
+            // Prüfe ob der Pfad geschlossen ist
+            // Toleranz für "geschlossen" - größer für große SVGs
+            const CLOSE_TOLERANCE = 1.0; // 1.0 Einheiten Toleranz (für große SVG-Koordinaten)
+
+            // Methode 1: autoClose Flag vom SVG-Loader (Z-Befehl im SVG)
+            let isClosed = subPath.autoClose === true;
+
+            // Methode 2: Prüfe ob erster und letzter Punkt übereinstimmen (via curves)
+            if (!isClosed && subPath.curves.length > 0) {
+                const firstCurve = subPath.curves[0];
+                const lastCurve = subPath.curves[subPath.curves.length - 1];
+                // @ts-ignore - v1 und v2 existieren auf Bezier-Kurven
+                if (firstCurve.v1 && lastCurve.v2) {
+                    // @ts-ignore
+                    const startX = firstCurve.v1.x;
+                    // @ts-ignore
+                    const startY = firstCurve.v1.y;
+                    // @ts-ignore
+                    const endX = lastCurve.v2.x;
+                    // @ts-ignore
+                    const endY = lastCurve.v2.y;
+                    const gap = Math.sqrt((startX - endX) ** 2 + (startY - endY) ** 2);
+                    if (gap < CLOSE_TOLERANCE) {
+                        isClosed = true;
                     }
-                    if (subPath.curves[0].v1.x === subPath.curves[subPath.curves.length - 1].v2.x && 
-                        subPath.curves[0].v1.y === subPath.curves[subPath.curves.length - 1].v2.y) {
-                        return true;
-                    }
-                    return false;
-                });
-                //@ts-ignore
-                line.userData.isClosed = isClosed.value;
+                }
             }
-            
+
+            // Methode 3: Prüfe direkt die Geometrie-Punkte
+            if (!isClosed) {
+                const positions = line.geometry.getAttribute('position');
+                if (positions && positions.count >= 3) {
+                    const firstX = positions.getX(0);
+                    const firstY = positions.getY(0);
+                    const lastX = positions.getX(positions.count - 1);
+                    const lastY = positions.getY(positions.count - 1);
+                    const gap = Math.sqrt((firstX - lastX) ** 2 + (firstY - lastY) ** 2);
+                    if (gap < CLOSE_TOLERANCE) {
+                        isClosed = true;
+                    }
+                }
+            }
+
+            line.userData.isClosed = isClosed;
+
+            // Debug: Logge nicht-geschlossene Pfade mit der problematischen Farbe
+            if (!isClosed && hexColor === '#1d1d1b') {
+                const positions = line.geometry.getAttribute('position');
+                if (positions && positions.count >= 3) {
+                    const firstX = positions.getX(0);
+                    const firstY = positions.getY(0);
+                    const lastX = positions.getX(positions.count - 1);
+                    const lastY = positions.getY(positions.count - 1);
+                    const gap = Math.sqrt((firstX - lastX) ** 2 + (firstY - lastY) ** 2);
+                    console.warn(`OFFENER Pfad #1d1d1b: ${positions.count} Punkte, Gap=${gap.toFixed(2)}, Start=(${firstX.toFixed(1)},${firstY.toFixed(1)}), End=(${lastX.toFixed(1)},${lastY.toFixed(1)})`);
+                }
+            }
+
             group.add(line);
         });
     });
@@ -791,17 +833,22 @@ export function generateInfillWithHoles(
 
 /**
  * Generiert Infill nur für geschlossene Pfade einer bestimmten Farbe
- * Mit automatischer Hole-Detection innerhalb der Farbgruppe
+ *
+ * Wenn eine globale Path-Analyse übergeben wird, werden Holes aller Farben berücksichtigt.
+ * Dies ist wichtig für SVGs, bei denen Outer-Pfad und Hole unterschiedliche Farben haben
+ * (z.B. bei Textpfaden aus Illustrator mit verschiedenen Schwarztönen).
  *
  * @param group Die THREE.Group mit allen SVG-Linien
  * @param color Die Hex-Farbe (z.B. "#ff0000") für die Infill generiert werden soll
  * @param options Infill-Optionen (Pattern, Dichte, etc.)
+ * @param globalPathAnalysis Optional: Globale Path-Analyse für farbübergreifende Hole-Detection
  * @returns Eine neue THREE.Group mit den Infill-Linien für diese Farbe
  */
 export function generateInfillForColor(
     group: THREE.Group,
     color: string,
-    options: InfillOptions
+    options: InfillOptions,
+    globalPathAnalysis?: PathAnalysisResult
 ): THREE.Group {
     const infillGroup = new THREE.Group();
     infillGroup.name = `InfillGroup_${color.replace('#', '')}`;
@@ -815,32 +862,48 @@ export function generateInfillForColor(
     // Normalisiere die Zielfarbe für Vergleich
     const targetColor = color.toLowerCase();
 
-    // Finde alle geschlossenen Pfade mit der angegebenen Farbe und extrahiere Polygone
-    const polygonsForColor: THREE.Vector2[][] = [];
+    let polygonsWithHoles: { outer: THREE.Vector2[]; holes: THREE.Vector2[][] }[];
 
-    group.children.forEach((child) => {
-        if (child instanceof THREE.Line && child.userData?.isClosed) {
-            const pathColor = (child.userData?.effectiveColor || '#000000').toLowerCase();
-            if (pathColor === targetColor) {
-                const points = extractPathPoints(child);
-                if (points.length >= 3) {
-                    polygonsForColor.push(points);
+    // Wenn globale Analyse vorhanden: Nutze farbübergreifende Hole-Detection
+    if (globalPathAnalysis) {
+        polygonsWithHoles = getPolygonsWithHolesForColor(globalPathAnalysis, targetColor);
+        console.log(`Infill für Farbe ${color}: ${polygonsWithHoles.length} Outer-Pfade (mit globaler Hole-Detection)`);
+
+        // Zähle die Holes für besseres Logging
+        const totalHoles = polygonsWithHoles.reduce((sum, p) => sum + p.holes.length, 0);
+        console.log(`Farbe ${color}: ${polygonsWithHoles.length} Outer, ${totalHoles} Holes (farbübergreifend)`);
+    } else {
+        // Fallback: Alte Methode (nur Pfade dieser Farbe analysieren)
+        const polygonsForColor: THREE.Vector2[][] = [];
+
+        group.children.forEach((child) => {
+            if (child instanceof THREE.Line && child.userData?.isClosed) {
+                const pathColor = (child.userData?.effectiveColor || '#000000').toLowerCase();
+                if (pathColor === targetColor) {
+                    const points = extractPathPoints(child);
+                    if (points.length >= 3) {
+                        polygonsForColor.push(points);
+                    }
                 }
             }
+        });
+
+        console.log(`Infill für Farbe ${color}: ${polygonsForColor.length} geschlossene Pfade gefunden (lokale Analyse)`);
+
+        if (polygonsForColor.length === 0) {
+            return infillGroup;
         }
-    });
 
-    console.log(`Infill für Farbe ${color}: ${polygonsForColor.length} geschlossene Pfade gefunden`);
+        // Path-Analyse für Hole-Detection NUR innerhalb dieser Farbgruppe
+        const colorPathAnalysis = analyzePathRelationships(polygonsForColor);
+        polygonsWithHoles = getPolygonsWithHoles(colorPathAnalysis);
 
-    if (polygonsForColor.length === 0) {
-        return infillGroup;
+        console.log(`Farbe ${color}: ${colorPathAnalysis.outerPaths.length} Outer, ${colorPathAnalysis.holes.length} Holes, ${colorPathAnalysis.nestedObjects.length} Nested (lokale Analyse)`);
     }
 
-    // Path-Analyse für Hole-Detection NUR innerhalb dieser Farbgruppe
-    const colorPathAnalysis = analyzePathRelationships(polygonsForColor);
-    const polygonsWithHoles = getPolygonsWithHoles(colorPathAnalysis);
-
-    console.log(`Farbe ${color}: ${colorPathAnalysis.outerPaths.length} Outer, ${colorPathAnalysis.holes.length} Holes, ${colorPathAnalysis.nestedObjects.length} Nested`);
+    if (polygonsWithHoles.length === 0) {
+        return infillGroup;
+    }
 
     // Generiere Infill für jedes Polygon (outer + nested objects) mit Hole-Clipping
     polygonsWithHoles.forEach((item, itemIndex) => {
@@ -1083,12 +1146,53 @@ function clipInfillLinesToHoles(
 export function extractPathPoints(path: THREE.Line): THREE.Vector2[] {
     const positions = path.geometry.attributes.position.array;
     const points: THREE.Vector2[] = [];
-    
+
     for (let i = 0; i < positions.length; i += 3) {
         points.push(new THREE.Vector2(positions[i], positions[i + 1]));
     }
-    
+
     return points;
+}
+
+/**
+ * Extrahiert alle geschlossenen Polygone aus einer THREE.Group MIT Farbinformation.
+ * Diese Funktion wird für die globale Path-Analyse verwendet, bei der alle Pfade
+ * unabhängig von ihrer Farbe analysiert werden.
+ *
+ * @param group Die THREE.Group mit allen SVG-Linien
+ * @returns Array von Polygonen mit Farbinformation
+ */
+export function extractAllPolygonsWithColorInfo(group: THREE.Group): PolygonWithColor[] {
+    const result: PolygonWithColor[] = [];
+
+    group.children.forEach((child) => {
+        if (child instanceof THREE.Line && child.userData?.isClosed) {
+            const color = (child.userData?.effectiveColor || '#000000').toLowerCase();
+            const points = extractPathPoints(child);
+            if (points.length >= 3) {
+                result.push({ polygon: points, color });
+            }
+        }
+    });
+
+    return result;
+}
+
+/**
+ * Führt eine globale Path-Analyse durch (über alle Farben hinweg).
+ * Diese Funktion sollte einmal nach dem SVG-Laden aufgerufen werden.
+ *
+ * @param group Die THREE.Group mit allen SVG-Linien
+ * @returns PathAnalysisResult mit Farbinformation in jedem PathInfo
+ */
+export function analyzeAllPathsGlobally(group: THREE.Group): PathAnalysisResult {
+    const polygonsWithColors = extractAllPolygonsWithColorInfo(group);
+    console.log(`Globale Path-Analyse: ${polygonsWithColors.length} geschlossene Pfade gefunden`);
+
+    const result = analyzePathRelationshipsWithColors(polygonsWithColors);
+    console.log(`Globale Analyse: ${result.outerPaths.length} Outer, ${result.holes.length} Holes, ${result.nestedObjects.length} Nested`);
+
+    return result;
 }
 
 // Berechne die Grenzen eines Polygons

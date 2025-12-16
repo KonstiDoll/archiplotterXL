@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
 import * as THREE from 'three';
 import { markRaw } from 'vue';
-import { InfillOptions, InfillPatternType, defaultInfillOptions, analyzeColorsInGroup, getThreejsObjectFromSvg, generateInfillForColor } from './utils/threejs_services';
-import { PathAnalysisResult, PathRole, analyzePathRelationships, extractPolygonsFromGroup, getEffectiveRole } from './utils/geometry/path-analysis';
+import { InfillOptions, InfillPatternType, defaultInfillOptions, analyzeColorsInGroup, getThreejsObjectFromSvg, generateInfillForColor, analyzeAllPathsGlobally } from './utils/threejs_services';
+import { PathAnalysisResult, PathRole, getEffectiveRole } from './utils/geometry/path-analysis';
 import type { ProjectData, SerializedSVGItem, SerializedColorGroup, SerializedInfillLine } from './utils/project_services';
 import { deserializeInfillGroup } from './utils/project_services';
 
@@ -64,7 +64,9 @@ export const useMainStore = defineStore('main', {
       { id: 'default_start_1', name: 'Start 1', x: 100, y: 100 }
     ] as WorkpieceStart[],
     // Default DPI für neue SVG-Imports
-    defaultDpi: 72
+    defaultDpi: 72,
+    // Kamera-Kippen erlauben (Default: false für 2D-Arbeit)
+    cameraTiltEnabled: false
   }),
   actions: {
     // Altes setLineGeometry für Kompatibilität
@@ -108,7 +110,7 @@ export const useMainStore = defineStore('main', {
 
       // Automatische Path-Analyse für Hole-Detection
       const newIndex = this.svgItems.length - 1;
-      this.analyzePathRelationships(newIndex);
+      this.analyzePathRelationshipsAction(newIndex);
     },
     
     // Methode zum Aktualisieren des Werkzeugs eines SVG-Items
@@ -225,7 +227,7 @@ export const useMainStore = defineStore('main', {
 
           // Path-Analyse zurücksetzen und neu durchführen
           item.isPathAnalyzed = false;
-          this.analyzePathRelationships(index);
+          this.analyzePathRelationshipsAction(index);
 
           // Trigger scene update durch Array-Referenz-Änderung
           this.svgItems = [...this.svgItems];
@@ -241,6 +243,12 @@ export const useMainStore = defineStore('main', {
     setDefaultDpi(dpi: number) {
       this.defaultDpi = dpi;
       console.log(`Default DPI auf ${dpi} gesetzt`);
+    },
+
+    // Kamera-Kippen aktivieren/deaktivieren
+    setCameraTiltEnabled(enabled: boolean) {
+      this.cameraTiltEnabled = enabled;
+      console.log(`Kamera-Kippen ${enabled ? 'aktiviert' : 'deaktiviert'}`);
     },
 
     // ===== NEU: Farb-Analyse Actions =====
@@ -357,11 +365,18 @@ export const useMainStore = defineStore('main', {
             colorGroup.infillGroup = undefined;
           }
 
-          // Neues Infill generieren (mit automatischer Hole-Detection pro Farbe)
+          // Sicherstellen dass Path-Analyse vorhanden ist (für globale Hole-Detection)
+          if (!item.isPathAnalyzed || !item.pathAnalysis) {
+            console.log('Führe globale Path-Analyse durch für farbübergreifende Hole-Detection...');
+            this.analyzePathRelationshipsAction(svgIndex);
+          }
+
+          // Neues Infill generieren - mit globaler Path-Analyse für farbübergreifende Holes
           const infillGroup = generateInfillForColor(
             item.geometry,
             colorGroup.color,
-            colorGroup.infillOptions
+            colorGroup.infillOptions,
+            item.pathAnalysis  // Globale Analyse übergeben!
           );
 
           if (infillGroup.children.length > 0) {
@@ -484,21 +499,25 @@ export const useMainStore = defineStore('main', {
     // ===== Path-Analyse (Hole Detection) Actions =====
 
     // Path-Analyse für ein SVG-Item durchführen
-    analyzePathRelationships(index: number) {
+    // Nutzt jetzt die GLOBALE Analyse über alle Farben hinweg,
+    // damit Holes korrekt erkannt werden auch wenn sie andere Farben haben.
+    analyzePathRelationshipsAction(index: number) {
       if (index >= 0 && index < this.svgItems.length) {
         const item = this.svgItems[index];
-        const polygons = extractPolygonsFromGroup(item.geometry);
 
-        if (polygons.length > 0) {
-          item.pathAnalysis = analyzePathRelationships(polygons);
+        // Nutze die neue globale Analyse, die Farbinformationen enthält
+        const pathAnalysis = analyzeAllPathsGlobally(item.geometry);
+
+        if (pathAnalysis.paths.length > 0) {
+          item.pathAnalysis = pathAnalysis;
           item.isPathAnalyzed = true;
-          console.log(`Path-Analyse für "${item.fileName}":`,
-            `${item.pathAnalysis.outerPaths.length} outer,`,
-            `${item.pathAnalysis.holes.length} holes,`,
-            `${item.pathAnalysis.nestedObjects.length} nested objects`
+          console.log(`Globale Path-Analyse für "${item.fileName}":`,
+            `${pathAnalysis.outerPaths.length} outer,`,
+            `${pathAnalysis.holes.length} holes (farbübergreifend),`,
+            `${pathAnalysis.nestedObjects.length} nested objects`
           );
         } else {
-          console.warn(`Keine Polygone in "${item.fileName}" gefunden`);
+          console.warn(`Keine geschlossenen Polygone in "${item.fileName}" gefunden`);
         }
       }
     },
@@ -711,7 +730,7 @@ export const useMainStore = defineStore('main', {
 
           // Run path analysis for the new item
           const newIndex = this.svgItems.length - 1;
-          this.analyzePathRelationships(newIndex);
+          this.analyzePathRelationshipsAction(newIndex);
 
           console.log(`Loaded SVG "${serialized.fileName}" from project`);
         } catch (error) {
