@@ -103,6 +103,17 @@
                     <span class="text-slate-400 text-xs ml-2">(für neue Imports)</span>
                 </div>
 
+                <!-- Kamera-Kippen -->
+                <div class="flex items-center justify-between p-2 bg-slate-700 rounded mt-2">
+                    <span class="text-white text-xs">Kamera kippen erlauben</span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" :checked="store.cameraTiltEnabled"
+                            @change="store.setCameraTiltEnabled(($event.target as HTMLInputElement).checked)"
+                            class="sr-only peer" />
+                        <div class="w-9 h-5 bg-slate-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
+
                 <!-- Hintergrund-Preset -->
                 <div class="p-2 bg-slate-700 rounded mt-2">
                     <div class="flex items-center mb-2">

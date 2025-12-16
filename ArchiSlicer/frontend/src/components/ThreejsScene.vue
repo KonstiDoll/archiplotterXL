@@ -46,7 +46,15 @@ controller.mouseButtons = {
     MIDDLE: THREE.MOUSE.DOLLY,
     RIGHT: THREE.MOUSE.ROTATE
 };
+// Kamera-Kippen standardmäßig deaktiviert (aus Store)
+controller.enableRotate = store.cameraTiltEnabled;
 controller.update();
+
+// Watch für Kamera-Kippen Einstellung
+watch(() => store.cameraTiltEnabled, (enabled) => {
+    controller.enableRotate = enabled;
+    console.log(`Kamera-Rotation ${enabled ? 'aktiviert' : 'deaktiviert'}`);
+});
 // Kein Three.js Hintergrund - CSS übernimmt
 scene.background = null;
 
