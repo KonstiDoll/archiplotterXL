@@ -1,10 +1,30 @@
 import { defineStore } from 'pinia'
 import * as THREE from 'three';
 import { markRaw } from 'vue';
-import { InfillOptions, InfillPatternType, defaultInfillOptions, analyzeColorsInGroup, getThreejsObjectFromSvg, generateInfillForColor, analyzeAllPathsGlobally } from './utils/threejs_services';
-import { PathAnalysisResult, PathRole, getEffectiveRole } from './utils/geometry/path-analysis';
+import { InfillOptions, InfillPatternType, defaultInfillOptions, analyzeColorsInGroup, getThreejsObjectFromSvg, generateInfillForColorAsync } from './utils/threejs_services';
+import { optimizePathBackend } from './utils/infill-api';
+import { PathAnalysisResult, PathRole, getEffectiveRole, analyzePathRelationships, extractPolygonsFromGroup } from './utils/geometry/path-analysis';
 import type { ProjectData, SerializedSVGItem, SerializedColorGroup, SerializedInfillLine } from './utils/project_services';
 import { deserializeInfillGroup } from './utils/project_services';
+
+// Interface für Infill-Statistiken
+export interface InfillStats {
+  totalLengthMm: number;      // Gesamte Zeichnungslänge
+  travelLengthMm: number;     // Fahrstrecke (Pen-up)
+  numSegments: number;        // Anzahl Liniensegmente
+  numPenLifts: number;        // Anzahl Pen-Lifts
+  isOptimized: boolean;       // Wurde TSP-Optimierung angewandt?
+}
+
+// Interface für Backend-Tasks in der Queue
+export interface BackendTask {
+  id: string;
+  type: 'generate' | 'optimize';
+  svgIndex: number;
+  colorIndex: number | null;  // null = file-level
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  label: string;  // Human-readable description
+}
 
 // Interface für Farbgruppen (erkannte Farben mit Tool-Zuordnung)
 export interface ColorGroup {
@@ -17,6 +37,7 @@ export interface ColorGroup {
   infillToolNumber: number;         // Tool für Infill (kann anders sein als Kontur-Tool)
   infillOptions: InfillOptions;     // Pattern, Dichte, Winkel, etc.
   infillGroup?: THREE.Group;        // Generierte Infill-Geometrie (optional)
+  infillStats?: InfillStats;        // Statistiken zum Infill (Länge, Travel, etc.)
 }
 
 // Interface für Workpiece Starts (Platzierungspunkte)
@@ -38,6 +59,7 @@ export interface SVGItem {
   drawingHeight: number;    // Z-Höhe für verschiedene Materialstärken (mm)
   infillOptions: InfillOptions;  // Infill-Optionen für dieses SVG
   infillGroup?: THREE.Group;    // Optional: Generierte Infill-Gruppe
+  infillStats?: InfillStats;    // Statistiken zum Infill (Länge, Travel, etc.)
   // Farb-Analyse
   colorGroups: ColorGroup[];   // Erkannte Farben mit Tool-Zuordnung
   isAnalyzed: boolean;         // Wurde Farbanalyse durchgeführt?
@@ -66,7 +88,13 @@ export const useMainStore = defineStore('main', {
     // Default DPI für neue SVG-Imports
     defaultDpi: 72,
     // Kamera-Kippen erlauben (Default: false für 2D-Arbeit)
-    cameraTiltEnabled: false
+    cameraTiltEnabled: false,
+    // Loading states für async Operationen
+    infillGenerating: null as { svgIndex: number; colorIndex: number | null } | null,
+    infillOptimizing: null as { svgIndex: number; colorIndex: number | null } | null,
+    // Backend task queue
+    taskQueue: [] as BackendTask[],
+    isProcessingQueue: false
   }),
   actions: {
     // Altes setLineGeometry für Kompatibilität
@@ -352,45 +380,154 @@ export const useMainStore = defineStore('main', {
       }
     },
 
-    // Infill für eine Farbgruppe generieren
-    generateColorInfill(svgIndex: number, colorIndex: number) {
+    // Infill für eine Farbgruppe generieren (async für Backend-Unterstützung)
+    async generateColorInfill(svgIndex: number, colorIndex: number) {
       if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
         const item = this.svgItems[svgIndex];
         if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
           const colorGroup = item.colorGroups[colorIndex];
 
-          // Vorhandenes Infill entfernen
-          if (colorGroup.infillGroup) {
-            item.geometry.remove(colorGroup.infillGroup);
-            colorGroup.infillGroup = undefined;
+          // Set loading state
+          this.infillGenerating = { svgIndex, colorIndex };
+
+          try {
+            // Vorhandenes Infill entfernen
+            if (colorGroup.infillGroup) {
+              item.geometry.remove(colorGroup.infillGroup);
+              colorGroup.infillGroup = undefined;
+            }
+            // Stats zurücksetzen
+            colorGroup.infillStats = undefined;
+
+            // Neues Infill generieren - OHNE TSP-Optimierung für schnelle Vorschau
+            // Hole-Detection erfolgt innerhalb der Farbgruppe
+            const infillGroup = await generateInfillForColorAsync(
+              item.geometry,
+              colorGroup.color,
+              colorGroup.infillOptions,
+              undefined,  // Keine globale Analyse - Holes werden pro Farbe erkannt
+              false  // Keine TSP-Optimierung
+            );
+
+            if (infillGroup.children.length > 0) {
+              // Mit markRaw für Vue-Reaktivität
+              colorGroup.infillGroup = markRaw(infillGroup);
+              // Zur Szene hinzufügen
+              item.geometry.add(infillGroup);
+
+              // Berechne Basis-Statistiken (ohne Optimierung)
+              const lines = infillGroup.children.filter(c => c instanceof THREE.Line) as THREE.Line[];
+              let totalLength = 0;
+              let travelLength = 0;
+              let lastEnd: THREE.Vector3 | null = null;
+
+              for (const line of lines) {
+                const pos = line.geometry.getAttribute('position');
+                if (pos && pos.count >= 2) {
+                  const start = new THREE.Vector3(pos.getX(0), pos.getY(0), pos.getZ(0));
+                  const end = new THREE.Vector3(pos.getX(1), pos.getY(1), pos.getZ(1));
+                  totalLength += start.distanceTo(end);
+                  if (lastEnd) {
+                    travelLength += lastEnd.distanceTo(start);
+                  }
+                  lastEnd = end;
+                }
+              }
+
+              colorGroup.infillStats = {
+                totalLengthMm: Math.round(totalLength * 10) / 10,
+                travelLengthMm: Math.round(travelLength * 10) / 10,
+                numSegments: lines.length,
+                numPenLifts: lines.length > 0 ? lines.length - 1 : 0,
+                isOptimized: false
+              };
+
+              console.log(`Infill für Farbe ${colorGroup.color} generiert: ${lines.length} Linien, ${colorGroup.infillStats.travelLengthMm}mm Travel`);
+            } else {
+              console.warn(`Kein Infill für Farbe ${colorGroup.color} generiert (keine geschlossenen Pfade?)`);
+            }
+
+            // Trigger scene update
+            this.svgItems = [...this.svgItems];
+          } finally {
+            // Clear loading state
+            this.infillGenerating = null;
+          }
+        }
+      }
+    },
+
+    // TSP-Optimierung für Infill einer Farbgruppe
+    async optimizeColorInfill(svgIndex: number, colorIndex: number) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          const colorGroup = item.colorGroups[colorIndex];
+
+          if (!colorGroup.infillGroup || colorGroup.infillGroup.children.length === 0) {
+            console.warn('Kein Infill zum Optimieren vorhanden');
+            return;
           }
 
-          // Sicherstellen dass Path-Analyse vorhanden ist (für globale Hole-Detection)
-          if (!item.isPathAnalyzed || !item.pathAnalysis) {
-            console.log('Führe globale Path-Analyse durch für farbübergreifende Hole-Detection...');
-            this.analyzePathRelationshipsAction(svgIndex);
+          // Set loading state
+          this.infillOptimizing = { svgIndex, colorIndex };
+
+          try {
+            // Extrahiere die Lines aus der Gruppe
+            const lines = colorGroup.infillGroup.children.filter(c => c instanceof THREE.Line) as THREE.Line[];
+
+            if (lines.length < 2) {
+              console.log('Zu wenige Linien für Optimierung');
+              return;
+            }
+
+            console.log(`Starte TSP-Optimierung für ${lines.length} Linien...`);
+
+            // Backend-Optimierung aufrufen
+            const result = await optimizePathBackend(lines);
+
+            if (result && result.lines.length > 0) {
+              // Alte Geometrie aus Szene entfernen
+              item.geometry.remove(colorGroup.infillGroup);
+
+              // Neue optimierte Gruppe erstellen
+              const optimizedGroup = new THREE.Group();
+              optimizedGroup.name = `InfillGroup_${colorGroup.color.replace('#', '')}_optimized`;
+
+              result.lines.forEach((line, idx) => {
+                line.name = `Infill_${colorGroup.color.replace('#', '')}_Opt_Line${idx}`;
+                line.userData = {
+                  isInfillLine: true,
+                  colorGroup: colorGroup.color,
+                  optimized: true
+                };
+                optimizedGroup.add(line);
+              });
+
+              // Mit markRaw für Vue-Reaktivität
+              colorGroup.infillGroup = markRaw(optimizedGroup);
+              item.geometry.add(optimizedGroup);
+
+              // Stats aktualisieren
+              colorGroup.infillStats = {
+                totalLengthMm: Math.round(result.stats.total_drawing_length_mm * 10) / 10,
+                travelLengthMm: Math.round(result.stats.total_travel_length_mm * 10) / 10,
+                numSegments: result.lines.length,
+                numPenLifts: result.stats.num_pen_lifts,
+                isOptimized: true
+              };
+
+              console.log(`TSP-Optimierung abgeschlossen: ${result.stats.total_travel_length_mm.toFixed(1)}mm Travel, ${result.stats.num_pen_lifts} Pen-Lifts`);
+
+              // Trigger scene update
+              this.svgItems = [...this.svgItems];
+            } else {
+              console.error('TSP-Optimierung fehlgeschlagen');
+            }
+          } finally {
+            // Clear loading state
+            this.infillOptimizing = null;
           }
-
-          // Neues Infill generieren - mit globaler Path-Analyse für farbübergreifende Holes
-          const infillGroup = generateInfillForColor(
-            item.geometry,
-            colorGroup.color,
-            colorGroup.infillOptions,
-            item.pathAnalysis  // Globale Analyse übergeben!
-          );
-
-          if (infillGroup.children.length > 0) {
-            // Mit markRaw für Vue-Reaktivität
-            colorGroup.infillGroup = markRaw(infillGroup);
-            // Zur Szene hinzufügen
-            item.geometry.add(infillGroup);
-            console.log(`Infill für Farbe ${colorGroup.color} generiert: ${infillGroup.children.length} Linien`);
-          } else {
-            console.warn(`Kein Infill für Farbe ${colorGroup.color} generiert (keine geschlossenen Pfade?)`);
-          }
-
-          // Trigger scene update
-          this.svgItems = [...this.svgItems];
         }
       }
     },
@@ -406,6 +543,7 @@ export const useMainStore = defineStore('main', {
             // Aus Szene entfernen
             item.geometry.remove(colorGroup.infillGroup);
             colorGroup.infillGroup = undefined;
+            colorGroup.infillStats = undefined;
             console.log(`Infill für Farbe ${colorGroup.color} gelöscht`);
 
             // Trigger scene update
@@ -413,6 +551,145 @@ export const useMainStore = defineStore('main', {
           }
         }
       }
+    },
+
+    // TSP-Optimierung für File-Level Infill
+    async optimizeFileInfill(svgIndex: number) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+
+        if (!item.infillGroup || item.infillGroup.children.length === 0) {
+          console.warn('Kein Infill zum Optimieren vorhanden');
+          return;
+        }
+
+        // Set loading state
+        this.infillOptimizing = { svgIndex, colorIndex: null };
+
+        try {
+          // Extrahiere die Lines aus der Gruppe
+          const lines = item.infillGroup.children.filter(c => c instanceof THREE.Line) as THREE.Line[];
+
+          if (lines.length < 2) {
+            console.log('Zu wenige Linien für Optimierung');
+            return;
+          }
+
+          console.log(`Starte TSP-Optimierung für ${lines.length} Linien (File: ${item.fileName})...`);
+
+          // Backend-Optimierung aufrufen
+          const result = await optimizePathBackend(lines);
+
+          if (result && result.lines.length > 0) {
+            // Alte Geometrie aus Szene entfernen
+            item.geometry.remove(item.infillGroup);
+
+            // Neue optimierte Gruppe erstellen
+            const optimizedGroup = new THREE.Group();
+            optimizedGroup.name = `InfillGroup_${item.fileName}_optimized`;
+
+            result.lines.forEach((line, idx) => {
+              line.name = `Infill_File_Opt_Line${idx}`;
+              line.userData = {
+                isInfillLine: true,
+                optimized: true
+              };
+              optimizedGroup.add(line);
+            });
+
+            // Mit markRaw für Vue-Reaktivität
+            item.infillGroup = markRaw(optimizedGroup);
+            item.geometry.add(optimizedGroup);
+
+            // Stats aktualisieren
+            item.infillStats = {
+              totalLengthMm: Math.round(result.stats.total_drawing_length_mm * 10) / 10,
+              travelLengthMm: Math.round(result.stats.total_travel_length_mm * 10) / 10,
+              numSegments: result.lines.length,
+              numPenLifts: result.stats.num_pen_lifts,
+              isOptimized: true
+            };
+
+            console.log(`TSP-Optimierung abgeschlossen für ${item.fileName}: ${result.stats.total_travel_length_mm.toFixed(1)}mm Travel`);
+
+            // Trigger scene update
+            this.svgItems = [...this.svgItems];
+          } else {
+            console.error('TSP-Optimierung fehlgeschlagen');
+          }
+        } finally {
+          // Clear loading state
+          this.infillOptimizing = null;
+        }
+      }
+    },
+
+    // ===== Queue System für Backend-Tasks =====
+
+    // Task zur Queue hinzufügen
+    queueTask(type: 'generate' | 'optimize', svgIndex: number, colorIndex: number | null, label: string) {
+      const task: BackendTask = {
+        id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        type,
+        svgIndex,
+        colorIndex,
+        status: 'pending',
+        label
+      };
+      this.taskQueue.push(task);
+
+      // Starte Queue-Verarbeitung falls nicht bereits aktiv
+      if (!this.isProcessingQueue) {
+        this.processQueue();
+      }
+
+      return task.id;
+    },
+
+    // Queue verarbeiten
+    async processQueue() {
+      if (this.isProcessingQueue) return;
+      this.isProcessingQueue = true;
+
+      while (this.taskQueue.length > 0) {
+        const task = this.taskQueue.find(t => t.status === 'pending');
+        if (!task) break;
+
+        task.status = 'running';
+        console.log(`[Queue] Starte Task: ${task.label}`);
+
+        try {
+          if (task.type === 'generate') {
+            if (task.colorIndex !== null) {
+              await this.generateColorInfill(task.svgIndex, task.colorIndex);
+            } else {
+              // File-level generate wird separat in Sidebar.vue gemacht
+              console.log('[Queue] File-level generate - handled externally');
+            }
+          } else if (task.type === 'optimize') {
+            if (task.colorIndex !== null) {
+              await this.optimizeColorInfill(task.svgIndex, task.colorIndex);
+            } else {
+              await this.optimizeFileInfill(task.svgIndex);
+            }
+          }
+          task.status = 'completed';
+          console.log(`[Queue] Task abgeschlossen: ${task.label}`);
+        } catch (error) {
+          task.status = 'failed';
+          console.error(`[Queue] Task fehlgeschlagen: ${task.label}`, error);
+        }
+
+        // Entferne abgeschlossene/fehlgeschlagene Tasks aus der Queue
+        this.taskQueue = this.taskQueue.filter(t => t.status === 'pending' || t.status === 'running');
+      }
+
+      this.isProcessingQueue = false;
+    },
+
+    // Alle pending Tasks aus der Queue entfernen
+    clearQueue() {
+      this.taskQueue = this.taskQueue.filter(t => t.status === 'running');
     },
 
     // ===== Workpiece Start Actions =====
@@ -499,25 +776,21 @@ export const useMainStore = defineStore('main', {
     // ===== Path-Analyse (Hole Detection) Actions =====
 
     // Path-Analyse für ein SVG-Item durchführen
-    // Nutzt jetzt die GLOBALE Analyse über alle Farben hinweg,
-    // damit Holes korrekt erkannt werden auch wenn sie andere Farben haben.
     analyzePathRelationshipsAction(index: number) {
       if (index >= 0 && index < this.svgItems.length) {
         const item = this.svgItems[index];
+        const polygons = extractPolygonsFromGroup(item.geometry);
 
-        // Nutze die neue globale Analyse, die Farbinformationen enthält
-        const pathAnalysis = analyzeAllPathsGlobally(item.geometry);
-
-        if (pathAnalysis.paths.length > 0) {
-          item.pathAnalysis = pathAnalysis;
+        if (polygons.length > 0) {
+          item.pathAnalysis = analyzePathRelationships(polygons);
           item.isPathAnalyzed = true;
-          console.log(`Globale Path-Analyse für "${item.fileName}":`,
-            `${pathAnalysis.outerPaths.length} outer,`,
-            `${pathAnalysis.holes.length} holes (farbübergreifend),`,
-            `${pathAnalysis.nestedObjects.length} nested objects`
+          console.log(`Path-Analyse für "${item.fileName}":`,
+            `${item.pathAnalysis.outerPaths.length} outer,`,
+            `${item.pathAnalysis.holes.length} holes,`,
+            `${item.pathAnalysis.nestedObjects.length} nested objects`
           );
         } else {
-          console.warn(`Keine geschlossenen Polygone in "${item.fileName}" gefunden`);
+          console.warn(`Keine Polygone in "${item.fileName}" gefunden`);
         }
       }
     },

@@ -228,13 +228,56 @@
             <!-- Action Buttons -->
             <div class="flex justify-end space-x-2 pt-2">
                 <button @click="$emit('remove-infill')"
-                    class="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700">
-                    Infill löschen
+                    :disabled="isGeneratingInfill || isOptimizingInfill"
+                    class="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Löschen
                 </button>
                 <button @click="$emit('generate-preview')"
-                    class="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700">
-                    Generieren
+                    :disabled="isGeneratingInfill || isOptimizingInfill"
+                    class="px-3 py-1 text-xs rounded transition-colors whitespace-nowrap"
+                    :class="isGeneratingInfill
+                        ? 'bg-yellow-600 text-yellow-100 cursor-wait'
+                        : 'bg-green-600 text-white hover:bg-green-700'">
+                    <template v-if="isGeneratingInfill">
+                        <svg class="inline-block w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                        </svg>
+                        Generiere...
+                    </template>
+                    <template v-else>
+                        Generieren
+                    </template>
                 </button>
+                <!-- Optimieren Button (nur wenn Infill vorhanden) -->
+                <button v-if="item.infillGroup"
+                    @click="$emit('optimize-infill')"
+                    :disabled="isOptimizingInfill || isGeneratingInfill || item.infillStats?.isOptimized"
+                    class="px-3 py-1 text-xs rounded transition-colors whitespace-nowrap"
+                    :class="isOptimizingInfill
+                        ? 'bg-yellow-600 text-yellow-100 cursor-wait'
+                        : item.infillStats?.isOptimized
+                            ? 'bg-blue-800 text-blue-300 cursor-default'
+                            : 'bg-blue-600 text-white hover:bg-blue-500'">
+                    <template v-if="isOptimizingInfill">
+                        <svg class="inline-block w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                        </svg>
+                        Optimiere...
+                    </template>
+                    <template v-else>
+                        {{ item.infillStats?.isOptimized ? 'Optimiert ✓' : 'Optimieren' }}
+                    </template>
+                </button>
+            </div>
+            <!-- Infill Stats (nur wenn Infill vorhanden) -->
+            <div v-if="item.infillGroup && item.infillStats && !isGeneratingInfill"
+                class="flex items-center justify-end space-x-3 pt-1 text-xs text-slate-400">
+                <span>{{ item.infillStats.numSegments }} Linien</span>
+                <span :class="item.infillStats.isOptimized ? 'text-green-400' : 'text-orange-400'">
+                    {{ item.infillStats.travelLengthMm }}mm Travel
+                </span>
             </div>
         </div>
     </div>
@@ -244,7 +287,7 @@
 import { ref, computed } from 'vue';
 import type { Group } from 'three';
 import { InfillPatternType, patternDensityRanges } from '../utils/threejs_services';
-import { useMainStore, type ColorGroup } from '../store';
+import { useMainStore, type ColorGroup, type InfillStats } from '../store';
 import type { PathAnalysisResult, PathInfo, PathRole } from '../utils/geometry/path-analysis';
 import { getEffectiveRole } from '../utils/geometry/path-analysis';
 import ToolSelect from './ToolSelect.vue';
@@ -269,6 +312,8 @@ const props = defineProps<{
             angle: number;
             outlineOffset: number;
         };
+        infillGroup?: Group;
+        infillStats?: InfillStats;
         // Farb-Analyse
         colorGroups: ColorGroup[];
         isAnalyzed: boolean;
@@ -284,10 +329,23 @@ const props = defineProps<{
         // Geometrie für Abmessungen
         geometry: Group;
     };
+    itemIndex: number;
     toolConfigs: ToolConfig[];
     isFirst: boolean;
     isLast: boolean;
 }>();
+
+// Check if file-level infill is currently being generated for this item
+const isGeneratingInfill = computed(() => {
+    const gen = store.infillGenerating;
+    return gen !== null && gen.svgIndex === props.itemIndex && gen.colorIndex === null;
+});
+
+// Check if file-level infill is currently being optimized for this item
+const isOptimizingInfill = computed(() => {
+    const opt = store.infillOptimizing;
+    return opt !== null && opt.svgIndex === props.itemIndex && opt.colorIndex === null;
+});
 
 // Berechne Abmessungen aus der Geometrie
 // Nutze item.dpi als Trigger für Reaktivität
@@ -335,6 +393,7 @@ const emit = defineEmits<{
     (e: 'update-offset', value: number): void;
     (e: 'remove-infill'): void;
     (e: 'generate-preview'): void;
+    (e: 'optimize-infill'): void;
     (e: 'analyze'): void;
     (e: 'set-path-role', pathId: string, role: PathRole | null): void;
     (e: 'update-workpiece-start', value: string | undefined): void;

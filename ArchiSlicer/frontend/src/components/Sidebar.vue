@@ -31,6 +31,7 @@
                         v-for="(item, index) in store.svgItems"
                         :key="index"
                         :item="item"
+                        :item-index="index"
                         :tool-configs="toolConfigs"
                         :is-first="index === 0"
                         :is-last="index === store.svgItems.length - 1"
@@ -46,6 +47,7 @@
                         @update-offset="(v) => updateOffset(index, v)"
                         @remove-infill="removeInfill(index)"
                         @generate-preview="generatePreview(index)"
+                        @optimize-infill="store.optimizeFileInfill(index)"
                         @analyze="store.analyzeColors(index)"
                         @set-path-role="(pathId, role) => store.setPathRole(index, pathId, role)"
                         @update-workpiece-start="(v) => store.setSVGItemWorkpieceStart(index, v)"
@@ -147,7 +149,7 @@
 import { ref, markRaw } from 'vue';
 import * as THREE from 'three';
 import { useMainStore } from '../store';
-import { getThreejsObjectFromSvg, generateInfillForGroup, generateInfillWithHoles, InfillPatternType, defaultInfillOptions } from '../utils/threejs_services';
+import { getThreejsObjectFromSvg, generateInfillForGroup, generateInfillWithHolesAsync, InfillPatternType, defaultInfillOptions } from '../utils/threejs_services';
 import { type ToolConfig } from '../utils/gcode_services';
 import ToolPanel from './ToolPanel.vue';
 import SVGItemPanel from './SVGItemPanel.vue';
@@ -264,33 +266,72 @@ const removeInfill = (index: number) => {
     store.updateSVGItemInfill(index, item.infillOptions);
 };
 
-const generatePreview = (index: number) => {
+const generatePreview = async (index: number) => {
     const item = store.svgItems[index];
 
-    // Remove old infill
-    if (item.infillGroup) {
-        while (item.infillGroup.children.length > 0) {
-            const child = item.infillGroup.children[0];
-            if (child instanceof THREE.Line) {
-                (child.material as THREE.Material).dispose();
-                child.geometry.dispose();
+    // Set loading state (colorIndex: null = file-level infill)
+    store.infillGenerating = { svgIndex: index, colorIndex: null };
+
+    try {
+        // Remove old infill and reset stats
+        if (item.infillGroup) {
+            while (item.infillGroup.children.length > 0) {
+                const child = item.infillGroup.children[0];
+                if (child instanceof THREE.Line) {
+                    (child.material as THREE.Material).dispose();
+                    child.geometry.dispose();
+                }
+                item.infillGroup.remove(child);
             }
-            item.infillGroup.remove(child);
+            item.geometry.remove(item.infillGroup);
         }
-        item.geometry.remove(item.infillGroup);
-    }
+        item.infillStats = undefined;
 
-    // Generate new infill - use hole-aware version if path analysis is available
-    let infillGroup: THREE.Group;
-    if (item.isPathAnalyzed && item.pathAnalysis) {
-        infillGroup = generateInfillWithHoles(item.geometry, item.infillOptions, item.pathAnalysis);
-        console.log(`Infill mit Hole-Clipping generiert für SVG #${index}: ${item.fileName}`);
-    } else {
-        infillGroup = generateInfillForGroup(item.geometry, item.infillOptions);
-        console.log(`Infill-Vorschau generiert für SVG #${index}: ${item.fileName}`);
-    }
+        // Generate new infill - use hole-aware version if path analysis is available
+        let infillGroup: THREE.Group;
+        if (item.isPathAnalyzed && item.pathAnalysis) {
+            // Use async backend-enabled version for path-analyzed SVGs
+            infillGroup = await generateInfillWithHolesAsync(item.geometry, item.infillOptions, item.pathAnalysis);
+            console.log(`Infill mit Hole-Clipping generiert für SVG #${index}: ${item.fileName}`);
+        } else {
+            infillGroup = generateInfillForGroup(item.geometry, item.infillOptions);
+            console.log(`Infill-Vorschau generiert für SVG #${index}: ${item.fileName}`);
+        }
 
-    store.setSVGItemInfillGroup(index, infillGroup);
-    item.geometry.add(infillGroup);
+        store.setSVGItemInfillGroup(index, infillGroup);
+        item.geometry.add(infillGroup);
+
+        // Calculate stats (without optimization)
+        const lines = infillGroup.children.filter(c => c instanceof THREE.Line) as THREE.Line[];
+        let totalLength = 0;
+        let travelLength = 0;
+        let lastEnd: THREE.Vector3 | null = null;
+
+        for (const line of lines) {
+            const pos = line.geometry.getAttribute('position');
+            if (pos && pos.count >= 2) {
+                const start = new THREE.Vector3(pos.getX(0), pos.getY(0), pos.getZ(0));
+                const end = new THREE.Vector3(pos.getX(1), pos.getY(1), pos.getZ(1));
+                totalLength += start.distanceTo(end);
+                if (lastEnd) {
+                    travelLength += lastEnd.distanceTo(start);
+                }
+                lastEnd = end;
+            }
+        }
+
+        item.infillStats = {
+            totalLengthMm: Math.round(totalLength * 10) / 10,
+            travelLengthMm: Math.round(travelLength * 10) / 10,
+            numSegments: lines.length,
+            numPenLifts: lines.length > 0 ? lines.length - 1 : 0,
+            isOptimized: false
+        };
+
+        console.log(`Infill Stats: ${lines.length} Linien, ${item.infillStats.travelLengthMm}mm Travel`);
+    } finally {
+        // Clear loading state
+        store.infillGenerating = null;
+    }
 };
 </script>

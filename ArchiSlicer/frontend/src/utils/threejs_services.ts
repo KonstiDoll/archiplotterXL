@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
 import { offsetPolygon, isValidPolygon, clipLineToPolygon } from './geometry/clipper-utils';
 import { PathAnalysisResult, getPolygonsWithHoles, analyzePathRelationships, analyzePathRelationshipsWithColors, getPolygonsWithHolesForColor, PolygonWithColor } from './geometry/path-analysis';
+import { generateInfillBackend, USE_BACKEND_INFILL } from './infill-api';
 
 // Enum für Füllmuster-Typen
 export enum InfillPatternType {
@@ -10,13 +11,8 @@ export enum InfillPatternType {
   LINES = 'lines',
   GRID = 'grid',
   CONCENTRIC = 'concentric',
-  ZIGZAG = 'zigzag',
   HONEYCOMB = 'honeycomb',
-  // Neue Patterns
-  SPIRAL = 'spiral',
-  FERMAT_SPIRAL = 'fermat',
   CROSSHATCH = 'crosshatch',
-  HILBERT = 'hilbert'
 }
 
 // Interface für Dichtebereiche je nach Muster-Typ
@@ -32,14 +28,9 @@ export const patternDensityRanges: { [key in InfillPatternType]: DensityRange } 
   [InfillPatternType.NONE]: { min: 0, max: 10, step: 0.5, defaultValue: 2 },
   [InfillPatternType.LINES]: { min: 0.5, max: 10, step: 0.5, defaultValue: 2 },
   [InfillPatternType.GRID]: { min: 1, max: 20, step: 1, defaultValue: 5 },
-  [InfillPatternType.ZIGZAG]: { min: 0.5, max: 15, step: 0.5, defaultValue: 3 },
   [InfillPatternType.HONEYCOMB]: { min: 1, max: 50, step: 1, defaultValue: 10 },
   [InfillPatternType.CONCENTRIC]: { min: 0.5, max: 10, step: 0.5, defaultValue: 2 },
-  // Neue Patterns
-  [InfillPatternType.SPIRAL]: { min: 1, max: 20, step: 0.5, defaultValue: 3 },
-  [InfillPatternType.FERMAT_SPIRAL]: { min: 1, max: 20, step: 0.5, defaultValue: 3 },
   [InfillPatternType.CROSSHATCH]: { min: 0.5, max: 10, step: 0.5, defaultValue: 2 },
-  [InfillPatternType.HILBERT]: { min: 1, max: 10, step: 0.5, defaultValue: 3 }
 };
 
 // Schnittstelle für Füllmuster-Parameter
@@ -679,28 +670,16 @@ export function generateInfillForGroup(group: THREE.Group, options: InfillOption
                     const linesB = generateLineInfill(points, bounds, { ...options, angle: 90 });
                     infillLines = [...linesA, ...linesB];
                     break;
-                case InfillPatternType.ZIGZAG:
-                    infillLines = generateZigzagInfill(points, bounds, options);
-                    break;
                 case InfillPatternType.HONEYCOMB:
                     infillLines = generateHoneycombInfill(points, bounds, options);
                     break;
                 case InfillPatternType.CONCENTRIC:
                     infillLines = generateConcentricInfill(points, bounds, options);
                     break;
-                case InfillPatternType.SPIRAL:
-                    infillLines = generateSpiralInfill(points, bounds, options);
-                    break;
-                case InfillPatternType.FERMAT_SPIRAL:
-                    infillLines = generateFermatSpiralInfill(points, bounds, options);
-                    break;
                 case InfillPatternType.CROSSHATCH:
                     const crossA = generateLineInfill(points, bounds, { ...options, angle: options.angle });
                     const crossB = generateLineInfill(points, bounds, { ...options, angle: options.angle + 45 });
                     infillLines = [...crossA, ...crossB];
-                    break;
-                case InfillPatternType.HILBERT:
-                    infillLines = generateHilbertInfill(points, bounds, options);
                     break;
                 default:
                     console.warn(`Unbekannter Infill-Typ: ${options.patternType}`);
@@ -784,28 +763,16 @@ export function generateInfillWithHoles(
                     const gridB = generateLineInfill(outer, bounds, { ...options, angle: 90 });
                     infillLines = [...gridA, ...gridB];
                     break;
-                case InfillPatternType.ZIGZAG:
-                    infillLines = generateZigzagInfill(outer, bounds, options);
-                    break;
                 case InfillPatternType.HONEYCOMB:
                     infillLines = generateHoneycombInfill(outer, bounds, options);
                     break;
                 case InfillPatternType.CONCENTRIC:
                     infillLines = generateConcentricInfill(outer, bounds, options);
                     break;
-                case InfillPatternType.SPIRAL:
-                    infillLines = generateSpiralInfill(outer, bounds, options);
-                    break;
-                case InfillPatternType.FERMAT_SPIRAL:
-                    infillLines = generateFermatSpiralInfill(outer, bounds, options);
-                    break;
                 case InfillPatternType.CROSSHATCH:
                     const crossA = generateLineInfill(outer, bounds, { ...options, angle: options.angle });
                     const crossB = generateLineInfill(outer, bounds, { ...options, angle: options.angle + 45 });
                     infillLines = [...crossA, ...crossB];
-                    break;
-                case InfillPatternType.HILBERT:
-                    infillLines = generateHilbertInfill(outer, bounds, options);
                     break;
             }
 
@@ -829,6 +796,74 @@ export function generateInfillWithHoles(
     });
 
     return infillGroup;
+}
+
+/**
+ * Async version of generateInfillWithHoles that uses backend when available.
+ *
+ * Tries to generate infill using the Python backend (with TSP optimization),
+ * falls back to frontend generation if backend is unavailable or fails.
+ *
+ * @param _group The THREE.Group (passed for consistency but not used directly)
+ * @param options Infill options (pattern, density, angle, offset)
+ * @param pathAnalysis Path analysis result with outer paths and holes
+ * @param optimizePath Whether to apply TSP optimization (default: false for speed)
+ * @returns THREE.Group containing the infill lines
+ */
+export async function generateInfillWithHolesAsync(
+    _group: THREE.Group,
+    options: InfillOptions,
+    pathAnalysis: PathAnalysisResult,
+    optimizePath: boolean = false
+): Promise<THREE.Group> {
+    const infillGroup = new THREE.Group();
+    infillGroup.name = "InfillGroupWithHoles";
+
+    if (options.patternType === InfillPatternType.NONE) {
+        return infillGroup;
+    }
+
+    // Get polygons with their holes from path analysis
+    const polygonsWithHoles = getPolygonsWithHoles(pathAnalysis);
+
+    if (polygonsWithHoles.length === 0) {
+        console.log('No polygons found for infill generation');
+        return infillGroup;
+    }
+
+    // Try backend generation if enabled
+    if (USE_BACKEND_INFILL) {
+        try {
+            console.log(`Trying backend infill for ${polygonsWithHoles.length} polygons...`);
+
+            const result = await generateInfillBackend(
+                polygonsWithHoles,
+                options,
+                optimizePath,
+                0x4287f5 // Default infill color
+            );
+
+            if (result && result.lines.length > 0) {
+                console.log(`Backend infill successful: ${result.lines.length} lines`);
+
+                // Add lines to group with proper naming
+                result.lines.forEach((line, lineIndex) => {
+                    line.name = `Infill_Backend_Line${lineIndex}`;
+                    infillGroup.add(line);
+                });
+
+                return infillGroup;
+            } else {
+                console.log('Backend returned no lines, falling back to frontend');
+            }
+        } catch (error) {
+            console.warn('Backend infill failed, falling back to frontend:', error);
+        }
+    }
+
+    // Fallback: Use frontend generation (synchronous)
+    console.log('Using frontend infill generation');
+    return generateInfillWithHoles(_group, options, pathAnalysis);
 }
 
 /**
@@ -949,28 +984,16 @@ export function generateInfillForColor(
                     const gridB = generateLineInfill(outer, bounds, { ...options, angle: 90 });
                     infillLines = [...gridA, ...gridB];
                     break;
-                case InfillPatternType.ZIGZAG:
-                    infillLines = generateZigzagInfill(outer, bounds, options);
-                    break;
                 case InfillPatternType.HONEYCOMB:
                     infillLines = generateHoneycombInfill(outer, bounds, options);
                     break;
                 case InfillPatternType.CONCENTRIC:
                     infillLines = generateConcentricInfill(outer, bounds, options);
                     break;
-                case InfillPatternType.SPIRAL:
-                    infillLines = generateSpiralInfill(outer, bounds, options);
-                    break;
-                case InfillPatternType.FERMAT_SPIRAL:
-                    infillLines = generateFermatSpiralInfill(outer, bounds, options);
-                    break;
                 case InfillPatternType.CROSSHATCH:
                     const crossA = generateLineInfill(outer, bounds, { ...options, angle: options.angle });
                     const crossB = generateLineInfill(outer, bounds, { ...options, angle: options.angle + 45 });
                     infillLines = [...crossA, ...crossB];
-                    break;
-                case InfillPatternType.HILBERT:
-                    infillLines = generateHilbertInfill(outer, bounds, options);
                     break;
                 default:
                     console.warn(`Unbekannter Infill-Typ: ${options.patternType}`);
@@ -1003,6 +1026,111 @@ export function generateInfillForColor(
 
     console.log(`Insgesamt ${infillGroup.children.length} Infill-Linien für Farbe ${color}`);
     return infillGroup;
+}
+
+/**
+ * Async version of generateInfillForColor that uses backend when available.
+ *
+ * Tries to generate infill using the Python backend (with TSP optimization),
+ * falls back to frontend generation if backend is unavailable or fails.
+ *
+ * @param group Die THREE.Group mit allen SVG-Linien
+ * @param color Die Hex-Farbe (z.B. "#ff0000") für die Infill generiert werden soll
+ * @param options Infill-Optionen (Pattern, Dichte, etc.)
+ * @param globalPathAnalysis Optional: Globale Path-Analyse für farbübergreifende Hole-Detection
+ * @param optimizePath Whether to apply TSP optimization (default: false for speed)
+ * @returns Eine neue THREE.Group mit den Infill-Linien für diese Farbe
+ */
+export async function generateInfillForColorAsync(
+    group: THREE.Group,
+    color: string,
+    options: InfillOptions,
+    globalPathAnalysis?: PathAnalysisResult,
+    optimizePath: boolean = false
+): Promise<THREE.Group> {
+    const infillGroup = new THREE.Group();
+    infillGroup.name = `InfillGroup_${color.replace('#', '')}`;
+
+    if (options.patternType === InfillPatternType.NONE) {
+        return infillGroup;
+    }
+
+    // Normalisiere die Zielfarbe für Vergleich
+    const targetColor = color.toLowerCase();
+
+    let polygonsWithHoles: { outer: THREE.Vector2[]; holes: THREE.Vector2[][] }[];
+
+    // Wenn globale Analyse vorhanden: Nutze farbübergreifende Hole-Detection
+    if (globalPathAnalysis) {
+        polygonsWithHoles = getPolygonsWithHolesForColor(globalPathAnalysis, targetColor);
+        console.log(`Infill für Farbe ${color}: ${polygonsWithHoles.length} Outer-Pfade (mit globaler Hole-Detection)`);
+    } else {
+        // Fallback: Alte Methode (nur Pfade dieser Farbe analysieren)
+        const polygonsForColor: THREE.Vector2[][] = [];
+
+        group.children.forEach((child) => {
+            if (child instanceof THREE.Line && child.userData?.isClosed) {
+                const pathColor = (child.userData?.effectiveColor || '#000000').toLowerCase();
+                if (pathColor === targetColor) {
+                    const points = extractPathPoints(child);
+                    if (points.length >= 3) {
+                        polygonsForColor.push(points);
+                    }
+                }
+            }
+        });
+
+        if (polygonsForColor.length === 0) {
+            return infillGroup;
+        }
+
+        // Path-Analyse für Hole-Detection NUR innerhalb dieser Farbgruppe
+        const colorPathAnalysis = analyzePathRelationships(polygonsForColor);
+        polygonsWithHoles = getPolygonsWithHoles(colorPathAnalysis);
+    }
+
+    if (polygonsWithHoles.length === 0) {
+        return infillGroup;
+    }
+
+    // Try backend generation if enabled
+    if (USE_BACKEND_INFILL) {
+        try {
+            console.log(`Trying backend infill for color ${color} (${polygonsWithHoles.length} polygons)...`);
+
+            const result = await generateInfillBackend(
+                polygonsWithHoles,
+                options,
+                optimizePath,
+                0x4287f5 // Default infill color
+            );
+
+            if (result && result.lines.length > 0) {
+                console.log(`Backend infill successful for color ${color}: ${result.lines.length} lines`);
+
+                // Add lines to group with proper naming and metadata
+                result.lines.forEach((line, lineIndex) => {
+                    line.name = `Infill_${color.replace('#', '')}_Backend_Line${lineIndex}`;
+                    line.userData = {
+                        ...line.userData,
+                        sourceColor: color,
+                        isInfill: true
+                    };
+                    infillGroup.add(line);
+                });
+
+                return infillGroup;
+            } else {
+                console.log(`Backend returned no lines for color ${color}, falling back to frontend`);
+            }
+        } catch (error) {
+            console.warn(`Backend infill failed for color ${color}, falling back to frontend:`, error);
+        }
+    }
+
+    // Fallback: Use frontend generation (synchronous)
+    console.log(`Using frontend infill generation for color ${color}`);
+    return generateInfillForColor(group, color, options, globalPathAnalysis);
 }
 
 /**
@@ -1382,137 +1510,6 @@ function lineLineIntersection(
 }
 
 /**
- * Generiere ein echtes V-Muster (Zigzag)
- * - Ein durchgehender Pfad der V-förmig hin und her geht
- * - Direkte Verbindung zwischen Scanlines (kein Verfahren entlang der Kante)
- */
-function generateZigzagInfill(
-    polygon: THREE.Vector2[],
-    bounds: { minX: number, maxX: number, minY: number, maxY: number },
-    options: InfillOptions
-): THREE.Line[] {
-    const infillLines: THREE.Line[] = [];
-
-    // Berechne Richtungs- und Normalenvektor basierend auf Winkel
-    const angleRad = options.angle * Math.PI / 180;
-    const dir = new THREE.Vector2(Math.cos(angleRad), Math.sin(angleRad));
-    const normal = new THREE.Vector2(-dir.y, dir.x);
-
-    // Berechne Dimensionen
-    const width = bounds.maxX - bounds.minX;
-    const height = bounds.maxY - bounds.minY;
-    const diagonal = Math.sqrt(width * width + height * height);
-
-    const center = new THREE.Vector2(
-        (bounds.minX + bounds.maxX) / 2,
-        (bounds.minY + bounds.maxY) / 2
-    );
-
-    // Berechne Projektionsbereich
-    let projMin = Infinity;
-    let projMax = -Infinity;
-
-    polygon.forEach(p => {
-        const relX = p.x - center.x;
-        const relY = p.y - center.y;
-        const proj = relX * normal.x + relY * normal.y;
-        projMin = Math.min(projMin, proj);
-        projMax = Math.max(projMax, proj);
-    });
-
-    const projLength = projMax - projMin;
-    const numLines = Math.ceil(projLength / options.density);
-
-    if (numLines <= 0 || numLines > 1000) {
-        console.warn(`Ungültige Anzahl von Linien: ${numLines}`);
-        return infillLines;
-    }
-
-    // Sammle alle Scanline-Segmente
-    type LineSegment = { start: THREE.Vector2, end: THREE.Vector2, projValue: number };
-    const segments: LineSegment[] = [];
-
-    for (let i = 0; i <= numLines; i++) {
-        const t = i / numLines;
-        const offset = projMin + t * projLength;
-
-        const lineCenter = new THREE.Vector2(
-            center.x + normal.x * offset,
-            center.y + normal.y * offset
-        );
-
-        const lineStart = new THREE.Vector2(
-            lineCenter.x - dir.x * diagonal,
-            lineCenter.y - dir.y * diagonal
-        );
-
-        const lineEnd = new THREE.Vector2(
-            lineCenter.x + dir.x * diagonal,
-            lineCenter.y + dir.y * diagonal
-        );
-
-        const intersections = findPolygonIntersections(polygon, lineStart, lineEnd);
-
-        if (intersections.length >= 2) {
-            // Sortiere Intersections entlang der Linie
-            intersections.sort((a, b) => {
-                const dax = a.x - lineStart.x;
-                const day = a.y - lineStart.y;
-                const dbx = b.x - lineStart.x;
-                const dby = b.y - lineStart.y;
-                return (dax * dir.x + day * dir.y) - (dbx * dir.x + dby * dir.y);
-            });
-
-            // Für jedes Paar von Intersections ein Segment erstellen
-            for (let j = 0; j < intersections.length; j += 2) {
-                if (j + 1 < intersections.length) {
-                    segments.push({
-                        start: intersections[j].clone(),
-                        end: intersections[j + 1].clone(),
-                        projValue: offset
-                    });
-                }
-            }
-        }
-    }
-
-    if (segments.length === 0) {
-        console.warn("Keine gültigen Liniensegmente für Zigzag gefunden");
-        return infillLines;
-    }
-
-    // Sortiere Segmente nach Projektion
-    segments.sort((a, b) => a.projValue - b.projValue);
-
-    // Baue EINEN durchgehenden Pfad als V-Muster
-    const pathPoints: THREE.Vector3[] = [];
-
-    for (let i = 0; i < segments.length; i++) {
-        const seg = segments[i];
-
-        if (i % 2 === 0) {
-            // Gerade Linien: start → end
-            pathPoints.push(new THREE.Vector3(seg.start.x, seg.start.y, 0));
-            pathPoints.push(new THREE.Vector3(seg.end.x, seg.end.y, 0));
-        } else {
-            // Ungerade Linien: end → start (Richtung umkehren für V-Muster)
-            pathPoints.push(new THREE.Vector3(seg.end.x, seg.end.y, 0));
-            pathPoints.push(new THREE.Vector3(seg.start.x, seg.start.y, 0));
-        }
-    }
-
-    // Erstelle eine einzelne Linie aus allen Punkten
-    if (pathPoints.length >= 2) {
-        const material = new THREE.LineBasicMaterial({ color: 0x00ff00 });
-        const geometry = new THREE.BufferGeometry().setFromPoints(pathPoints);
-        infillLines.push(new THREE.Line(geometry, material));
-    }
-
-    console.log(`Zigzag V-Muster: ${segments.length} Segmente, ${pathPoints.length} Punkte`);
-    return infillLines;
-}
-
-/**
  * Generiere ein Honigwaben-Muster (Hexagons)
  * - Korrekte Tessellation ohne Überlappung
  * - Zeichnet nur einzigartige Kanten (keine Duplikate)
@@ -1774,325 +1771,4 @@ function isPointInPolygon(point: THREE.Vector2, polygon: THREE.Vector2[]): boole
     }
 
     return inside;
-}
-
-// ============================================================================
-// NEUE PATTERNS: Contour Spiral, Hilbert
-// ============================================================================
-
-/**
- * Generiert ein Contour-Spiral-Muster
- * - Basiert auf konzentrischen Offset-Ringen (ClipperOffset)
- * - Ringe werden zu EINEM durchgehenden Pfad verbunden
- * - Funktioniert für ALLE Polygon-Formen (konvex, konkav, komplex)!
- * - EIN durchgehender Pfad = optimal für Plotter!
- */
-function generateSpiralInfill(
-    polygon: THREE.Vector2[],
-    _bounds: { minX: number, maxX: number, minY: number, maxY: number },
-    options: InfillOptions
-): THREE.Line[] {
-    return generateContourSpiral(polygon, options, false);
-}
-
-/**
- * Generiert ein Fermat-Spiral-Muster (Contour-basiert)
- * - Wie Spiral, aber geht raus UND zurück
- * - Kein Pen-Lift nötig!
- */
-function generateFermatSpiralInfill(
-    polygon: THREE.Vector2[],
-    _bounds: { minX: number, maxX: number, minY: number, maxY: number },
-    options: InfillOptions
-): THREE.Line[] {
-    return generateContourSpiral(polygon, options, true);
-}
-
-/**
- * Finde den Index des Punktes im Ring, der am nächsten zur angegebenen Winkelrichtung vom Zentrum liegt
- * Dies sorgt für konsistente "Naht"-Positionen bei allen Ringen
- */
-function findPointAtAngle(ring: THREE.Vector2[], center: THREE.Vector2, targetAngle: number): number {
-    let bestIdx = 0;
-    let bestAngleDiff = Infinity;
-
-    for (let i = 0; i < ring.length; i++) {
-        const dx = ring[i].x - center.x;
-        const dy = ring[i].y - center.y;
-        const angle = Math.atan2(dy, dx);
-
-        // Winkel-Differenz (normalisiert auf -PI bis PI)
-        let diff = angle - targetAngle;
-        while (diff > Math.PI) diff -= 2 * Math.PI;
-        while (diff < -Math.PI) diff += 2 * Math.PI;
-
-        if (Math.abs(diff) < Math.abs(bestAngleDiff)) {
-            bestAngleDiff = diff;
-            bestIdx = i;
-        }
-    }
-
-    return bestIdx;
-}
-
-/**
- * Berechne das Zentrum eines Polygons
- */
-function getPolygonCenter(polygon: THREE.Vector2[]): THREE.Vector2 {
-    let cx = 0, cy = 0;
-    for (const p of polygon) {
-        cx += p.x;
-        cy += p.y;
-    }
-    return new THREE.Vector2(cx / polygon.length, cy / polygon.length);
-}
-
-/**
- * Rotiere Ring so dass er bei startIndex beginnt
- */
-function rotateRing(ring: THREE.Vector2[], startIndex: number): THREE.Vector2[] {
-    if (startIndex === 0 || ring.length === 0) return ring;
-    return [...ring.slice(startIndex), ...ring.slice(0, startIndex)];
-}
-
-/**
- * Generiere Spirale durch Verbinden von konzentrischen Ringen
- * OHNE Punkt-Interpolation - originale Ring-Geometrie wird beibehalten
- * @param polygon Das zu füllende Polygon
- * @param options Infill-Optionen (density = Abstand zwischen Ringen)
- * @param fermatStyle Wenn true: geht raus UND zurück (kein Pen-Lift am Ende)
- */
-function generateContourSpiral(
-    polygon: THREE.Vector2[],
-    options: InfillOptions,
-    fermatStyle: boolean
-): THREE.Line[] {
-    const infillLines: THREE.Line[] = [];
-
-    // Sammle alle konzentrischen Ringe mit ClipperOffset
-    const rings: THREE.Vector2[][] = [polygon];
-    let currentPolygon = polygon;
-    const offsetAmount = -options.density;
-    const maxRings = 200;
-
-    while (rings.length < maxRings) {
-        const offsetResults = offsetPolygon(currentPolygon, offsetAmount, 'miter');
-
-        let foundValid = false;
-        for (const offsetPoly of offsetResults) {
-            if (offsetPoly.length >= 3 && isValidPolygon(offsetPoly, 0.5)) {
-                rings.push(offsetPoly);
-                currentPolygon = offsetPoly;
-                foundValid = true;
-                break;
-            }
-        }
-
-        if (!foundValid) break;
-    }
-
-    console.log(`Contour Spiral: ${rings.length} Ringe generiert`);
-
-    if (rings.length === 0) {
-        return infillLines;
-    }
-
-    // Wenn nur ein Ring: gib ihn als geschlossene Linie zurück
-    if (rings.length === 1) {
-        const points = rings[0].map(p => new THREE.Vector3(p.x, p.y, 0));
-        points.push(points[0].clone());
-        const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const material = new THREE.LineBasicMaterial({ color: 0x00ff00 });
-        infillLines.push(new THREE.Line(geometry, material));
-        return infillLines;
-    }
-
-    // Berechne das gemeinsame Zentrum für konsistente Nahtpositionen
-    const center = getPolygonCenter(polygon);
-
-    // Nahtwinkel: Alle Ringe starten bei der gleichen Winkelposition
-    // Wir wählen den Winkel des ersten Punkts des äußeren Polygons
-    const seamAngle = Math.atan2(polygon[0].y - center.y, polygon[0].x - center.x);
-
-    // Spirale erstellen: Ringe verbinden mit konsistenten Nahtpositionen
-    const spiralPoints: THREE.Vector3[] = [];
-
-    for (let ringIdx = 0; ringIdx < rings.length; ringIdx++) {
-        const ring = rings[ringIdx];
-
-        // Finde den Punkt bei der Nahtposition (gleicher Winkel für alle Ringe)
-        const startIdx = findPointAtAngle(ring, center, seamAngle);
-
-        // Rotiere den Ring so dass er bei der Nahtposition beginnt
-        const rotatedRing = rotateRing(ring, startIdx);
-
-        // Füge alle Punkte dieses Rings hinzu
-        for (const p of rotatedRing) {
-            spiralPoints.push(new THREE.Vector3(p.x, p.y, 0));
-        }
-    }
-
-    // Fermat-Style: Gehe wieder nach außen (in umgekehrter Reihenfolge)
-    if (fermatStyle && rings.length > 1) {
-        // Nahtwinkel für den Rückweg: gegenüberliegende Seite (180° versetzt)
-        const returnSeamAngle = seamAngle + Math.PI;
-
-        // Starte bei rings.length - 2, da wir gerade am innersten Ring (rings.length - 1) sind
-        for (let ringIdx = rings.length - 2; ringIdx >= 0; ringIdx--) {
-            const ring = rings[ringIdx];
-
-            // Starte auf der gegenüberliegenden Seite für den Rückweg
-            const startIdx = findPointAtAngle(ring, center, returnSeamAngle);
-            const rotatedRing = rotateRing(ring, startIdx);
-
-            for (const p of rotatedRing) {
-                spiralPoints.push(new THREE.Vector3(p.x, p.y, 0));
-            }
-        }
-    }
-
-    // Erstelle die Linie
-    if (spiralPoints.length >= 2) {
-        const geometry = new THREE.BufferGeometry().setFromPoints(spiralPoints);
-        const material = new THREE.LineBasicMaterial({ color: 0x00ff00 });
-        const line = new THREE.Line(geometry, material);
-        line.name = fermatStyle ? 'Infill_FermatSpiral' : 'Infill_Spiral';
-        infillLines.push(line);
-    }
-
-    console.log(`Contour Spiral: ${spiralPoints.length} Punkte im Pfad`);
-    return infillLines;
-}
-
-/**
- * Generiert ein Hilbert-Kurven-Muster
- * - Space-filling Fraktal
- * - EIN durchgehender Pfad
- * - Gleichmäßige Abdeckung
- */
-function generateHilbertInfill(
-    polygon: THREE.Vector2[],
-    bounds: { minX: number, maxX: number, minY: number, maxY: number },
-    options: InfillOptions
-): THREE.Line[] {
-    const infillLines: THREE.Line[] = [];
-
-    const width = bounds.maxX - bounds.minX;
-    const height = bounds.maxY - bounds.minY;
-
-    // Berechne die Order basierend auf Dichte
-    // Höhere Order = mehr Details = dichteres Muster
-    // 2^order Segmente pro Seite
-    const targetSpacing = options.density;
-    const avgSize = (width + height) / 2;
-    const order = Math.max(1, Math.min(6, Math.round(Math.log2(avgSize / targetSpacing))));
-
-    console.log(`Hilbert: Order ${order}, Ziel-Abstand: ${targetSpacing}mm`);
-
-    // Generiere Hilbert-Kurve
-    const hilbertPoints = generateHilbertPoints(order);
-
-    // Skaliere und positioniere die Punkte - SEPARATE X/Y Skalierung für Rechtecke
-    const n = Math.pow(2, order);
-    const scaleFactorX = width / n;
-    const scaleFactorY = height / n;
-
-    // Zentrum für Rotation
-    const centerX = (bounds.minX + bounds.maxX) / 2;
-    const centerY = (bounds.minY + bounds.maxY) / 2;
-    const angleRad = options.angle * Math.PI / 180;
-
-    // Transformiere alle Punkte
-    const transformedPoints: THREE.Vector2[] = [];
-    for (const hp of hilbertPoints) {
-        let x = bounds.minX + hp.x * scaleFactorX + scaleFactorX / 2;
-        let y = bounds.minY + hp.y * scaleFactorY + scaleFactorY / 2;
-
-        if (options.angle !== 0) {
-            const dx = x - centerX;
-            const dy = y - centerY;
-            x = centerX + dx * Math.cos(angleRad) - dy * Math.sin(angleRad);
-            y = centerY + dx * Math.sin(angleRad) + dy * Math.cos(angleRad);
-        }
-
-        transformedPoints.push(new THREE.Vector2(x, y));
-    }
-
-    // Segment-basiertes Clipping: Nur zusammenhängende Segmente innerhalb des Polygons
-    // Statt alle Punkte zu filtern und dann zu verbinden
-    const material = new THREE.LineBasicMaterial({ color: 0x00ff00 });
-    let currentSegment: THREE.Vector3[] = [];
-    let totalPoints = 0;
-
-    for (let i = 0; i < transformedPoints.length; i++) {
-        const point = transformedPoints[i];
-        const isInside = isPointInPolygon(point, polygon);
-
-        if (isInside) {
-            currentSegment.push(new THREE.Vector3(point.x, point.y, 0));
-            totalPoints++;
-        } else {
-            // Punkt ist außerhalb - aktuelles Segment beenden wenn vorhanden
-            if (currentSegment.length >= 2) {
-                const geometry = new THREE.BufferGeometry().setFromPoints(currentSegment);
-                const line = new THREE.Line(geometry, material.clone());
-                line.name = 'Infill_Hilbert';
-                infillLines.push(line);
-            }
-            currentSegment = [];
-        }
-    }
-
-    // Letztes Segment hinzufügen
-    if (currentSegment.length >= 2) {
-        const geometry = new THREE.BufferGeometry().setFromPoints(currentSegment);
-        const line = new THREE.Line(geometry, material.clone());
-        line.name = 'Infill_Hilbert';
-        infillLines.push(line);
-    }
-
-    console.log(`Hilbert: ${totalPoints} Punkte, ${infillLines.length} Segmente`);
-    return infillLines;
-}
-
-/**
- * Generiert Hilbert-Kurven-Punkte rekursiv
- * Verwendet L-System Regeln
- */
-function generateHilbertPoints(order: number): { x: number; y: number }[] {
-    const points: { x: number; y: number }[] = [];
-
-    // Startposition
-    let x = 0;
-    let y = 0;
-
-    // Füge Startpunkt hinzu
-    points.push({ x, y });
-
-    // Rekursive Hilbert-Generierung
-    function hilbert(level: number, dx: number, dy: number) {
-        if (level <= 0) return;
-
-        // L-System für Hilbert: A -> -BF+AFA+FB-
-        // Rotationen: + = links, - = rechts, F = vorwärts
-
-        hilbert(level - 1, dy, dx);          // B mit gedrehten Richtungen
-        move(dx, dy);                         // F
-        hilbert(level - 1, dx, dy);          // A
-        move(dy, -dx);                        // F nach links
-        hilbert(level - 1, dx, dy);          // A
-        move(-dx, -dy);                       // F
-        hilbert(level - 1, -dy, -dx);        // B mit gedrehten Richtungen
-    }
-
-    function move(mdx: number, mdy: number) {
-        x += mdx;
-        y += mdy;
-        points.push({ x, y });
-    }
-
-    // Starte Rekursion
-    hilbert(order, 1, 0);
-
-    return points;
 }

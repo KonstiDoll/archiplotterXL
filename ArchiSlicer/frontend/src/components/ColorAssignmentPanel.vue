@@ -111,23 +111,67 @@
                             </template>
                         </div>
 
-                        <!-- Zeile 2b: Generate/Delete Buttons (nur wenn Infill aktiviert) -->
+                        <!-- Zeile 2b: Generate/Optimize/Delete Buttons (nur wenn Infill aktiviert) -->
                         <div v-if="colorGroup.infillEnabled" class="flex items-center space-x-2 pt-1">
                             <!-- Generieren Button -->
                             <button @click="generateInfill(colorIdx)"
-                                class="flex-1 px-2 py-1 text-xs rounded transition-colors"
-                                :class="colorGroup.infillGroup ? 'bg-green-700 text-green-200 hover:bg-green-600' : 'bg-green-600 text-white hover:bg-green-500'">
-                                {{ colorGroup.infillGroup ? '↻ Neu generieren' : '▶ Generieren' }}
+                                :disabled="isGenerating(colorIdx) || isOptimizing(colorIdx)"
+                                class="px-2 py-1 text-xs rounded transition-colors whitespace-nowrap"
+                                :class="isGenerating(colorIdx)
+                                    ? isGeneratingRunning(colorIdx)
+                                        ? 'bg-yellow-600 text-yellow-100 cursor-wait'
+                                        : 'bg-yellow-800 text-yellow-200 cursor-wait'
+                                    : colorGroup.infillGroup
+                                        ? 'bg-green-700 text-green-200 hover:bg-green-600'
+                                        : 'bg-green-600 text-white hover:bg-green-500'">
+                                <template v-if="isGenerating(colorIdx)">
+                                    <svg class="inline-block w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                    </svg>
+                                    {{ isGeneratingRunning(colorIdx) ? 'Generiere...' : 'Wartend' }}
+                                </template>
+                                <template v-else>
+                                    {{ colorGroup.infillGroup ? 'Neu' : 'Generieren' }}
+                                </template>
                             </button>
-                            <!-- Löschen Button (nur wenn Infill generiert) -->
-                            <button v-if="colorGroup.infillGroup"
+                            <!-- Optimieren Button (nur wenn Infill generiert und nicht optimiert) -->
+                            <button v-if="colorGroup.infillGroup && !isGenerating(colorIdx)"
+                                @click="optimizeInfill(colorIdx)"
+                                :disabled="isOptimizing(colorIdx) || colorGroup.infillStats?.isOptimized"
+                                class="px-2 py-1 text-xs rounded transition-colors whitespace-nowrap"
+                                :class="isOptimizing(colorIdx)
+                                    ? isRunning(colorIdx)
+                                        ? 'bg-yellow-600 text-yellow-100 cursor-wait'
+                                        : 'bg-yellow-800 text-yellow-200 cursor-wait'
+                                    : colorGroup.infillStats?.isOptimized
+                                        ? 'bg-blue-800 text-blue-300 cursor-default'
+                                        : 'bg-blue-600 text-white hover:bg-blue-500'">
+                                <template v-if="isOptimizing(colorIdx)">
+                                    <svg class="inline-block w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                    </svg>
+                                    {{ isRunning(colorIdx) ? 'Optimiere...' : 'Wartend' }}
+                                </template>
+                                <template v-else>
+                                    {{ colorGroup.infillStats?.isOptimized ? 'Optimiert ✓' : 'Optimieren' }}
+                                </template>
+                            </button>
+                            <!-- Löschen Button -->
+                            <button v-if="colorGroup.infillGroup && !isGenerating(colorIdx) && !isOptimizing(colorIdx)"
                                 @click="deleteInfill(colorIdx)"
-                                class="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-500 transition-colors">
-                                ✕ Löschen
+                                class="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-500 transition-colors"
+                                title="Infill löschen">
+                                ✕
                             </button>
-                            <!-- Info über generierte Linien -->
-                            <span v-if="colorGroup.infillGroup" class="text-xs text-slate-400">
-                                {{ colorGroup.infillGroup.children.length }} Linien
+                        </div>
+                        <!-- Zeile 2c: Infill Stats (nur wenn Infill generiert) -->
+                        <div v-if="colorGroup.infillGroup && colorGroup.infillStats && !isGenerating(colorIdx)"
+                            class="flex items-center space-x-3 pt-1 text-xs text-slate-400">
+                            <span>{{ colorGroup.infillStats.numSegments }} Linien</span>
+                            <span :class="colorGroup.infillStats.isOptimized ? 'text-green-400' : 'text-orange-400'">
+                                {{ colorGroup.infillStats.travelLengthMm }}mm Travel
                             </span>
                         </div>
 
@@ -200,6 +244,52 @@
                             Auto-Zuordnung
                         </button>
                     </div>
+
+                    <!-- Batch Actions -->
+                    <div v-if="ungeneratedCount > 0 || unoptimizedCount > 0 || store.taskQueue.length > 0" class="flex space-x-2 pt-2">
+                        <!-- Alle generieren -->
+                        <button v-if="ungeneratedCount > 0 || store.taskQueue.some(t => t.type === 'generate')"
+                            @click="generateAllInfills"
+                            :disabled="store.isProcessingQueue || ungeneratedCount === 0"
+                            class="flex-1 px-2 py-2 text-xs rounded transition-colors whitespace-nowrap"
+                            :class="store.isProcessingQueue && store.taskQueue.some(t => t.type === 'generate')
+                                ? 'bg-yellow-600 text-yellow-100 cursor-wait'
+                                : 'bg-green-600 text-white hover:bg-green-500'">
+                            <template v-if="store.isProcessingQueue && store.taskQueue.some(t => t.type === 'generate')">
+                                <svg class="inline-block w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                </svg>
+                                Gen...
+                            </template>
+                            <template v-else>
+                                Alle generieren ({{ ungeneratedCount }})
+                            </template>
+                        </button>
+                        <!-- Alle optimieren -->
+                        <button v-if="unoptimizedCount > 0 || store.taskQueue.some(t => t.type === 'optimize')"
+                            @click="optimizeAllInfills"
+                            :disabled="store.isProcessingQueue || unoptimizedCount === 0"
+                            class="flex-1 px-2 py-2 text-xs rounded transition-colors whitespace-nowrap"
+                            :class="store.isProcessingQueue && store.taskQueue.some(t => t.type === 'optimize')
+                                ? 'bg-yellow-600 text-yellow-100 cursor-wait'
+                                : 'bg-blue-600 text-white hover:bg-blue-500'">
+                            <template v-if="store.isProcessingQueue && store.taskQueue.some(t => t.type === 'optimize')">
+                                <svg class="inline-block w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                </svg>
+                                Opt...
+                            </template>
+                            <template v-else>
+                                Alle optimieren ({{ unoptimizedCount }})
+                            </template>
+                        </button>
+                    </div>
+                    <!-- Queue Status -->
+                    <div v-if="store.taskQueue.length > 0" class="pt-1 text-center text-xs text-slate-400">
+                        {{ store.taskQueue.length }} Tasks in Queue
+                    </div>
                 </div>
             </div>
         </div>
@@ -233,13 +323,9 @@ const patternTypes = [
     { value: InfillPatternType.NONE, label: 'Kein Infill' },
     { value: InfillPatternType.LINES, label: 'Linien' },
     { value: InfillPatternType.GRID, label: 'Gitter' },
-    { value: InfillPatternType.ZIGZAG, label: 'Zickzack' },
     { value: InfillPatternType.HONEYCOMB, label: 'Waben' },
     { value: InfillPatternType.CONCENTRIC, label: 'Konzentrisch' },
-    { value: InfillPatternType.SPIRAL, label: 'Spirale' },
-    { value: InfillPatternType.FERMAT_SPIRAL, label: 'Fermat-Spirale' },
     { value: InfillPatternType.CROSSHATCH, label: 'Kreuzschraffur' },
-    { value: InfillPatternType.HILBERT, label: 'Hilbert' }
 ];
 
 // Expanded state für erweiterte Optionen
@@ -339,9 +425,118 @@ const toggleExpandedOptions = (colorIdx: number) => {
     expandedColorIdx.value = expandedColorIdx.value === colorIdx ? null : colorIdx;
 };
 
-// Infill für eine Farbe generieren
+// Check if infill is currently being generated for a specific color (or queued)
+const isGenerating = (colorIdx: number): boolean => {
+    // Aktiv laufend
+    const gen = store.infillGenerating;
+    if (gen !== null && gen.svgIndex === selectedSvgIndex.value && gen.colorIndex === colorIdx) {
+        return true;
+    }
+    // In Queue (pending oder running)
+    return store.taskQueue.some(t =>
+        t.type === 'generate' &&
+        t.svgIndex === selectedSvgIndex.value &&
+        t.colorIndex === colorIdx &&
+        (t.status === 'pending' || t.status === 'running')
+    );
+};
+
+// Check if generation task is actively running (not just queued)
+const isGeneratingRunning = (colorIdx: number): boolean => {
+    const gen = store.infillGenerating;
+    return gen !== null && gen.svgIndex === selectedSvgIndex.value && gen.colorIndex === colorIdx;
+};
+
+// Check if infill is currently being optimized for a specific color (or queued)
+const isOptimizing = (colorIdx: number): boolean => {
+    // Aktiv laufend
+    const opt = store.infillOptimizing;
+    if (opt !== null && opt.svgIndex === selectedSvgIndex.value && opt.colorIndex === colorIdx) {
+        return true;
+    }
+    // In Queue (pending oder running)
+    return store.taskQueue.some(t =>
+        t.type === 'optimize' &&
+        t.svgIndex === selectedSvgIndex.value &&
+        t.colorIndex === colorIdx &&
+        (t.status === 'pending' || t.status === 'running')
+    );
+};
+
+// Check if task is actively running (not just queued)
+const isRunning = (colorIdx: number): boolean => {
+    const opt = store.infillOptimizing;
+    return opt !== null && opt.svgIndex === selectedSvgIndex.value && opt.colorIndex === colorIdx;
+};
+
+// Infill für eine Farbe generieren (via Queue)
 const generateInfill = (colorIdx: number) => {
-    store.generateColorInfill(selectedSvgIndex.value, colorIdx);
+    const item = selectedItem.value;
+    if (!item) return;
+    const colorGroup = item.colorGroups[colorIdx];
+    const label = `Gen: ${item.fileName} - ${colorGroup.color}`;
+    store.queueTask('generate', selectedSvgIndex.value, colorIdx, label);
+};
+
+// TSP-Optimierung für Infill einer Farbe (via Queue)
+const optimizeInfill = (colorIdx: number) => {
+    const item = selectedItem.value;
+    if (!item) return;
+    const colorGroup = item.colorGroups[colorIdx];
+    const label = `TSP: ${item.fileName} - ${colorGroup.color}`;
+    store.queueTask('optimize', selectedSvgIndex.value, colorIdx, label);
+};
+
+// Alle unoptimierte Infills auf einmal optimieren (Queue)
+const optimizeAllInfills = () => {
+    const item = selectedItem.value;
+    if (!item) return;
+
+    let queued = 0;
+    item.colorGroups.forEach((colorGroup, colorIdx) => {
+        // Nur wenn Infill vorhanden und noch nicht optimiert
+        if (colorGroup.infillGroup && !colorGroup.infillStats?.isOptimized) {
+            const label = `TSP: ${item.fileName} - ${colorGroup.color}`;
+            store.queueTask('optimize', selectedSvgIndex.value, colorIdx, label);
+            queued++;
+        }
+    });
+    console.log(`${queued} TSP-Optimierungen in Queue gestellt`);
+};
+
+// Anzahl der ungenerierten Infills (infillEnabled aber kein infillGroup)
+const ungeneratedCount = computed(() => {
+    const item = selectedItem.value;
+    if (!item) return 0;
+    return item.colorGroups.filter(cg =>
+        cg.infillEnabled && !cg.infillGroup
+    ).length;
+});
+
+// Anzahl der unoptimierte Infills berechnen
+const unoptimizedCount = computed(() => {
+    const item = selectedItem.value;
+    if (!item) return 0;
+    return item.colorGroups.filter(cg =>
+        cg.infillGroup && !cg.infillStats?.isOptimized
+    ).length;
+});
+
+// Alle ungenerierten Infills auf einmal generieren (Queue)
+const generateAllInfills = () => {
+    const item = selectedItem.value;
+    if (!item) return;
+
+    let queued = 0;
+    item.colorGroups.forEach((colorGroup, colorIdx) => {
+        // Nur wenn Infill aktiviert aber noch nicht generiert
+        if (colorGroup.infillEnabled && !colorGroup.infillGroup) {
+            const label = `Gen: ${item.fileName} - ${colorGroup.color}`;
+            store.queueTask('generate', selectedSvgIndex.value, colorIdx, label);
+            queued++;
+        }
+    });
+    console.log(`${queued} Infill-Generierungen in Queue gestellt`);
 };
 
 // Infill für eine Farbe löschen

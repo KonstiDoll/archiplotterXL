@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from alembic.config import Config
 from alembic import command
 
-from routers import pen_types, tool_presets, projects
+from routers import pen_types, tool_presets, projects, infill
 
 
 @asynccontextmanager
@@ -39,6 +39,7 @@ app.add_middleware(
 app.include_router(pen_types.router)
 app.include_router(tool_presets.router)
 app.include_router(projects.router)
+app.include_router(infill.router)
 
 
 @app.get("/")
