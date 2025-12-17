@@ -55,7 +55,17 @@
                 <span>Speichern als...</span>
             </button>
 
-            <span class="text-xs text-slate-500 ml-2">v{{ version }}</span>
+            <!-- Version & What's New -->
+            <button
+                @click="showWhatsNew = true"
+                class="flex items-center space-x-1 text-xs text-slate-500 hover:text-slate-300 ml-2 transition-colors"
+                title="Was ist neu?">
+                <span>v{{ version }}</span>
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </button>
         </div>
     </header>
 
@@ -72,6 +82,12 @@
         :mode="saveDialogMode"
         @close="showSaveDialog = false"
         @saved="handleProjectSaved"
+    />
+
+    <!-- What's New Dialog -->
+    <WhatsNewDialog
+        :is-open="showWhatsNew"
+        @close="showWhatsNew = false"
     />
 
     <!-- New Project Confirmation -->
@@ -103,6 +119,7 @@ import { version } from '../../package.json';
 import { useMainStore } from '../store';
 import ProjectBrowser from './ProjectBrowser.vue';
 import SaveProjectDialog from './SaveProjectDialog.vue';
+import WhatsNewDialog from './WhatsNewDialog.vue';
 import {
     currentProjectId,
     currentProjectName,
@@ -115,6 +132,7 @@ const showProjectBrowser = ref(false);
 const showSaveDialog = ref(false);
 const saveDialogMode = ref<'save' | 'saveAs'>('save');
 const showNewConfirm = ref(false);
+const showWhatsNew = ref(false);
 
 function handleNewProject() {
     // If there are items, ask for confirmation
