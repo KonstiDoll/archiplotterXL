@@ -13,6 +13,7 @@ from .geometry_utils import (
     clip_line_to_polygon,
     Point2D,
     LineSegment,
+    Polyline,
 )
 
 
@@ -184,11 +185,23 @@ class ConcentricInfill(InfillGenerator):
     """
 
     def generate(self) -> List[LineSegment]:
-        """Generate concentric ring infill."""
+        """Generate concentric ring infill as line segments (legacy compatibility)."""
+        # Convert polylines to line segments for backward compatibility
+        polylines = self.generate_polylines()
+        line_segments: List[LineSegment] = []
+
+        for polyline in polylines:
+            for i in range(len(polyline) - 1):
+                line_segments.append((polyline[i], polyline[i + 1]))
+
+        return line_segments
+
+    def generate_polylines(self) -> List[Polyline]:
+        """Generate concentric ring infill as polylines (continuous paths)."""
         if self.polygon.is_empty:
             return []
 
-        line_segments: List[LineSegment] = []
+        polylines: List[Polyline] = []
 
         # Track all active polygon parts (can split during offsetting)
         active_polygons = [(self.polygon, 0.0)]  # (polygon, cumulative_offset)
@@ -204,33 +217,27 @@ class ConcentricInfill(InfillGenerator):
                 if current_polygon.is_empty:
                     continue
 
-                # Extract boundary as line segments
+                # Extract boundary as polylines (each ring is one continuous path)
                 if current_polygon.geom_type == "Polygon":
                     # Outer boundary
                     coords = list(current_polygon.exterior.coords)
-                    for i in range(len(coords) - 1):
-                        line_segments.append((
-                            (coords[i][0], coords[i][1]),
-                            (coords[i + 1][0], coords[i + 1][1])
-                        ))
+                    if len(coords) >= 2:
+                        polyline: Polyline = [(c[0], c[1]) for c in coords]
+                        polylines.append(polyline)
 
                     # Inner boundaries (holes become filled)
                     for interior in current_polygon.interiors:
                         coords = list(interior.coords)
-                        for i in range(len(coords) - 1):
-                            line_segments.append((
-                                (coords[i][0], coords[i][1]),
-                                (coords[i + 1][0], coords[i + 1][1])
-                            ))
+                        if len(coords) >= 2:
+                            polyline: Polyline = [(c[0], c[1]) for c in coords]
+                            polylines.append(polyline)
 
                 elif current_polygon.geom_type == "MultiPolygon":
                     for poly in current_polygon.geoms:
                         coords = list(poly.exterior.coords)
-                        for i in range(len(coords) - 1):
-                            line_segments.append((
-                                (coords[i][0], coords[i][1]),
-                                (coords[i + 1][0], coords[i + 1][1])
-                            ))
+                        if len(coords) >= 2:
+                            polyline: Polyline = [(c[0], c[1]) for c in coords]
+                            polylines.append(polyline)
 
                 # Offset current polygon inward by one density step
                 next_polygon = offset_polygon(current_polygon, self.density)
@@ -247,7 +254,7 @@ class ConcentricInfill(InfillGenerator):
 
             active_polygons = next_polygons
 
-        return line_segments
+        return polylines
 
 
 class CrosshatchInfill(InfillGenerator):
@@ -386,3 +393,92 @@ def generate_infill_for_polygons(
     print(f"  [PATTERN DETAIL] pattern_generation: {time_pattern_generation*1000:7.2f} ms ({len(all_segments)} segments)")
 
     return all_segments
+
+
+def generate_infill_for_polygons_with_polylines(
+    polygons: List[dict],
+    pattern_type: str,
+    density: float,
+    angle: float,
+    outline_offset: float
+) -> Tuple[List[LineSegment], List[Polyline]]:
+    """
+    Generate infill for multiple polygons, returning both line segments and polylines.
+
+    For patterns like 'concentric', polylines are preferred (continuous paths).
+    For patterns like 'lines', 'grid', 'crosshatch', only line segments are returned.
+
+    Args:
+        polygons: List of {"outer": [...], "holes": [[...]]} dicts
+        pattern_type: Pattern name
+        density: Line spacing
+        angle: Angle in degrees
+        outline_offset: Inward offset
+
+    Returns:
+        Tuple of (line_segments, polylines)
+    """
+    all_segments: List[LineSegment] = []
+    all_polylines: List[Polyline] = []
+
+    # Timing accumulators
+    time_shapely_conversion = 0.0
+    time_pattern_generation = 0.0
+    total_points = 0
+
+    # Check if pattern supports polylines
+    use_polylines = pattern_type.lower() == "concentric"
+
+    for poly_data in polygons:
+        outer = poly_data.get("outer", [])
+        holes = poly_data.get("holes", [])
+
+        if len(outer) < 3:
+            continue
+
+        try:
+            # Time: Shapely polygon conversion
+            t0 = time.perf_counter()
+            shapely_polygon = polygon_with_holes_to_shapely(outer, holes)
+            time_shapely_conversion += time.perf_counter() - t0
+
+            total_points += len(outer) + sum(len(h) for h in holes)
+
+            if shapely_polygon.is_empty or shapely_polygon.area < 0.01:
+                continue
+
+            # Time: Pattern generation
+            t0 = time.perf_counter()
+            generator = get_infill_generator(
+                pattern_type,
+                shapely_polygon,
+                density,
+                angle,
+                outline_offset
+            )
+
+            if use_polylines and hasattr(generator, 'generate_polylines'):
+                # Use polyline generation for concentric pattern
+                polylines = generator.generate_polylines()
+                all_polylines.extend(polylines)
+            else:
+                # Use line segment generation for other patterns
+                segments = generator.generate()
+                all_segments.extend(segments)
+
+            time_pattern_generation += time.perf_counter() - t0
+
+        except Exception as e:
+            # Log but continue with other polygons
+            print(f"Warning: Failed to generate infill for polygon: {e}")
+            continue
+
+    # Print detailed timing
+    if use_polylines:
+        print(f"  [PATTERN DETAIL] shapely_conversion: {time_shapely_conversion*1000:7.2f} ms ({total_points} points)")
+        print(f"  [PATTERN DETAIL] pattern_generation: {time_pattern_generation*1000:7.2f} ms ({len(all_polylines)} polylines)")
+    else:
+        print(f"  [PATTERN DETAIL] shapely_conversion: {time_shapely_conversion*1000:7.2f} ms ({total_points} points)")
+        print(f"  [PATTERN DETAIL] pattern_generation: {time_pattern_generation*1000:7.2f} ms ({len(all_segments)} segments)")
+
+    return all_segments, all_polylines

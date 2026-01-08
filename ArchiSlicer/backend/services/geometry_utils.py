@@ -9,6 +9,7 @@ import numpy as np
 
 Point2D = Tuple[float, float]
 LineSegment = Tuple[Point2D, Point2D]
+Polyline = List[Point2D]  # Ordered sequence of connected points
 
 
 def points_to_shapely_polygon(points: List[dict]) -> Polygon:

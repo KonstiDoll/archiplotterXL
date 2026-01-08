@@ -6,7 +6,7 @@ import numpy as np
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 
-from .geometry_utils import Point2D, LineSegment
+from .geometry_utils import Point2D, LineSegment, Polyline
 
 
 def calculate_distance(p1: Point2D, p2: Point2D) -> float:
@@ -357,4 +357,159 @@ def calculate_path_statistics(
         "total_drawing_length_mm": total_drawing,
         "total_travel_length_mm": total_travel,
         "num_pen_lifts": len(segments) - 1 if len(segments) > 0 else 0,
+    }
+
+
+def optimize_polyline_path(
+    polylines: List[Polyline],
+    start_point: Optional[Point2D] = None,
+    time_limit_seconds: int = 300
+) -> Tuple[List[Polyline], dict]:
+    """
+    Optimize drawing order of polylines (continuous paths).
+
+    Each polyline is a sequence of connected points. This function finds:
+    1. The optimal order to draw the polylines
+    2. Whether each polyline should be drawn forward or reversed
+
+    This is modeled similarly to line segment optimization, where each
+    polyline has a start point (first point) and end point (last point).
+
+    Args:
+        polylines: List of polylines (each is List[Point2D])
+        start_point: Optional starting position
+        time_limit_seconds: Maximum solving time
+
+    Returns:
+        Tuple of:
+        - Reordered and potentially reversed polylines
+        - Metadata dict with statistics
+    """
+    if len(polylines) == 0:
+        return [], {
+            "total_drawing_length_mm": 0,
+            "total_travel_length_mm": 0,
+            "num_pen_lifts": 0,
+            "optimization_applied": False,
+        }
+
+    if len(polylines) == 1:
+        polyline = polylines[0]
+        drawing_length = sum(
+            calculate_distance(polyline[i], polyline[i + 1])
+            for i in range(len(polyline) - 1)
+        )
+        return polylines, {
+            "total_drawing_length_mm": drawing_length,
+            "total_travel_length_mm": 0,
+            "num_pen_lifts": 0,
+            "optimization_applied": False,
+        }
+
+    # Use greedy optimization for polylines (simpler and faster than OR-Tools)
+    return _greedy_optimize_polylines(polylines, start_point)
+
+
+def _greedy_optimize_polylines(
+    polylines: List[Polyline],
+    start_point: Optional[Point2D] = None
+) -> Tuple[List[Polyline], dict]:
+    """
+    Greedy nearest-neighbor optimization for polylines.
+
+    For open polylines, we consider both forward and reverse directions.
+    For closed polylines (e.g., concentric rings), we only optimize order,
+    not direction, since they're loops.
+    """
+    t0 = time.perf_counter()
+
+    if len(polylines) == 0:
+        return [], {
+            "total_drawing_length_mm": 0,
+            "total_travel_length_mm": 0,
+            "num_pen_lifts": 0,
+            "method": "greedy",
+        }
+
+    # Helper to check if polyline is closed (first point ≈ last point)
+    def is_closed(polyline: Polyline) -> bool:
+        if len(polyline) < 2:
+            return False
+        dist = calculate_distance(polyline[0], polyline[-1])
+        return dist < 0.001  # Tolerance for floating point
+
+    remaining = list(polylines)
+    ordered: List[Polyline] = []
+
+    # Start from given point or first polyline start
+    if start_point is not None:
+        current_pos = start_point
+    else:
+        current_pos = remaining[0][0]
+
+    total_drawing = 0.0
+    total_travel = 0.0
+
+    while remaining:
+        # Find nearest polyline
+        best_idx = 0
+        best_dist = float("inf")
+        best_start_idx = 0  # For closed polylines: which point to start from
+
+        for i, polyline in enumerate(remaining):
+            if is_closed(polyline):
+                # For closed polylines, find closest point on the ring
+                # and rotate the ring to start from that point
+                for j in range(len(polyline) - 1):  # Skip last point (same as first)
+                    dist = calculate_distance(current_pos, polyline[j])
+                    if dist < best_dist:
+                        best_dist = dist
+                        best_idx = i
+                        best_start_idx = j
+            else:
+                # For open polylines, check both endpoints
+                d_start = calculate_distance(current_pos, polyline[0])
+                d_end = calculate_distance(current_pos, polyline[-1])
+
+                if d_start < best_dist:
+                    best_dist = d_start
+                    best_idx = i
+                    best_start_idx = 0
+
+                if d_end < best_dist:
+                    best_dist = d_end
+                    best_idx = i
+                    best_start_idx = -1  # Marker for reversed
+
+        # Add the best polyline
+        polyline = remaining.pop(best_idx)
+
+        if is_closed(polyline):
+            # Rotate closed polyline to start from best point
+            if best_start_idx > 0:
+                # Rotate: move points before best_start_idx to the end
+                polyline = polyline[best_start_idx:] + polyline[1:best_start_idx + 1]
+        else:
+            # Reverse open polyline if needed
+            if best_start_idx == -1:
+                polyline = list(reversed(polyline))
+
+        total_travel += best_dist
+
+        # Calculate drawing length for this polyline
+        for i in range(len(polyline) - 1):
+            total_drawing += calculate_distance(polyline[i], polyline[i + 1])
+
+        current_pos = polyline[-1]  # End position after drawing
+        ordered.append(polyline)
+
+    elapsed = (time.perf_counter() - t0) * 1000
+    print(f"  [TSP TIMING] greedy polyline optimization: {elapsed:.2f} ms for {len(polylines)} polylines")
+
+    return ordered, {
+        "total_drawing_length_mm": total_drawing,
+        "total_travel_length_mm": total_travel,
+        "num_pen_lifts": len(ordered) - 1,
+        "optimization_applied": True,
+        "method": "greedy",
     }

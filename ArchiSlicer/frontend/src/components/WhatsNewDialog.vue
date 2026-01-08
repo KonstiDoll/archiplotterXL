@@ -65,6 +65,18 @@ interface Release {
 
 const changelog: Release[] = [
     {
+        version: '0.7.3',
+        date: '08.01.2026',
+        title: 'Polyline-Optimierung für konzentrische Ringe',
+        changes: [
+            'Konzentrische Ringe als zusammenhängende Polylines (statt tausende Segmente)',
+            'Beispiel: 11.000 Segmente → 100 Polylines (100x weniger!)',
+            'TSP-Optimierung für Ringe: Rotation statt Umkehrung (erhält Ring-Struktur)',
+            'Optimierung viel schneller durch weniger Segmente',
+            'G-Code Generator funktioniert direkt mit Polylines',
+        ]
+    },
+    {
         version: '0.7.2',
         date: '08.01.2026',
         title: 'Konzentrisches Infill Fix',

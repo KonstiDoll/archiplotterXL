@@ -29,9 +29,14 @@ interface LineSegment {
   end: Point2D;
 }
 
+interface Polyline {
+  points: Point2D[];
+}
+
 interface InfillMetadata {
   total_length_mm: number;
   num_segments: number;
+  num_polylines: number;
   pattern_type: string;
   optimization_applied: boolean;
   travel_length_mm?: number;
@@ -40,11 +45,20 @@ interface InfillMetadata {
 
 interface InfillResponse {
   lines: LineSegment[];
+  polylines: Polyline[];
   metadata: InfillMetadata;
 }
 
 interface PathOptimizationResponse {
   ordered_lines: LineSegment[];
+  total_drawing_length_mm: number;
+  total_travel_length_mm: number;
+  num_pen_lifts: number;
+  optimization_method: string;
+}
+
+interface PolylineOptimizationResponse {
+  ordered_polylines: Polyline[];
   total_drawing_length_mm: number;
   total_travel_length_mm: number;
   num_pen_lifts: number;
@@ -105,6 +119,31 @@ function segmentsToThreeLines(
       new THREE.Vector3(segment.start.x, segment.start.y, 0),
       new THREE.Vector3(segment.end.x, segment.end.y, 0)
     ];
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const line = new THREE.Line(geometry, material);
+    lines.push(line);
+  }
+
+  return lines;
+}
+
+/**
+ * Convert API polylines to THREE.Line objects.
+ */
+function polylinesToThreeLines(
+  polylines: Polyline[],
+  color: number = 0x00ff00
+): THREE.Line[] {
+  const lines: THREE.Line[] = [];
+  const material = new THREE.LineBasicMaterial({ color });
+
+  for (const polyline of polylines) {
+    // Convert polyline points to Vector3
+    const points = polyline.points.map(
+      pt => new THREE.Vector3(pt.x, pt.y, 0)
+    );
+
+    // Create a single continuous line from all points
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const line = new THREE.Line(geometry, material);
     lines.push(line);
@@ -201,10 +240,12 @@ export async function generateInfillBackend(
 
     const data: InfillResponse = await response.json();
 
-    // Convert to THREE.Line objects
-    const lines = segmentsToThreeLines(data.lines, color);
+    // Convert both line segments and polylines to THREE.Line objects
+    const segmentLines = segmentsToThreeLines(data.lines, color);
+    const polylineLines = polylinesToThreeLines(data.polylines || [], color);
+    const lines = [...segmentLines, ...polylineLines];
 
-    console.log(`Backend infill: ${data.lines.length} lines, ${data.metadata.total_length_mm}mm total`);
+    console.log(`Backend infill: ${data.lines.length} segments, ${data.polylines?.length || 0} polylines, ${data.metadata.total_length_mm}mm total`);
     if (data.metadata.optimization_applied) {
       console.log(`  Optimized: ${data.metadata.travel_length_mm}mm travel, ${data.metadata.num_pen_lifts} pen lifts`);
     }
@@ -222,7 +263,7 @@ export async function generateInfillBackend(
 }
 
 /**
- * Optimize path order for existing line segments.
+ * Optimize path order for existing line segments or polylines.
  *
  * @param lines Array of THREE.Line objects to optimize
  * @param startPoint Optional starting position
@@ -232,61 +273,113 @@ export async function optimizePathBackend(
   lines: THREE.Line[],
   startPoint?: THREE.Vector2,
   timeoutSeconds: number = 300
-): Promise<{ lines: THREE.Line[]; stats: PathOptimizationResponse } | null> {
+): Promise<{ lines: THREE.Line[]; stats: PathOptimizationResponse | PolylineOptimizationResponse } | null> {
   try {
-    // Extract line segments from THREE.Line objects
-    const segments: LineSegment[] = [];
+    // Get color from first line
+    const material = lines[0]?.material as THREE.LineBasicMaterial;
+    const defaultColor = material?.color.getHex() || 0x00ff00;
 
-    for (const line of lines) {
-      const positions = line.geometry.getAttribute('position');
-      if (positions && positions.count >= 2) {
-        segments.push({
-          start: { x: positions.getX(0), y: positions.getY(0) },
-          end: { x: positions.getX(1), y: positions.getY(1) }
-        });
+    // Check if we have polylines (>2 points) or simple segments (2 points)
+    const firstLinePositions = lines[0]?.geometry.getAttribute('position');
+    const isPolylines = firstLinePositions && firstLinePositions.count > 2;
+
+    if (isPolylines) {
+      // Extract polylines from THREE.Line objects
+      const polylines: Polyline[] = [];
+
+      for (const line of lines) {
+        const positions = line.geometry.getAttribute('position');
+        if (positions && positions.count >= 2) {
+          const points: Point2D[] = [];
+          for (let i = 0; i < positions.count; i++) {
+            points.push({ x: positions.getX(i), y: positions.getY(i) });
+          }
+          polylines.push({ points });
+        }
       }
+
+      if (polylines.length === 0) {
+        return null;
+      }
+
+      const request: { polylines: Polyline[]; start_point?: Point2D; timeout_seconds: number } = {
+        polylines,
+        timeout_seconds: timeoutSeconds,
+      };
+
+      if (startPoint) {
+        request.start_point = { x: startPoint.x, y: startPoint.y };
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/infill/optimize-polylines`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+        signal: AbortSignal.timeout(timeoutSeconds * 1000 + 5000),
+      });
+
+      if (!response.ok) {
+        console.error('Polyline optimization error:', response.statusText);
+        return null;
+      }
+
+      const data: PolylineOptimizationResponse = await response.json();
+
+      // Convert back to THREE.Line objects
+      const optimizedLines = polylinesToThreeLines(data.ordered_polylines, defaultColor);
+
+      console.log(`Path optimized: ${data.total_travel_length_mm}mm travel, ${data.num_pen_lifts} pen lifts`);
+
+      return { lines: optimizedLines, stats: data };
+
+    } else {
+      // Extract line segments from THREE.Line objects
+      const segments: LineSegment[] = [];
+
+      for (const line of lines) {
+        const positions = line.geometry.getAttribute('position');
+        if (positions && positions.count >= 2) {
+          segments.push({
+            start: { x: positions.getX(0), y: positions.getY(0) },
+            end: { x: positions.getX(1), y: positions.getY(1) }
+          });
+        }
+      }
+
+      if (segments.length === 0) {
+        return null;
+      }
+
+      const request: { lines: LineSegment[]; start_point?: Point2D; timeout_seconds: number } = {
+        lines: segments,
+        timeout_seconds: timeoutSeconds,
+      };
+
+      if (startPoint) {
+        request.start_point = { x: startPoint.x, y: startPoint.y };
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/infill/optimize-path`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+        signal: AbortSignal.timeout(timeoutSeconds * 1000 + 5000),
+      });
+
+      if (!response.ok) {
+        console.error('Path optimization error:', response.statusText);
+        return null;
+      }
+
+      const data: PathOptimizationResponse = await response.json();
+
+      // Convert back to THREE.Line objects
+      const optimizedLines = segmentsToThreeLines(data.ordered_lines, defaultColor);
+
+      console.log(`Path optimized: ${data.total_travel_length_mm}mm travel, ${data.num_pen_lifts} pen lifts`);
+
+      return { lines: optimizedLines, stats: data };
     }
-
-    if (segments.length === 0) {
-      return null;
-    }
-
-    const request: { lines: LineSegment[]; start_point?: Point2D; timeout_seconds: number } = {
-      lines: segments,
-      timeout_seconds: timeoutSeconds,
-    };
-
-    if (startPoint) {
-      request.start_point = { x: startPoint.x, y: startPoint.y };
-    }
-
-    const response = await fetch(`${API_BASE_URL}/api/infill/optimize-path`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(request),
-      signal: AbortSignal.timeout(timeoutSeconds * 1000 + 5000), // Backend timeout + 5s buffer
-    });
-
-    if (!response.ok) {
-      console.error('Path optimization error:', response.statusText);
-      return null;
-    }
-
-    const data: PathOptimizationResponse = await response.json();
-
-    // Get colors from original lines
-    const colors = lines.map(line => {
-      const material = line.material as THREE.LineBasicMaterial;
-      return material.color.getHex();
-    });
-    const defaultColor = colors[0] || 0x00ff00;
-
-    // Convert back to THREE.Line objects
-    const optimizedLines = segmentsToThreeLines(data.ordered_lines, defaultColor);
-
-    console.log(`Path optimized: ${data.total_travel_length_mm}mm travel, ${data.num_pen_lifts} pen lifts`);
-
-    return { lines: optimizedLines, stats: data };
 
   } catch (error) {
     console.warn('Path optimization failed:', error);
