@@ -202,7 +202,7 @@ export async function generateInfillBackend(
   options: InfillOptions,
   optimizePath: boolean = false,
   color: number = 0x00ff00,
-  timeoutSeconds: number = 300
+  timeoutSeconds: number = 60
 ): Promise<{ lines: THREE.Line[]; metadata: InfillMetadata } | null> {
   if (!USE_BACKEND_INFILL) {
     return null;
@@ -272,7 +272,7 @@ export async function generateInfillBackend(
 export async function optimizePathBackend(
   lines: THREE.Line[],
   startPoint?: THREE.Vector2,
-  timeoutSeconds: number = 300
+  timeoutSeconds: number = 30
 ): Promise<{ lines: THREE.Line[]; stats: PathOptimizationResponse | PolylineOptimizationResponse } | null> {
   try {
     // Get color from first line

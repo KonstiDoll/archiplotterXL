@@ -165,7 +165,9 @@ const generateGcode = () => {
                     item.feedrate,
                     globalDrawingHeight.value,
                     item.offsetX,
-                    item.offsetY
+                    item.offsetY,
+                    item.toolNumber,  // File-level fallback tool for contours
+                    item.infillToolNumber  // File-level fallback tool for infill
                 );
 
                 combinedGcode += svgGcode;
@@ -179,7 +181,8 @@ const generateGcode = () => {
                     globalDrawingHeight.value,
                     item.offsetX,
                     item.offsetY,
-                    item.infillToolNumber
+                    item.infillToolNumber,
+                    item.toolNumber  // File-level fallback tool for contours
                 );
 
                 combinedGcode += svgGcode;

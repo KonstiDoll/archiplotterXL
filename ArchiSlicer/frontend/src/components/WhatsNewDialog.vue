@@ -65,6 +65,22 @@ interface Release {
 
 const changelog: Release[] = [
     {
+        version: '0.8.0',
+        date: '09.01.2026',
+        title: 'Layer System & TSP-Optimierung',
+        changes: [
+            'Hierarchische Layer-UI: Datei-Layer mit ausklappbaren Farb-Layern',
+            'Visibility-Toggle funktioniert jetzt in 3D-Preview und GCode-Export',
+            'Fallback-Mechanismus: File-Settings als Default für Farben',
+            'Resizable Sidebar mit localStorage-Persistenz',
+            'Animierte Collapse-Pfeile (einheitlich 180° Rotation)',
+            'TSP-Optimierung: Kompletter Wechsel zu Greedy-Algorithmus (schnell & effektiv)',
+            'NULL-Segmente werden automatisch herausgefiltert',
+            'Korrekte Travel-Distance-Berechnung (AS-IS ohne Optimierung)',
+            'Fix: Log zeigt jetzt korrekt +/- Prozent bei Verschlechterung/Verbesserung',
+        ]
+    },
+    {
         version: '0.7.4',
         date: '08.01.2026',
         title: 'Pumping Fix für Polylines',

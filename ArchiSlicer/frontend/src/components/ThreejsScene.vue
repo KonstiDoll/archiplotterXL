@@ -225,6 +225,25 @@ watch(() => store.svgItems, (newItems) => {
     // Füge alle SVGs aus dem Store zur Szene hinzu
     newItems.forEach(item => {
         const obj = markRaw(item.geometry);
+
+        // NEW: Filter visibility by color if analyzed
+        if (item.isAnalyzed && item.colorGroups.length > 0) {
+            // Create visibility map
+            const visibilityMap = new Map<string, boolean>();
+            item.colorGroups.forEach(cg => {
+                visibilityMap.set(cg.color.toLowerCase(), cg.visible);
+            });
+
+            // Traverse and hide invisible lines
+            obj.traverse((child) => {
+                if (child instanceof THREE.Line) {
+                    const lineColor = (child.userData?.effectiveColor || '#000000').toLowerCase();
+                    const isVisible = visibilityMap.get(lineColor) ?? true;
+                    child.visible = isVisible;
+                }
+            });
+        }
+
         // Offset anwenden (SVG-Ursprung an Workpiece Start setzen)
         obj.position.set(item.offsetX, item.offsetY, 0);
         scene.add(obj);

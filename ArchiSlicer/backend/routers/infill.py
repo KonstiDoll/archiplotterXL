@@ -281,11 +281,24 @@ async def optimize_path(request: PathOptimizationRequest):
                 num_pen_lifts=0,
             )
 
-        # Convert to internal format
-        segments = [
-            ((line.start.x, line.start.y), (line.end.x, line.end.y))
-            for line in request.lines
-        ]
+        # Convert to internal format and filter out degenerate segments (start == end)
+        segments = []
+        for line in request.lines:
+            start = (line.start.x, line.start.y)
+            end = (line.end.x, line.end.y)
+            # Skip null segments (start == end)
+            if start != end:
+                segments.append((start, end))
+            else:
+                print(f"  [FILTER] Skipping degenerate segment: {start} == {end}")
+
+        if len(segments) == 0:
+            return PathOptimizationResponse(
+                ordered_lines=[],
+                total_drawing_length_mm=0,
+                total_travel_length_mm=0,
+                num_pen_lifts=0,
+            )
 
         start_point = None
         if request.start_point:

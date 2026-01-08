@@ -33,6 +33,7 @@ export interface ColorGroup {
   toolNumber: number;      // Zugeordnetes Tool für Konturen (1-9), default: 1
   lineCount: number;       // Anzahl Linien mit dieser Farbe
   visible: boolean;        // Sichtbarkeit in Vorschau
+  useFileDefaults: boolean; // Wenn true, werden File-Level Settings als Fallback verwendet
   // Infill-Einstellungen pro Farbe
   infillEnabled: boolean;           // Infill an/aus für diese Farbe
   infillToolNumber: number;         // Tool für Infill (kann anders sein als Kontur-Tool)
@@ -297,6 +298,7 @@ export const useMainStore = defineStore('main', {
           toolNumber: defaultTool,  // Erbe Kontur-Tool von der Datei
           lineCount: info.lineCount,
           visible: true,
+          useFileDefaults: true,  // Initial immer File-Defaults verwenden
           // Infill-Defaults - erben von Datei
           infillEnabled: false,
           infillToolNumber: defaultInfillTool,  // Erbe Infill-Tool von der Datei
@@ -325,6 +327,49 @@ export const useMainStore = defineStore('main', {
         if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
           item.colorGroups[colorIndex].visible = !item.colorGroups[colorIndex].visible;
         }
+      }
+    },
+
+    // Toggle useFileDefaults für eine Farbe
+    toggleColorUseFileDefaults(svgIndex: number, colorIndex: number) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          const cg = item.colorGroups[colorIndex];
+          cg.useFileDefaults = !cg.useFileDefaults;
+
+          // Wenn Defaults aktiviert werden, File-Settings kopieren
+          if (cg.useFileDefaults) {
+            cg.toolNumber = item.toolNumber;
+            cg.infillToolNumber = item.infillToolNumber;
+          }
+        }
+      }
+    },
+
+    // File-Settings auf alle Farben anwenden
+    applyFileSettingsToAllColors(svgIndex: number) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        item.colorGroups.forEach(cg => {
+          cg.toolNumber = item.toolNumber;
+          cg.infillToolNumber = item.infillToolNumber;
+          cg.useFileDefaults = true;
+        });
+        console.log(`File-Settings auf ${item.colorGroups.length} Farben angewandt`);
+      }
+    },
+
+    // File-Level Visibility Toggle (alle Farben auf einmal)
+    toggleFileVisibility(svgIndex: number) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        // Wenn alle sichtbar sind, verstecke alle. Sonst zeige alle.
+        const newVisibility = !item.colorGroups.every(cg => cg.visible);
+        item.colorGroups.forEach(cg => {
+          cg.visible = newVisibility;
+        });
+        console.log(`File-Visibility: ${newVisibility ? 'alle sichtbar' : 'alle versteckt'}`);
       }
     },
 
@@ -417,6 +462,9 @@ export const useMainStore = defineStore('main', {
               item.geometry.add(infillGroup);
 
               // Berechne Basis-Statistiken (ohne Optimierung)
+              // WICHTIG: Travel-Distance wird hier AS-IS berechnet - in der Reihenfolge und
+              // Orientierung wie die Linien vom Backend kommen. Das entspricht dem tatsächlichen
+              // Weg OHNE Optimierung.
               const lines = infillGroup.children.filter(c => c instanceof THREE.Line) as THREE.Line[];
               let totalLength = 0;
               let travelLength = 0;
@@ -427,11 +475,14 @@ export const useMainStore = defineStore('main', {
                 if (pos && pos.count >= 2) {
                   const start = new THREE.Vector3(pos.getX(0), pos.getY(0), pos.getZ(0));
                   const end = new THREE.Vector3(pos.getX(1), pos.getY(1), pos.getZ(1));
+
                   totalLength += start.distanceTo(end);
+
+                  // Travel: Von letztem End-Punkt zum aktuellen Start-Punkt
                   if (lastEnd) {
                     travelLength += lastEnd.distanceTo(start);
                   }
-                  lastEnd = end;
+                  lastEnd = end;  // Segment wird start→end gezeichnet (AS-IS)
                 }
               }
 
@@ -443,7 +494,7 @@ export const useMainStore = defineStore('main', {
                 isOptimized: false
               };
 
-              console.log(`Infill für Farbe ${colorGroup.color} generiert: ${lines.length} Linien, ${colorGroup.infillStats.travelLengthMm}mm Travel`);
+              console.log(`Infill für Farbe ${colorGroup.color} generiert: ${lines.length} Linien, ${colorGroup.infillStats.travelLengthMm}mm Travel (unoptimiert)`);
             } else {
               console.warn(`Kein Infill für Farbe ${colorGroup.color} generiert (keine geschlossenen Pfade?)`);
             }
@@ -528,11 +579,13 @@ export const useMainStore = defineStore('main', {
 
               if (oldTravel > 0 && oldPenLifts > 0) {
                 // Show improvement if we had previous stats
-                const travelReduction = ((oldTravel - newTravel) / oldTravel * 100).toFixed(1);
-                const penLiftReduction = ((oldPenLifts - newPenLifts) / oldPenLifts * 100).toFixed(1);
+                const travelChange = ((newTravel - oldTravel) / oldTravel * 100).toFixed(1);
+                const penLiftChange = ((newPenLifts - oldPenLifts) / oldPenLifts * 100).toFixed(1);
+                const travelSign = Number(travelChange) > 0 ? '+' : '';
+                const penLiftSign = Number(penLiftChange) > 0 ? '+' : '';
                 console.log(`✅ TSP-Optimierung (${result.stats.optimization_method}) abgeschlossen:`);
-                console.log(`   Travel: ${oldTravel}mm → ${newTravel}mm (-${travelReduction}%)`);
-                console.log(`   Pen-Lifts: ${oldPenLifts} → ${newPenLifts} (-${penLiftReduction}%)`);
+                console.log(`   Travel: ${oldTravel}mm → ${newTravel}mm (${travelSign}${travelChange}%)`);
+                console.log(`   Pen-Lifts: ${oldPenLifts} → ${newPenLifts} (${penLiftSign}${penLiftChange}%)`);
               } else {
                 // First time optimization
                 console.log(`✅ TSP-Optimierung (${result.stats.optimization_method}) abgeschlossen:`);
@@ -640,11 +693,13 @@ export const useMainStore = defineStore('main', {
 
             if (oldTravel > 0 && oldPenLifts > 0) {
               // Show improvement if we had previous stats
-              const travelReduction = ((oldTravel - newTravel) / oldTravel * 100).toFixed(1);
-              const penLiftReduction = ((oldPenLifts - newPenLifts) / oldPenLifts * 100).toFixed(1);
+              const travelChange = ((newTravel - oldTravel) / oldTravel * 100).toFixed(1);
+              const penLiftChange = ((newPenLifts - oldPenLifts) / oldPenLifts * 100).toFixed(1);
+              const travelSign = Number(travelChange) > 0 ? '+' : '';
+              const penLiftSign = Number(penLiftChange) > 0 ? '+' : '';
               console.log(`✅ TSP-Optimierung für ${item.fileName} (${result.stats.optimization_method}) abgeschlossen:`);
-              console.log(`   Travel: ${oldTravel}mm → ${newTravel}mm (-${travelReduction}%)`);
-              console.log(`   Pen-Lifts: ${oldPenLifts} → ${newPenLifts} (-${penLiftReduction}%)`);
+              console.log(`   Travel: ${oldTravel}mm → ${newTravel}mm (${travelSign}${travelChange}%)`);
+              console.log(`   Pen-Lifts: ${oldPenLifts} → ${newPenLifts} (${penLiftSign}${penLiftChange}%)`);
             } else {
               // First time optimization
               console.log(`✅ TSP-Optimierung für ${item.fileName} (${result.stats.optimization_method}) abgeschlossen:`);
@@ -934,6 +989,7 @@ export const useMainStore = defineStore('main', {
                 toolNumber: cg.toolNumber,
                 lineCount: cg.lineCount,
                 visible: cg.visible,
+                useFileDefaults: cg.useFileDefaults,
                 infillEnabled: cg.infillEnabled,
                 infillToolNumber: cg.infillToolNumber,
                 infillOptions: { ...cg.infillOptions },
@@ -1010,6 +1066,7 @@ export const useMainStore = defineStore('main', {
               toolNumber: cg.toolNumber,
               lineCount: cg.lineCount,
               visible: cg.visible,
+              useFileDefaults: cg.useFileDefaults ?? false, // Default to false for backwards compatibility
               infillEnabled: cg.infillEnabled,
               infillToolNumber: cg.infillToolNumber,
               infillOptions: { ...cg.infillOptions },

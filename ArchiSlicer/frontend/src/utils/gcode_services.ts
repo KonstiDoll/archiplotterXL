@@ -520,12 +520,17 @@ export function createGcodeFromColorGroups(
     drawingHeight: number = 0,
     offsetX: number = 0,
     offsetY: number = 0,
-    infillToolNumber: number = 1  // Tool-Nummer für File-Level Infill
+    infillToolNumber: number = 1,  // Tool-Nummer für File-Level Infill
+    fileToolNumber: number = 1  // NEW: Fallback tool for contours
 ): string {
-    // Map von Farbe zu Tool-Nummer erstellen
+    // Map von Farbe zu Tool-Nummer und Sichtbarkeit erstellen
     const colorToTool = new Map<string, number>();
+    const colorVisibility = new Map<string, boolean>();
     colorGroups.forEach(cg => {
-        colorToTool.set(cg.color, cg.toolNumber);
+        // Use file defaults if useFileDefaults is true
+        const effectiveTool = cg.useFileDefaults ? fileToolNumber : cg.toolNumber;
+        colorToTool.set(cg.color, effectiveTool);
+        colorVisibility.set(cg.color, cg.visible);
     });
 
     // Linien nach Tool gruppieren (für optimale Tool-Wechsel)
@@ -538,6 +543,13 @@ export function createGcodeFromColorGroups(
             const color = child.userData?.effectiveColor
                        || child.userData?.strokeColor
                        || '#000000';
+
+            // NEW: Skip invisible colors
+            const isVisible = colorVisibility.get(color) ?? true;
+            if (!isVisible) {
+                return; // Skip this line if color is hidden
+            }
+
             const toolNumber = colorToTool.get(color) || 1;
 
             if (!linesByTool.has(toolNumber)) {
@@ -748,7 +760,9 @@ export function createGcodeWithColorInfill(
     customFeedrate: number = 3000,
     drawingHeight: number = 0,
     offsetX: number = 0,
-    offsetY: number = 0
+    offsetY: number = 0,
+    fileToolNumber: number = 1,  // NEW: Fallback tool for contours
+    fileInfillToolNumber: number = 1  // NEW: Fallback tool for infill
 ): string {
     let gCode = 'G90\nG21\n'; // Absolute positioning, millimeters
 
@@ -793,7 +807,8 @@ export function createGcodeWithColorInfill(
 
         // --- KONTUREN ---
         if (contourLines.length > 0) {
-            const contourTool = colorGroup.toolNumber;
+            // Use file defaults if useFileDefaults is true
+            const contourTool = colorGroup.useFileDefaults ? fileToolNumber : colorGroup.toolNumber;
             const toolConfig = toolConfigs[contourTool - 1] || { penType: 'stabilo', color: '#000000' };
             const penTypeConfig = penTypes[toolConfig.penType] || penTypes['stabilo'];
 
@@ -840,7 +855,8 @@ export function createGcodeWithColorInfill(
 
         // --- INFILL ---
         if (hasInfill) {
-            const infillTool = colorGroup.infillToolNumber;
+            // Use file defaults if useFileDefaults is true
+            const infillTool = colorGroup.useFileDefaults ? fileInfillToolNumber : colorGroup.infillToolNumber;
             const toolConfig = toolConfigs[infillTool - 1] || { penType: 'stabilo', color: '#000000' };
             const penTypeConfig = penTypes[toolConfig.penType] || penTypes['stabilo'];
 

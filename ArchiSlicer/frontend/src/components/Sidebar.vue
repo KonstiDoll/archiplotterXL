@@ -1,5 +1,5 @@
 <template>
-    <aside class="flex flex-col w-80 h-full bg-slate-900 overflow-hidden shrink-0">
+    <aside :style="{ width: sidebarWidth + 'px' }" class="flex flex-col h-full bg-slate-900 overflow-hidden shrink-0 relative">
         <!-- Scrollable Content -->
         <div class="flex-grow overflow-y-auto p-3 space-y-4">
 
@@ -52,12 +52,13 @@
                         @set-path-role="(pathId, role) => store.setPathRole(index, pathId, role)"
                         @update-workpiece-start="(v) => store.setSVGItemWorkpieceStart(index, v)"
                         @update-dpi="(v) => store.updateSVGItemDpi(index, v)"
+                        @apply-to-all-colors="store.applyFileSettingsToAllColors(index)"
+                        @toggle-file-visibility="store.toggleFileVisibility(index)"
                     />
                 </div>
             </div>
 
-            <!-- Color Assignment Panel -->
-            <ColorAssignmentPanel v-if="store.svgItems.length > 0" :tool-configs="toolConfigs" />
+            <!-- ColorAssignmentPanel removed - functionality merged into SVGItemPanel -->
 
             <!-- Workpiece Starts Panel -->
             <WorkpieceStartPanel />
@@ -142,18 +143,25 @@
                 </div>
             </div>
         </div>
+
+        <!-- Resize Handle -->
+        <div
+            @mousedown="startResize"
+            class="absolute top-0 right-0 w-1 h-full cursor-ew-resize hover:bg-blue-500 bg-slate-700 transition-colors z-10"
+            title="Drag to resize">
+        </div>
     </aside>
 </template>
 
 <script setup lang="ts">
-import { ref, markRaw } from 'vue';
+import { ref, markRaw, onMounted, onUnmounted } from 'vue';
 import * as THREE from 'three';
 import { useMainStore } from '../store';
 import { getThreejsObjectFromSvg, generateInfillForGroup, generateInfillWithHolesAsync, InfillPatternType, defaultInfillOptions } from '../utils/threejs_services';
 import { type ToolConfig } from '../utils/gcode_services';
 import ToolPanel from './ToolPanel.vue';
 import SVGItemPanel from './SVGItemPanel.vue';
-import ColorAssignmentPanel from './ColorAssignmentPanel.vue';
+// ColorAssignmentPanel removed - functionality merged into SVGItemPanel
 import WorkpieceStartPanel from './WorkpieceStartPanel.vue';
 import PenTypeAdmin from './PenTypeAdmin.vue';
 
@@ -179,6 +187,68 @@ import { gradientPresets } from '../utils/background_presets';
 
 const store = useMainStore();
 const dragOver = ref(false);
+
+// Sidebar resize
+const sidebarWidth = ref(320); // Default 320px (was w-80)
+const MIN_WIDTH = 280;
+const MAX_WIDTH = 600;
+const STORAGE_KEY = 'archiplotterXL_sidebarWidth';
+const isResizing = ref(false);
+const startX = ref(0);
+const startWidth = ref(0);
+
+// Load saved width from localStorage on mount
+onMounted(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (parsed >= MIN_WIDTH && parsed <= MAX_WIDTH) {
+            sidebarWidth.value = parsed;
+        }
+    }
+});
+
+// Cleanup on unmount
+onUnmounted(() => {
+    document.removeEventListener('mousemove', handleResize);
+    document.removeEventListener('mouseup', stopResize);
+});
+
+// Start resize
+function startResize(event: MouseEvent) {
+    isResizing.value = true;
+    startX.value = event.clientX;
+    startWidth.value = sidebarWidth.value;
+
+    document.addEventListener('mousemove', handleResize);
+    document.addEventListener('mouseup', stopResize);
+
+    // Prevent text selection during drag
+    event.preventDefault();
+    document.body.classList.add('resizing');
+}
+
+// Handle resize
+function handleResize(event: MouseEvent) {
+    if (!isResizing.value) return;
+
+    const delta = event.clientX - startX.value;
+    const newWidth = startWidth.value + delta;
+
+    // Clamp between min and max
+    sidebarWidth.value = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth));
+}
+
+// Stop resize
+function stopResize() {
+    isResizing.value = false;
+    document.removeEventListener('mousemove', handleResize);
+    document.removeEventListener('mouseup', stopResize);
+
+    // Save to localStorage
+    localStorage.setItem(STORAGE_KEY, sidebarWidth.value.toString());
+    document.body.classList.remove('resizing');
+}
 
 // File handling
 const handleFileSelect = (e: Event) => {

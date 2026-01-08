@@ -38,53 +38,126 @@
                 </select>
             </div>
 
-            <!-- Tool & Feedrate Row -->
-            <div class="flex items-center space-x-3">
-                <div class="flex items-center">
-                    <label class="text-xs text-slate-400 mr-1">Tool:</label>
-                    <ToolSelect
-                        :model-value="item.toolNumber"
-                        :tool-configs="toolConfigs"
-                        @update:model-value="(v: number) => $emit('update-tool', v)"
-                        button-class="w-16"
-                    />
-                </div>
-                <div class="flex items-center flex-grow">
-                    <label class="text-xs text-slate-400 mr-1">Speed:</label>
-                    <input type="number" :value="item.feedrate"
-                        @change="$emit('update-feedrate', Number(($event.target as HTMLInputElement).value))"
-                        class="p-1 w-20 text-sm border border-slate-600 rounded bg-slate-700 text-white" min="100" max="30000" step="100" />
-                    <span class="text-xs text-slate-400 ml-1">mm/min</span>
+            <!-- File Settings Section Header -->
+            <div class="border-t border-slate-600 pt-3">
+                <button @click="fileSettingsExpanded = !fileSettingsExpanded"
+                    class="w-full flex items-center justify-between p-2 rounded hover:bg-slate-700 transition-colors">
+                    <div class="flex items-center space-x-2">
+                        <!-- File-level visibility toggle -->
+                        <button v-if="item.isAnalyzed && item.colorGroups.length > 0"
+                            @click.stop="$emit('toggle-file-visibility')"
+                            class="w-5 h-5 flex items-center justify-center text-xs rounded"
+                            :class="allColorsVisible ? 'bg-green-600 text-white' : 'bg-slate-600 text-slate-400'"
+                            :title="allColorsVisible ? 'Alle Farben sichtbar' : 'Einige Farben versteckt'">
+                            {{ allColorsVisible ? '👁' : '👁‍🗨' }}
+                        </button>
+                        <span class="text-sm text-white font-medium">File Settings</span>
+                        <span v-if="item.isAnalyzed" class="text-xs text-slate-400">(Fallback)</span>
+                    </div>
+                    <span class="text-slate-400 transition-transform duration-200"
+                        :class="{ 'rotate-180': !fileSettingsExpanded }">▼</span>
+                </button>
+
+                <!-- File Settings Content (collapsible) -->
+                <div v-if="fileSettingsExpanded" class="mt-2 space-y-3 px-2">
+                    <!-- Tool & Feedrate Row -->
+                    <div class="flex items-center space-x-3">
+                        <div class="flex items-center">
+                            <label class="text-xs text-slate-400 mr-1">Tool:</label>
+                            <ToolSelect
+                                :model-value="item.toolNumber"
+                                :tool-configs="toolConfigs"
+                                @update:model-value="(v: number) => $emit('update-tool', v)"
+                                button-class="w-16"
+                            />
+                        </div>
+                        <div class="flex items-center flex-grow">
+                            <label class="text-xs text-slate-400 mr-1">Speed:</label>
+                            <input type="number" :value="item.feedrate"
+                                @change="$emit('update-feedrate', Number(($event.target as HTMLInputElement).value))"
+                                class="p-1 w-20 text-sm border border-slate-600 rounded bg-slate-700 text-white" min="100" max="30000" step="100" />
+                            <span class="text-xs text-slate-400 ml-1">mm/min</span>
+                        </div>
+                    </div>
+
+                    <!-- Infill Tool (when NOT using color-based infill) -->
+                    <div v-if="!item.isAnalyzed" class="flex items-center">
+                        <label class="text-xs text-slate-400 mr-1">Infill Tool:</label>
+                        <ToolSelect
+                            :model-value="item.infillToolNumber"
+                            :tool-configs="toolConfigs"
+                            @update:model-value="(v: number) => $emit('update-infill-tool', v)"
+                            button-class="flex-grow"
+                        />
+                    </div>
+
+                    <!-- Apply to all colors button (only when analyzed) -->
+                    <button v-if="item.isAnalyzed && item.colorGroups.length > 0"
+                        @click="$emit('apply-to-all-colors')"
+                        class="w-full px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+                        Auf alle Farben anwenden
+                    </button>
+
+                    <!-- Hint when analyzed -->
+                    <div v-if="item.isAnalyzed" class="text-xs text-slate-400 p-2 bg-slate-700/50 rounded">
+                        ℹ️ Diese Einstellungen dienen als Fallback-Werte für Farben, die "File Default" verwenden.
+                    </div>
                 </div>
             </div>
 
-            <!-- Farb-Analyse Status -->
-            <div class="flex items-center justify-between">
-                <!-- Mini-Farbübersicht wenn analysiert -->
-                <div v-if="item.isAnalyzed" class="flex items-center space-x-1">
-                    <span class="text-xs text-slate-400 mr-1">Farben:</span>
-                    <div v-for="(colorGroup, idx) in item.colorGroups.slice(0, 5)" :key="idx"
-                        class="w-4 h-4 rounded border border-slate-500"
-                        :style="{ backgroundColor: colorGroup.color }"
-                        :title="`${colorGroup.color} (Tool ${colorGroup.toolNumber})`">
+            <!-- Colors Section -->
+            <div class="border-t border-slate-600 pt-3">
+                <!-- If NOT analyzed: Show analyze button -->
+                <div v-if="!item.isAnalyzed" class="text-center">
+                    <button @click="$emit('analyze')"
+                        class="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors">
+                        Farben analysieren
+                    </button>
+                    <div class="text-xs text-slate-400 mt-2">
+                        Analysiert Farben im SVG (Stroke und Fill)
                     </div>
-                    <span v-if="item.colorGroups.length > 5" class="text-xs text-slate-400">
-                        +{{ item.colorGroups.length - 5 }}
-                    </span>
-                </div>
-                <div v-else class="text-xs text-slate-400">
-                    Farben nicht analysiert
                 </div>
 
-                <!-- Analyse Button -->
-                <button v-if="!item.isAnalyzed"
-                    @click="$emit('analyze')"
-                    class="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">
-                    Analysieren
-                </button>
-                <span v-else class="text-xs text-green-400">
-                    ✓ {{ item.colorGroups.length }} Farben
-                </span>
+                <!-- If analyzed: Show colors section -->
+                <div v-else>
+                    <button @click="colorsExpanded = !colorsExpanded"
+                        class="w-full flex items-center justify-between p-2 rounded hover:bg-slate-700 transition-colors">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm text-white font-medium">Colors</span>
+                            <span class="text-xs text-slate-400">({{ item.colorGroups.length }})</span>
+                        </div>
+                        <span class="text-slate-400 transition-transform duration-200"
+                            :class="{ 'rotate-180': !colorsExpanded }">▼</span>
+                    </button>
+
+                    <!-- Color Rows -->
+                    <div v-if="colorsExpanded" class="space-y-2 mt-2">
+                        <ColorRow
+                            v-for="(colorGroup, colorIdx) in item.colorGroups"
+                            :key="colorIdx"
+                            :color-group="colorGroup"
+                            :item-index="itemIndex"
+                            :color-index="colorIdx"
+                            :file-tool="item.toolNumber"
+                            :file-infill-tool="item.infillToolNumber"
+                            :tool-configs="toolConfigs"
+                            :is-generating="store.infillGenerating?.svgIndex === itemIndex && store.infillGenerating?.colorIndex === colorIdx"
+                            :is-optimizing="store.infillOptimizing?.svgIndex === itemIndex && store.infillOptimizing?.colorIndex === colorIdx"
+                            @toggle-visibility="store.toggleColorVisibility(itemIndex, colorIdx)"
+                            @toggle-use-defaults="store.toggleColorUseFileDefaults(itemIndex, colorIdx)"
+                            @update-tool="store.setColorTool(itemIndex, colorIdx, $event)"
+                            @toggle-infill="store.toggleColorInfill(itemIndex, colorIdx)"
+                            @update-infill-tool="store.setColorInfillTool(itemIndex, colorIdx, $event)"
+                            @update-pattern="store.setColorInfillPattern(itemIndex, colorIdx, $event)"
+                            @generate-infill="store.queueTask('generate', itemIndex, colorIdx, `Gen: ${item.fileName} - ${colorGroup.color}`)"
+                            @optimize-infill="store.queueTask('optimize', itemIndex, colorIdx, `TSP: ${item.fileName} - ${colorGroup.color}`)"
+                            @delete-infill="store.deleteColorInfill(itemIndex, colorIdx)"
+                            @update-density="store.updateColorInfillOptions(itemIndex, colorIdx, { density: $event })"
+                            @update-angle="store.updateColorInfillOptions(itemIndex, colorIdx, { angle: $event })"
+                            @update-outline-offset="store.updateColorInfillOptions(itemIndex, colorIdx, { outlineOffset: $event })"
+                        />
+                    </div>
+                </div>
             </div>
 
             <!-- DPI-Skalierung und Abmessungen -->
@@ -147,8 +220,10 @@
                 </div>
             </div>
 
-            <!-- Infill Toggle Button -->
-            <button @click="expanded = !expanded"
+            <!-- File-level Infill (only if NOT analyzed) -->
+            <div v-if="!item.isAnalyzed">
+                <!-- Infill Toggle Button -->
+                <button @click="expanded = !expanded"
                 class="w-full flex items-center justify-between p-2 rounded text-sm transition-colors"
                 :class="item.infillOptions.patternType !== 'none'
                     ? 'bg-blue-600 text-white hover:bg-blue-700'
@@ -279,6 +354,7 @@
                     {{ item.infillStats.travelLengthMm }}mm Travel
                 </span>
             </div>
+            </div> <!-- End of File-level Infill conditional -->
         </div>
     </div>
 </template>
@@ -291,6 +367,7 @@ import { useMainStore, type ColorGroup, type InfillStats } from '../store';
 import type { PathAnalysisResult, PathInfo, PathRole } from '../utils/geometry/path-analysis';
 import { getEffectiveRole } from '../utils/geometry/path-analysis';
 import ToolSelect from './ToolSelect.vue';
+import ColorRow from './ColorRow.vue';
 
 const store = useMainStore();
 
@@ -367,11 +444,19 @@ const dimensions = computed(() => {
 
 const expanded = ref(false);
 const pathDetailsExpanded = ref(false);
+const colorsExpanded = ref(true); // Colors section expanded by default
+const fileSettingsExpanded = ref(false); // File settings collapsed by default
 const patternTypes = Object.values(InfillPatternType);
 
 const densityRange = computed(() => {
     const pt = props.item.infillOptions.patternType as InfillPatternType;
     return patternDensityRanges[pt] || patternDensityRanges[InfillPatternType.LINES];
+});
+
+// Check if all colors are visible (for file-level eye icon)
+const allColorsVisible = computed(() => {
+    if (!props.item.isAnalyzed || props.item.colorGroups.length === 0) return true;
+    return props.item.colorGroups.every(cg => cg.visible);
 });
 
 // Helper function to get path role
@@ -398,6 +483,8 @@ const emit = defineEmits<{
     (e: 'set-path-role', pathId: string, role: PathRole | null): void;
     (e: 'update-workpiece-start', value: string | undefined): void;
     (e: 'update-dpi', value: number): void;
+    (e: 'apply-to-all-colors'): void;
+    (e: 'toggle-file-visibility'): void;
 }>();
 
 function handlePathRoleChange(path: PathInfo, value: string) {

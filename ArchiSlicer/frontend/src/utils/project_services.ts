@@ -56,6 +56,7 @@ export interface SerializedColorGroup {
   toolNumber: number;
   lineCount: number;
   visible: boolean;
+  useFileDefaults?: boolean; // Optional for backwards compatibility
   infillEnabled: boolean;
   infillToolNumber: number;
   infillOptions: InfillOptions;
