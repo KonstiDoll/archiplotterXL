@@ -65,6 +65,16 @@ interface Release {
 
 const changelog: Release[] = [
     {
+        version: '0.7.4',
+        date: '08.01.2026',
+        title: 'Pumping Fix für Polylines',
+        changes: [
+            'Fix: Pumping erfolgt jetzt auf dem Papier (Stift unten), nicht in der Luft',
+            'Pumping während langer Polylines (z.B. alle 20mm in 50mm Ring)',
+            'Korrekte Sequenz: Zeichnen → Pumpen → Stift heben',
+        ]
+    },
+    {
         version: '0.7.3',
         date: '08.01.2026',
         title: 'Polyline-Optimierung für konzentrische Ringe',

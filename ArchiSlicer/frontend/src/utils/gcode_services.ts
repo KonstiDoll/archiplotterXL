@@ -267,9 +267,9 @@ function calculateLineLength(positions: ArrayLike<number>): number {
 
 // Generate pump G-code
 // pumpTravel is the distance in mm to move Z down (relative) for pumping
-function generatePumpGcode(penUp: number, pumpTravel: number): string {
+// WICHTIG: Stift muss bereits unten (penDown) sein!
+function generatePumpGcode(pumpTravel: number): string {
     return `; === PUMP ACTION ===
-G1 U${penUp} F6000
 G91 ; relative positioning
 G1 Z-${pumpTravel.toFixed(2)} F6000
 G1 Z${pumpTravel.toFixed(2)} F6000
@@ -419,17 +419,18 @@ export function createGcodeFromLineGroup(
             accumulatedDistance: 0,
             pumpDistanceThreshold: penTypeConfig.pumpDistanceThreshold || 0,
             pumpHeight: penTypeConfig.pumpHeight || 50,
-            penUp: penUp,
         };
 
         allLines.forEach((lineGeo) => {
-            const { gcode: gcodeLine, lineLength } = createGcodeFromLine(lineGeo, moveUDown, drawingSpeed, offsetX, offsetY);
+            // Pass pumpCtx to enable pumping DURING drawing (important for polylines!)
+            const { gcode: gcodeLine } = createGcodeFromLine(lineGeo, moveUDown, drawingSpeed, offsetX, offsetY, pumpCtx);
             gCode += gcodeLine;
-            gCode += moveUUp;
 
-            // Track distance and check for pump (at_node mode)
-            pumpCtx.accumulatedDistance += lineLength;
-            gCode += checkAndGeneratePump(pumpCtx, moveUUp);
+            // Check if we need to pump at the END of this line (after drawing finished)
+            gCode += checkAndGeneratePump(pumpCtx);
+
+            // Now lift pen
+            gCode += moveUUp;
         });
 
         // Tool nur ablegen wenn kein Infill oder Infill anderes Tool verwendet
@@ -468,18 +469,19 @@ export function createGcodeFromLineGroup(
             accumulatedDistance: 0,
             pumpDistanceThreshold: infillPenTypeConfig.pumpDistanceThreshold || 0,
             pumpHeight: infillPenTypeConfig.pumpHeight || 50,
-            penUp: infillPenUp,
         };
 
         gCode += '\n; --- Infill zeichnen mit Tool #' + infillToolNumber + ' ---\n';
         infillLines.forEach((lineGeo) => {
-            const { gcode: gcodeLine, lineLength } = createGcodeFromLine(lineGeo, moveInfillUDown, drawingSpeed, offsetX, offsetY);
+            // Pass pumpCtx to enable pumping DURING drawing (important for polylines!)
+            const { gcode: gcodeLine } = createGcodeFromLine(lineGeo, moveInfillUDown, drawingSpeed, offsetX, offsetY, infillPumpCtx);
             gCode += gcodeLine;
-            gCode += moveInfillUUp;
 
-            // Track distance and check for pump (at_node mode)
-            infillPumpCtx.accumulatedDistance += lineLength;
-            gCode += checkAndGeneratePump(infillPumpCtx, moveInfillUUp);
+            // Check if we need to pump at the END of this line (after drawing finished)
+            gCode += checkAndGeneratePump(infillPumpCtx);
+
+            // Now lift pen
+            gCode += moveInfillUUp;
         });
 
         // Tool ablegen (immer das Infill-Tool, da es das letzte verwendete ist)
@@ -627,18 +629,19 @@ export function createGcodeFromColorGroups(
             accumulatedDistance: 0,
             pumpDistanceThreshold: penTypeConfig.pumpDistanceThreshold || 0,
             pumpHeight: penTypeConfig.pumpHeight || 50,
-            penUp: penUp,
         };
 
         // Linien zeichnen
         lines.forEach((lineGeo) => {
-            const { gcode: gcodeLine, lineLength } = createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY);
+            // Pass pumpCtx to enable pumping DURING drawing (important for polylines!)
+            const { gcode: gcodeLine } = createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY, pumpCtx);
             gCode += gcodeLine;
-            gCode += moveUUp;
 
-            // Track distance and check for pump (at_node mode)
-            pumpCtx.accumulatedDistance += lineLength;
-            gCode += checkAndGeneratePump(pumpCtx, moveUUp);
+            // Check if we need to pump at the END of this line (after drawing finished)
+            gCode += checkAndGeneratePump(pumpCtx);
+
+            // Now lift pen
+            gCode += moveUUp;
         });
     });
 
@@ -680,13 +683,15 @@ export function createGcodeFromColorGroups(
         gCode += `; ${infillLines.length} Infill-Linien\n`;
 
         infillLines.forEach((lineGeo) => {
-            const { gcode: gcodeLine, lineLength } = createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY);
+            // Pass pumpCtx to enable pumping DURING drawing (important for polylines!)
+            const { gcode: gcodeLine } = createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY, infillPumpCtx);
             gCode += gcodeLine;
-            gCode += moveUUp;
 
-            // Track distance and check for pump (at_node mode)
-            infillPumpCtx.accumulatedDistance += lineLength;
-            gCode += checkAndGeneratePump(infillPumpCtx, moveUUp);
+            // Check if we need to pump at the END of this line (after drawing finished)
+            gCode += checkAndGeneratePump(infillPumpCtx);
+
+            // Now lift pen
+            gCode += moveUUp;
         });
     }
 
@@ -815,20 +820,21 @@ export function createGcodeWithColorInfill(
                 accumulatedDistance: 0,
                 pumpDistanceThreshold: penTypeConfig.pumpDistanceThreshold || 0,
                 pumpHeight: penTypeConfig.pumpHeight || 50,
-                penUp: penTypeConfig.penUp,
             };
 
             gCode += moveUUp;
             gCode += `; Konturen (${contourLines.length} Linien) mit Tool #${contourTool}\n`;
 
             contourLines.forEach((lineGeo) => {
-                const { gcode: gcodeLine, lineLength } = createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY);
+                // Pass pumpCtx to enable pumping DURING drawing (important for polylines!)
+                const { gcode: gcodeLine } = createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY, contourPumpCtx);
                 gCode += gcodeLine;
-                gCode += moveUUp;
 
-                // Track distance and check for pump (at_node mode)
-                contourPumpCtx.accumulatedDistance += lineLength;
-                gCode += checkAndGeneratePump(contourPumpCtx, moveUUp);
+                // Check if we need to pump at the END of this line (after drawing finished)
+                gCode += checkAndGeneratePump(contourPumpCtx);
+
+                // Now lift pen
+                gCode += moveUUp;
             });
         }
 
@@ -861,7 +867,6 @@ export function createGcodeWithColorInfill(
                 accumulatedDistance: 0,
                 pumpDistanceThreshold: penTypeConfig.pumpDistanceThreshold || 0,
                 pumpHeight: penTypeConfig.pumpHeight || 50,
-                penUp: penTypeConfig.penUp,
             };
 
             gCode += moveUUp;
@@ -869,13 +874,15 @@ export function createGcodeWithColorInfill(
 
             infillGroup!.children.forEach((child) => {
                 if (child instanceof THREE.Line) {
-                    const { gcode: gcodeLine, lineLength } = createGcodeFromLine(child, moveUDown, customFeedrate, offsetX, offsetY);
+                    // Pass pumpCtx to enable pumping DURING drawing (important for polylines!)
+                    const { gcode: gcodeLine } = createGcodeFromLine(child, moveUDown, customFeedrate, offsetX, offsetY, infillPumpCtx);
                     gCode += gcodeLine;
-                    gCode += moveUUp;
 
-                    // Track distance and check for pump (at_node mode)
-                    infillPumpCtx.accumulatedDistance += lineLength;
-                    gCode += checkAndGeneratePump(infillPumpCtx, moveUUp);
+                    // Check if we need to pump at the END of this line (after drawing finished)
+                    gCode += checkAndGeneratePump(infillPumpCtx);
+
+                    // Now lift pen
+                    gCode += moveUUp;
                 }
             });
         }
@@ -898,17 +905,18 @@ interface PumpContext {
     accumulatedDistance: number;
     pumpDistanceThreshold: number;  // 0 = disabled
     pumpHeight: number;  // relative Z travel distance for pumping (moves down then back up)
-    penUp: number;
 }
 
 // Helper function for creating G-code from a single line
 // Returns { gcode, lineLength } for pump tracking
+// Can pump during drawing if pumpCtx is provided (for polylines)
 function createGcodeFromLine(
     lineGeo: THREE.Line,
     moveUDown: string,
     customFeedrate: number = 3000,
     offsetX: number = 0,
-    offsetY: number = 0
+    offsetY: number = 0,
+    pumpCtx?: PumpContext
 ): { gcode: string; lineLength: number } {
     let gcode = '';
     let first = true;
@@ -935,10 +943,29 @@ function createGcodeFromLine(
 
         const gcodeLine = `G1 X${machineX} Y${machineY} F${speed}\n`;
         gcode += gcodeLine;
+
         if (first) {
             gcode += moveUDown;
             first = false;
             speed = customFeedrate; // Verwende benutzerdefinierte Feedrate
+        } else if (pumpCtx) {
+            // Calculate segment length (distance from previous point)
+            const prevX = positions[index - 3];
+            const prevY = positions[index - 2];
+            const segmentLength = Math.sqrt(
+                Math.pow(slicerX - (prevX + offsetX), 2) +
+                Math.pow(slicerY - (prevY + offsetY), 2)
+            );
+
+            // Track distance and pump if threshold reached (WITHIN the polyline)
+            if (pumpCtx.pumpDistanceThreshold > 0) {
+                pumpCtx.accumulatedDistance += segmentLength;
+
+                if (pumpCtx.accumulatedDistance >= pumpCtx.pumpDistanceThreshold) {
+                    pumpCtx.accumulatedDistance = 0;
+                    gcode += generatePumpGcode(pumpCtx.pumpHeight);
+                }
+            }
         }
     }
 
@@ -946,8 +973,10 @@ function createGcodeFromLine(
     return { gcode, lineLength };
 }
 
-// Helper to check and generate pump action if needed (at_node mode - after line ends)
-function checkAndGeneratePump(pumpCtx: PumpContext, moveUUp: string): string {
+// Helper to check and generate pump action if needed
+// Returns pump G-code if threshold reached, otherwise empty string
+// WICHTIG: Muss BEVOR Stift hochgefahren wird aufgerufen werden!
+function checkAndGeneratePump(pumpCtx: PumpContext): string {
     if (pumpCtx.pumpDistanceThreshold <= 0) {
         return ''; // Pump disabled
     }
@@ -955,7 +984,7 @@ function checkAndGeneratePump(pumpCtx: PumpContext, moveUUp: string): string {
     if (pumpCtx.accumulatedDistance >= pumpCtx.pumpDistanceThreshold) {
         pumpCtx.accumulatedDistance = 0; // Reset counter
         // pumpHeight is now used as relative travel distance (Z moves down by this amount, then back up)
-        return moveUUp + generatePumpGcode(pumpCtx.penUp, pumpCtx.pumpHeight);
+        return generatePumpGcode(pumpCtx.pumpHeight);
     }
 
     return '';
