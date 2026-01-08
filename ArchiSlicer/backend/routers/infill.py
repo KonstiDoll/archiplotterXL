@@ -44,6 +44,7 @@ class InfillRequest(BaseModel):
     angle: float = Field(default=45.0, ge=0, le=360, description="Angle in degrees")
     outline_offset: float = Field(default=0.0, ge=0, le=50, description="Inward offset from edge in mm")
     optimize_path: bool = Field(default=False, description="Apply TSP path optimization")
+    timeout_seconds: int = Field(default=300, gt=0, le=600, description="TSP optimization timeout in seconds")
 
 
 class InfillMetadata(BaseModel):
@@ -66,6 +67,7 @@ class PathOptimizationRequest(BaseModel):
     """Request to optimize path order."""
     lines: List[LineSegment]
     start_point: Optional[Point2D] = None
+    timeout_seconds: int = Field(default=300, gt=0, le=600, description="Optimization timeout in seconds")
 
 
 class PathOptimizationResponse(BaseModel):
@@ -143,7 +145,7 @@ async def generate_infill(request: InfillRequest):
 
         if request.optimize_path and len(segments) > 1:
             t0 = time.perf_counter()
-            segments, opt_stats = optimize_drawing_path(segments)
+            segments, opt_stats = optimize_drawing_path(segments, time_limit_seconds=request.timeout_seconds)
             timings["tsp_optimization"] = (time.perf_counter() - t0) * 1000
             optimization_applied = opt_stats.get("optimization_applied", False)
             travel_length = opt_stats.get("total_travel_length_mm")
@@ -233,7 +235,7 @@ async def optimize_path(request: PathOptimizationRequest):
         optimized_segments, opt_stats = optimize_drawing_path(
             segments,
             start_point,
-            time_limit_seconds=5
+            time_limit_seconds=request.timeout_seconds
         )
 
         # Convert back to response format

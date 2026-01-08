@@ -17,7 +17,7 @@ def calculate_distance(p1: Point2D, p2: Point2D) -> float:
 def optimize_drawing_path(
     segments: List[LineSegment],
     start_point: Optional[Point2D] = None,
-    time_limit_seconds: int = 5
+    time_limit_seconds: int = 300
 ) -> Tuple[List[LineSegment], dict]:
     """
     Optimize drawing order using TSP solver.
@@ -62,7 +62,13 @@ def optimize_drawing_path(
     if len(segments) <= 3:
         return _greedy_optimize(segments, start_point)
 
-    # For larger problems, use OR-Tools TSP solver
+    # For very large problems, use greedy (OR-Tools takes too long)
+    # Threshold: ~200 segments = ~60 seconds with OR-Tools
+    if len(segments) > 200:
+        print(f"  [TSP] {len(segments)} segments is too large for OR-Tools, using greedy fallback")
+        return _greedy_optimize(segments, start_point)
+
+    # For medium-sized problems, use OR-Tools TSP solver
     return _ortools_optimize(segments, start_point, time_limit_seconds)
 
 
@@ -139,7 +145,7 @@ def _greedy_optimize(
 def _ortools_optimize(
     segments: List[LineSegment],
     start_point: Optional[Point2D] = None,
-    time_limit_seconds: int = 5
+    time_limit_seconds: int = 300
 ) -> Tuple[List[LineSegment], dict]:
     """
     Use OR-Tools to solve the path optimization as a TSP variant.

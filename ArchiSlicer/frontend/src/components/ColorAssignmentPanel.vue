@@ -173,6 +173,12 @@
                             <span :class="colorGroup.infillStats.isOptimized ? 'text-green-400' : 'text-orange-400'">
                                 {{ colorGroup.infillStats.travelLengthMm }}mm Travel
                             </span>
+                            <span :class="colorGroup.infillStats.isOptimized ? 'text-green-400' : 'text-slate-400'">
+                                {{ colorGroup.infillStats.numPenLifts }} Pen-Lifts
+                            </span>
+                            <span v-if="colorGroup.infillStats.optimizationMethod" class="text-slate-500 italic">
+                                ({{ colorGroup.infillStats.optimizationMethod }})
+                            </span>
                         </div>
 
                         <!-- Zeile 3: Erweiterte Optionen (expandierbar) -->

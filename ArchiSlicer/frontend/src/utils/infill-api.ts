@@ -162,7 +162,8 @@ export async function generateInfillBackend(
   polygons: { outer: THREE.Vector2[]; holes: THREE.Vector2[][] }[],
   options: InfillOptions,
   optimizePath: boolean = false,
-  color: number = 0x00ff00
+  color: number = 0x00ff00,
+  timeoutSeconds: number = 300
 ): Promise<{ lines: THREE.Line[]; metadata: InfillMetadata } | null> {
   if (!USE_BACKEND_INFILL) {
     return null;
@@ -182,13 +183,14 @@ export async function generateInfillBackend(
       angle: options.angle,
       outline_offset: options.outlineOffset,
       optimize_path: optimizePath,
+      timeout_seconds: timeoutSeconds,
     };
 
     const response = await fetch(`${API_BASE_URL}/api/infill/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
-      signal: AbortSignal.timeout(30000), // 30 second timeout
+      signal: AbortSignal.timeout(timeoutSeconds * 1000 + 5000), // Backend timeout + 5s buffer
     });
 
     if (!response.ok) {
@@ -228,7 +230,8 @@ export async function generateInfillBackend(
  */
 export async function optimizePathBackend(
   lines: THREE.Line[],
-  startPoint?: THREE.Vector2
+  startPoint?: THREE.Vector2,
+  timeoutSeconds: number = 300
 ): Promise<{ lines: THREE.Line[]; stats: PathOptimizationResponse } | null> {
   try {
     // Extract line segments from THREE.Line objects
@@ -248,8 +251,9 @@ export async function optimizePathBackend(
       return null;
     }
 
-    const request: { lines: LineSegment[]; start_point?: Point2D } = {
+    const request: { lines: LineSegment[]; start_point?: Point2D; timeout_seconds: number } = {
       lines: segments,
+      timeout_seconds: timeoutSeconds,
     };
 
     if (startPoint) {
@@ -260,7 +264,7 @@ export async function optimizePathBackend(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
-      signal: AbortSignal.timeout(60000), // 60 second timeout for large infills
+      signal: AbortSignal.timeout(timeoutSeconds * 1000 + 5000), // Backend timeout + 5s buffer
     });
 
     if (!response.ok) {

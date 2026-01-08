@@ -14,6 +14,7 @@ export interface InfillStats {
   numSegments: number;        // Anzahl Liniensegmente
   numPenLifts: number;        // Anzahl Pen-Lifts
   isOptimized: boolean;       // Wurde TSP-Optimierung angewandt?
+  optimizationMethod?: string; // Methode: "greedy" | "ortools"
 }
 
 // Interface für Backend-Tasks in der Queue
@@ -509,15 +510,34 @@ export const useMainStore = defineStore('main', {
               item.geometry.add(optimizedGroup);
 
               // Stats aktualisieren
+              const oldTravel = colorGroup.infillStats?.travelLengthMm || 0;
+              const oldPenLifts = colorGroup.infillStats?.numPenLifts || 0;
+
               colorGroup.infillStats = {
                 totalLengthMm: Math.round(result.stats.total_drawing_length_mm * 10) / 10,
                 travelLengthMm: Math.round(result.stats.total_travel_length_mm * 10) / 10,
                 numSegments: result.lines.length,
                 numPenLifts: result.stats.num_pen_lifts,
-                isOptimized: true
+                isOptimized: true,
+                optimizationMethod: result.stats.optimization_method
               };
 
-              console.log(`TSP-Optimierung abgeschlossen: ${result.stats.total_travel_length_mm.toFixed(1)}mm Travel, ${result.stats.num_pen_lifts} Pen-Lifts`);
+              // Log improvement
+              const newTravel = colorGroup.infillStats.travelLengthMm;
+              const newPenLifts = colorGroup.infillStats.numPenLifts;
+
+              if (oldTravel > 0 && oldPenLifts > 0) {
+                // Show improvement if we had previous stats
+                const travelReduction = ((oldTravel - newTravel) / oldTravel * 100).toFixed(1);
+                const penLiftReduction = ((oldPenLifts - newPenLifts) / oldPenLifts * 100).toFixed(1);
+                console.log(`✅ TSP-Optimierung (${result.stats.optimization_method}) abgeschlossen:`);
+                console.log(`   Travel: ${oldTravel}mm → ${newTravel}mm (-${travelReduction}%)`);
+                console.log(`   Pen-Lifts: ${oldPenLifts} → ${newPenLifts} (-${penLiftReduction}%)`);
+              } else {
+                // First time optimization
+                console.log(`✅ TSP-Optimierung (${result.stats.optimization_method}) abgeschlossen:`);
+                console.log(`   Travel: ${newTravel}mm | Pen-Lifts: ${newPenLifts} | Linien: ${colorGroup.infillStats.numSegments}`);
+              }
 
               // Trigger scene update
               this.svgItems = [...this.svgItems];
@@ -602,15 +622,34 @@ export const useMainStore = defineStore('main', {
             item.geometry.add(optimizedGroup);
 
             // Stats aktualisieren
+            const oldTravel = item.infillStats?.travelLengthMm || 0;
+            const oldPenLifts = item.infillStats?.numPenLifts || 0;
+
             item.infillStats = {
               totalLengthMm: Math.round(result.stats.total_drawing_length_mm * 10) / 10,
               travelLengthMm: Math.round(result.stats.total_travel_length_mm * 10) / 10,
               numSegments: result.lines.length,
               numPenLifts: result.stats.num_pen_lifts,
-              isOptimized: true
+              isOptimized: true,
+              optimizationMethod: result.stats.optimization_method
             };
 
-            console.log(`TSP-Optimierung abgeschlossen für ${item.fileName}: ${result.stats.total_travel_length_mm.toFixed(1)}mm Travel`);
+            // Log improvement
+            const newTravel = item.infillStats.travelLengthMm;
+            const newPenLifts = item.infillStats.numPenLifts;
+
+            if (oldTravel > 0 && oldPenLifts > 0) {
+              // Show improvement if we had previous stats
+              const travelReduction = ((oldTravel - newTravel) / oldTravel * 100).toFixed(1);
+              const penLiftReduction = ((oldPenLifts - newPenLifts) / oldPenLifts * 100).toFixed(1);
+              console.log(`✅ TSP-Optimierung für ${item.fileName} (${result.stats.optimization_method}) abgeschlossen:`);
+              console.log(`   Travel: ${oldTravel}mm → ${newTravel}mm (-${travelReduction}%)`);
+              console.log(`   Pen-Lifts: ${oldPenLifts} → ${newPenLifts} (-${penLiftReduction}%)`);
+            } else {
+              // First time optimization
+              console.log(`✅ TSP-Optimierung für ${item.fileName} (${result.stats.optimization_method}) abgeschlossen:`);
+              console.log(`   Travel: ${newTravel}mm | Pen-Lifts: ${newPenLifts} | Linien: ${item.infillStats.numSegments}`);
+            }
 
             // Trigger scene update
             this.svgItems = [...this.svgItems];

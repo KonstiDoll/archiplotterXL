@@ -65,6 +65,18 @@ interface Release {
 
 const changelog: Release[] = [
     {
+        version: '0.7.1',
+        date: '08.01.2026',
+        title: 'TSP-Optimierung für große Infills',
+        changes: [
+            'Automatischer Greedy-Algorithmus für >200 Linien (schnell!)',
+            'Optimierung von 11.000 Linien in ~10 Sekunden statt 5+ Minuten',
+            'OR-Tools für 4-200 Linien mit 300s Timeout (optimal)',
+            'Timeout über API konfigurierbar (max. 600s)',
+            'CORS-Fix für Port 5174',
+        ]
+    },
+    {
         version: '0.7.0',
         date: '17.12.2025',
         title: 'Backend Infill-Generierung mit TSP-Optimierung',
