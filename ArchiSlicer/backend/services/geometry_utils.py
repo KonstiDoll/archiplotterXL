@@ -92,7 +92,7 @@ def polygon_with_holes_to_shapely(
     return polygon
 
 
-def offset_polygon(polygon: Polygon, distance: float) -> Polygon:
+def offset_polygon(polygon: Polygon, distance: float):
     """
     Offset polygon inward (shrink) by the given distance.
 
@@ -101,7 +101,8 @@ def offset_polygon(polygon: Polygon, distance: float) -> Polygon:
         distance: Distance to offset inward (positive = shrink)
 
     Returns:
-        Offset Polygon (may be empty if offset is too large)
+        Offset Polygon, MultiPolygon, or empty Polygon
+        NOTE: Can return MultiPolygon when polygon splits into pieces!
     """
     if distance <= 0:
         return polygon
@@ -112,11 +113,8 @@ def offset_polygon(polygon: Polygon, distance: float) -> Polygon:
     if result.is_empty:
         return Polygon()  # Return empty polygon
 
-    # Handle MultiPolygon result (polygon splits into pieces)
-    if result.geom_type == "MultiPolygon":
-        # Return the largest piece
-        result = max(result.geoms, key=lambda p: p.area)
-
+    # Return result as-is (can be Polygon or MultiPolygon)
+    # Don't discard smaller pieces!
     return result
 
 

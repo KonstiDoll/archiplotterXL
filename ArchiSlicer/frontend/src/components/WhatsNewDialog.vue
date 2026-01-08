@@ -65,6 +65,16 @@ interface Release {
 
 const changelog: Release[] = [
     {
+        version: '0.7.2',
+        date: '08.01.2026',
+        title: 'Konzentrisches Infill Fix',
+        changes: [
+            'Fix: Konzentrisches Infill füllt jetzt alle Bereiche vollständig',
+            'Keine Löcher mehr in komplexen Formen (z.B. Buchstaben)',
+            'MultiPolygon-Splitting wird korrekt behandelt',
+        ]
+    },
+    {
         version: '0.7.1',
         date: '08.01.2026',
         title: 'TSP-Optimierung für große Infills',

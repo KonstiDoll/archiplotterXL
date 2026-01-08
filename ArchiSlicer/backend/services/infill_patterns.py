@@ -189,49 +189,63 @@ class ConcentricInfill(InfillGenerator):
             return []
 
         line_segments: List[LineSegment] = []
-        current_polygon = self.polygon
-        offset_distance = 0.0
+
+        # Track all active polygon parts (can split during offsetting)
+        active_polygons = [(self.polygon, 0.0)]  # (polygon, cumulative_offset)
 
         max_iterations = 1000  # Safety limit
         iteration = 0
 
-        while not current_polygon.is_empty and iteration < max_iterations:
+        while active_polygons and iteration < max_iterations:
             iteration += 1
+            next_polygons = []
 
-            # Extract boundary as line segments
-            if current_polygon.geom_type == "Polygon":
-                # Outer boundary
-                coords = list(current_polygon.exterior.coords)
-                for i in range(len(coords) - 1):
-                    line_segments.append((
-                        (coords[i][0], coords[i][1]),
-                        (coords[i + 1][0], coords[i + 1][1])
-                    ))
+            for current_polygon, current_offset in active_polygons:
+                if current_polygon.is_empty:
+                    continue
 
-                # Inner boundaries (holes become filled)
-                for interior in current_polygon.interiors:
-                    coords = list(interior.coords)
+                # Extract boundary as line segments
+                if current_polygon.geom_type == "Polygon":
+                    # Outer boundary
+                    coords = list(current_polygon.exterior.coords)
                     for i in range(len(coords) - 1):
                         line_segments.append((
                             (coords[i][0], coords[i][1]),
                             (coords[i + 1][0], coords[i + 1][1])
                         ))
 
-            elif current_polygon.geom_type == "MultiPolygon":
-                for poly in current_polygon.geoms:
-                    coords = list(poly.exterior.coords)
-                    for i in range(len(coords) - 1):
-                        line_segments.append((
-                            (coords[i][0], coords[i][1]),
-                            (coords[i + 1][0], coords[i + 1][1])
-                        ))
+                    # Inner boundaries (holes become filled)
+                    for interior in current_polygon.interiors:
+                        coords = list(interior.coords)
+                        for i in range(len(coords) - 1):
+                            line_segments.append((
+                                (coords[i][0], coords[i][1]),
+                                (coords[i + 1][0], coords[i + 1][1])
+                            ))
 
-            # Offset inward for next ring
-            offset_distance += self.density
-            current_polygon = offset_polygon(self.polygon, offset_distance)
+                elif current_polygon.geom_type == "MultiPolygon":
+                    for poly in current_polygon.geoms:
+                        coords = list(poly.exterior.coords)
+                        for i in range(len(coords) - 1):
+                            line_segments.append((
+                                (coords[i][0], coords[i][1]),
+                                (coords[i + 1][0], coords[i + 1][1])
+                            ))
 
-            if current_polygon.is_empty:
-                break
+                # Offset current polygon inward by one density step
+                next_polygon = offset_polygon(current_polygon, self.density)
+
+                if not next_polygon.is_empty:
+                    # Handle both Polygon and MultiPolygon results
+                    if next_polygon.geom_type == "MultiPolygon":
+                        # Add all pieces separately (polygon may have split)
+                        for piece in next_polygon.geoms:
+                            if not piece.is_empty and piece.area > 0.01:  # Filter tiny pieces
+                                next_polygons.append((piece, current_offset + self.density))
+                    else:
+                        next_polygons.append((next_polygon, current_offset + self.density))
+
+            active_polygons = next_polygons
 
         return line_segments
 
