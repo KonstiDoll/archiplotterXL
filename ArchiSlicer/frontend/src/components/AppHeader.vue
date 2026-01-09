@@ -87,7 +87,7 @@
     <!-- What's New Dialog -->
     <WhatsNewDialog
         :is-open="showWhatsNew"
-        @close="showWhatsNew = false"
+        @close="handleWhatsNewClose"
     />
 
     <!-- New Project Confirmation -->
@@ -114,7 +114,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { version } from '../../package.json';
 import { useMainStore } from '../store';
 import ProjectBrowser from './ProjectBrowser.vue';
@@ -133,6 +133,25 @@ const showSaveDialog = ref(false);
 const saveDialogMode = ref<'save' | 'saveAs'>('save');
 const showNewConfirm = ref(false);
 const showWhatsNew = ref(false);
+
+// LocalStorage Key für letzte gesehene Version
+const STORAGE_KEY_LAST_VERSION = 'archislicer_lastSeenVersion';
+
+// Beim Start prüfen, ob neue Version vorhanden ist
+onMounted(() => {
+    const lastSeenVersion = localStorage.getItem(STORAGE_KEY_LAST_VERSION);
+    if (lastSeenVersion !== version) {
+        // Neue Version! Dialog automatisch anzeigen
+        showWhatsNew.value = true;
+    }
+});
+
+// Handler für Dialog-Schließen
+function handleWhatsNewClose() {
+    showWhatsNew.value = false;
+    // Version im localStorage speichern
+    localStorage.setItem(STORAGE_KEY_LAST_VERSION, version);
+}
 
 function handleNewProject() {
     // If there are items, ask for confirmation

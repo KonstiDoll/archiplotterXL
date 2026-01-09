@@ -65,6 +65,16 @@ interface Release {
 
 const changelog: Release[] = [
     {
+        version: '0.8.1',
+        date: '09.01.2026',
+        title: 'Auto-Show "What\'s New"',
+        changes: [
+            '"What\'s New" Dialog wird automatisch beim ersten Start nach Update angezeigt',
+            'Version wird in localStorage gespeichert (nur einmal pro Version)',
+            'Dialog kann weiterhin manuell über Button geöffnet werden',
+        ]
+    },
+    {
         version: '0.8.0',
         date: '09.01.2026',
         title: 'Layer System & TSP-Optimierung',
