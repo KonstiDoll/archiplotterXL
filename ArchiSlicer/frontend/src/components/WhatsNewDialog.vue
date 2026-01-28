@@ -65,6 +65,16 @@ interface Release {
 
 const changelog: Release[] = [
     {
+        version: '0.8.2',
+        date: '29.01.2026',
+        title: 'ZigZag Infill Pattern',
+        changes: [
+            'Neues ZigZag-Infill-Muster: Kontinuierliche Zickzack-Linien mit minimalen Pen-Lifts',
+            'Erzeugt zusammenhängende Polylines statt einzelner Segmente',
+            'Ideal für schnelles Füllen großer Flächen',
+        ]
+    },
+    {
         version: '0.8.1',
         date: '09.01.2026',
         title: 'Auto-Show "What\'s New"',

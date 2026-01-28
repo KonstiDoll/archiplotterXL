@@ -165,6 +165,7 @@ function patternTypeToString(patternType: InfillPatternType): string {
     'grid': 'grid',
     'concentric': 'concentric',
     'crosshatch': 'crosshatch',
+    'zigzag': 'zigzag',
     'honeycomb': 'grid', // Honeycomb uses frontend generation, falls back to grid for backend
   };
 

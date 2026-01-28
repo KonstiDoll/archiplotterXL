@@ -289,6 +289,93 @@ class CrosshatchInfill(InfillGenerator):
         return lines1 + lines2
 
 
+class ZigZagInfill(InfillGenerator):
+    """
+    Zigzag pattern - continuous lines with minimal pen lifts.
+    Similar to line infill but connects scan lines in alternating directions.
+    """
+
+    def generate(self) -> List[LineSegment]:
+        """Convert polylines to segments for backward compatibility."""
+        polylines = self.generate_polylines()
+        segments: List[LineSegment] = []
+        for polyline in polylines:
+            for i in range(len(polyline) - 1):
+                segments.append((polyline[i], polyline[i + 1]))
+        return segments
+
+    def generate_polylines(self) -> List[Polyline]:
+        """Generate zigzag as continuous polylines."""
+        if self.polygon.is_empty:
+            return []
+
+        minx, miny, maxx, maxy = self.bounds
+        width, height = maxx - minx, maxy - miny
+        if width <= 0 or height <= 0:
+            return []
+
+        diagonal = math.sqrt(width ** 2 + height ** 2)
+        angle_rad = math.radians(self.angle)
+        direction = np.array([math.cos(angle_rad), math.sin(angle_rad)])
+        normal = np.array([-direction[1], direction[0]])
+        center = np.array([(minx + maxx) / 2, (miny + maxy) / 2])
+
+        # Project polygon to find range
+        all_coords = list(self.polygon.exterior.coords)
+        for interior in self.polygon.interiors:
+            all_coords.extend(list(interior.coords))
+        coords = np.array(all_coords)
+        projections = np.dot(coords - center, normal)
+        proj_min, proj_max = projections.min(), projections.max()
+
+        num_lines = int(math.ceil((proj_max - proj_min) / self.density))
+        if num_lines <= 0 or num_lines > 10000:
+            return []
+
+        # Generate scan lines and clip to polygon
+        scan_lines: List[List[LineSegment]] = []
+        for i in range(num_lines + 1):
+            t = i / num_lines if num_lines > 0 else 0
+            offset = proj_min + t * (proj_max - proj_min)
+            line_center = center + normal * offset
+            line_start = tuple(line_center - direction * diagonal)
+            line_end = tuple(line_center + direction * diagonal)
+            segments = clip_line_to_polygon(line_start, line_end, self.polygon)
+            if segments:
+                scan_lines.append(segments)
+
+        if not scan_lines:
+            return []
+
+        # Connect in zigzag order
+        polylines: List[Polyline] = []
+        current: Polyline = []
+        forward = True
+        threshold = self.density * 2.0
+
+        for segments in scan_lines:
+            if not forward:
+                segments = [(s[1], s[0]) for s in reversed(segments)]
+
+            for start, end in segments:
+                if not current:
+                    current = [start, end]
+                else:
+                    dist = math.sqrt((start[0] - current[-1][0])**2 + (start[1] - current[-1][1])**2)
+                    if dist <= threshold:
+                        current.append(end)
+                    else:
+                        if len(current) >= 2:
+                            polylines.append(current)
+                        current = [start, end]
+            forward = not forward
+
+        if len(current) >= 2:
+            polylines.append(current)
+
+        return polylines
+
+
 def get_infill_generator(
     pattern_type: str,
     polygon: Polygon,
@@ -314,6 +401,7 @@ def get_infill_generator(
         "grid": GridInfill,
         "concentric": ConcentricInfill,
         "crosshatch": CrosshatchInfill,
+        "zigzag": ZigZagInfill,
     }
 
     generator_class = generators.get(pattern_type.lower())
@@ -427,7 +515,7 @@ def generate_infill_for_polygons_with_polylines(
     total_points = 0
 
     # Check if pattern supports polylines
-    use_polylines = pattern_type.lower() == "concentric"
+    use_polylines = pattern_type.lower() in ["concentric", "zigzag"]
 
     for poly_data in polygons:
         outer = poly_data.get("outer", [])

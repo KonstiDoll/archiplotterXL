@@ -45,7 +45,7 @@ class Polyline(BaseModel):
 class InfillRequest(BaseModel):
     """Request to generate infill pattern."""
     polygons: List[PolygonWithHoles] = Field(..., min_length=1)
-    pattern: Literal["lines", "grid", "concentric", "crosshatch"] = "lines"
+    pattern: Literal["lines", "grid", "concentric", "crosshatch", "zigzag"] = "lines"
     density: float = Field(default=2.0, gt=0, le=100, description="Spacing between lines in mm")
     angle: float = Field(default=45.0, ge=0, le=360, description="Angle in degrees")
     outline_offset: float = Field(default=0.0, ge=0, le=50, description="Inward offset from edge in mm")
@@ -419,6 +419,12 @@ async def list_patterns():
                 "name": "Crosshatch",
                 "description": "Diagonal crossing lines at +/- 45 degrees",
                 "recommended_density_range": [2.0, 15.0],
+            },
+            {
+                "id": "zigzag",
+                "name": "Zigzag",
+                "description": "Continuous zigzag lines with minimal pen lifts",
+                "recommended_density_range": [1.0, 10.0],
             },
         ]
     }

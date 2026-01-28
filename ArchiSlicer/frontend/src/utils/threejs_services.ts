@@ -13,6 +13,7 @@ export enum InfillPatternType {
   CONCENTRIC = 'concentric',
   HONEYCOMB = 'honeycomb',
   CROSSHATCH = 'crosshatch',
+  ZIGZAG = 'zigzag',
 }
 
 // Interface für Dichtebereiche je nach Muster-Typ
@@ -31,6 +32,7 @@ export const patternDensityRanges: { [key in InfillPatternType]: DensityRange } 
   [InfillPatternType.HONEYCOMB]: { min: 1, max: 50, step: 1, defaultValue: 10 },
   [InfillPatternType.CONCENTRIC]: { min: 0.5, max: 10, step: 0.5, defaultValue: 2 },
   [InfillPatternType.CROSSHATCH]: { min: 0.5, max: 10, step: 0.5, defaultValue: 2 },
+  [InfillPatternType.ZIGZAG]: { min: 0.5, max: 10, step: 0.5, defaultValue: 2 },
 };
 
 // Schnittstelle für Füllmuster-Parameter
