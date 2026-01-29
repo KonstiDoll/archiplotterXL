@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc && vite build",
-    "preview": "vite preview"
+    "build": "npm run convert-macros && vue-tsc && vite build",
+    "preview": "vite preview",
+    "convert-macros": "npx tsx scripts/convert-macros.ts"
   },
   "dependencies": {
     "@heroicons/vue": "^2.1.1",
