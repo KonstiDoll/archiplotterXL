@@ -223,12 +223,12 @@ const generateGcode = () => {
 };
 
 // Open G-Code Simulator
-const handleSimulate = () => {
+const handleSimulate = async () => {
     if (!gCode.value) {
         alert('Bitte zuerst G-Code generieren!');
         return;
     }
-    simulatorStore.open(gCode.value, toolConfigs.value);
+    await simulatorStore.open(gCode.value, toolConfigs.value);
 };
 </script>
 

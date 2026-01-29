@@ -14,7 +14,7 @@ import { PEN_LINE_WIDTHS, machineToCanvas } from '../types/simulator';
 
 // Canvas dimensions (matching the workpiece area in mm)
 // We use a scale factor to convert mm to pixels for good resolution
-const CANVAS_SCALE = 2; // 2 pixels per mm
+const CANVAS_SCALE = 4; // 4 pixels per mm (higher = sharper)
 const WORKPIECE_WIDTH = 1864;  // mm (Machine Y range)
 const WORKPIECE_HEIGHT = 1210; // mm (Machine X range)
 
@@ -140,13 +140,13 @@ export class SimulatorRenderer {
     const toX = to.x * CANVAS_SCALE;
     const toY = (WORKPIECE_HEIGHT - to.y) * CANVAS_SCALE;
 
-    // Draw dashed line in cyan/teal color for visibility
+    // Draw dashed gray line for travel paths
     this.ctx.beginPath();
     this.ctx.moveTo(fromX, fromY);
     this.ctx.lineTo(toX, toY);
-    this.ctx.strokeStyle = 'rgba(0, 180, 200, 0.6)';
-    this.ctx.lineWidth = 1.0 * CANVAS_SCALE;
-    this.ctx.setLineDash([8 * CANVAS_SCALE, 4 * CANVAS_SCALE]);
+    this.ctx.strokeStyle = 'rgba(128, 128, 128, 0.5)';
+    this.ctx.lineWidth = 0.5 * CANVAS_SCALE;
+    this.ctx.setLineDash([5 * CANVAS_SCALE, 5 * CANVAS_SCALE]);
     this.ctx.stroke();
     this.ctx.setLineDash([]); // Reset to solid
 

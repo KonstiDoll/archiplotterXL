@@ -162,10 +162,10 @@ export const useSimulatorStore = defineStore('simulator', {
     /**
      * Open the simulator with G-Code
      */
-    open(gcode: string, toolConfigs: ToolConfig[]) {
+    async open(gcode: string, toolConfigs: ToolConfig[]) {
       this.rawGCode = gcode;
       this.toolConfigs = [...toolConfigs];
-      this.parsedGCode = parseGCode(gcode);
+      this.parsedGCode = await parseGCode(gcode);
       this.isOpen = true;
       this.reset();
 

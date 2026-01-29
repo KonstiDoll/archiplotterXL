@@ -78,6 +78,9 @@ let threeRenderer: THREE.WebGLRenderer;
 let controls: OrbitControls;
 let simulatorRenderer: SimulatorRenderer;
 let simulatorPlane: THREE.Mesh;
+let penMesh: THREE.Group;
+let penBodyMesh: THREE.Mesh;
+let penTipMesh: THREE.Mesh;
 let animationFrameId: number | null = null;
 
 // Animation state
@@ -169,6 +172,29 @@ function initThree() {
   gridHelper.position.set(932, 605, -0.1);
   scene.add(gridHelper);
 
+  // Create 3D pen visualizer (thin like pen tip)
+  penMesh = new THREE.Group();
+
+  // Pen body (thin cylinder)
+  const bodyGeometry = new THREE.CylinderGeometry(2, 2, 40, 12);
+  const bodyMaterial = new THREE.MeshBasicMaterial({ color: 0x404040 });
+  penBodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
+  penBodyMesh.position.z = 25; // Offset up from tip
+  penBodyMesh.rotation.x = Math.PI / 2; // Point down
+  penMesh.add(penBodyMesh);
+
+  // Pen tip (thin cone)
+  const tipGeometry = new THREE.ConeGeometry(1.5, 8, 12);
+  const tipMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+  penTipMesh = new THREE.Mesh(tipGeometry, tipMaterial);
+  penTipMesh.position.z = 2;
+  penTipMesh.rotation.x = -Math.PI / 2; // Point down
+  penMesh.add(penTipMesh);
+
+  // Initial position
+  penMesh.position.set(0, 0, 10);
+  scene.add(penMesh);
+
   // Handle window resize
   window.addEventListener('resize', onResize);
 
@@ -217,6 +243,56 @@ function onKeyDown(event: KeyboardEvent) {
   }
 }
 
+function updatePenPosition() {
+  if (!penMesh || !simulatorStore.parsedGCode) return;
+
+  const parsed = simulatorStore.parsedGCode;
+  const currentTime = simulatorStore.currentTime;
+
+  // Find current instruction and interpolate position
+  const current = findInstructionAtTime(parsed.instructions, currentTime);
+
+  let penX = 0, penY = 0;
+  let isPenDown = false;
+  let currentToolNum: number | null = null;
+
+  if (current && current.instruction.startPosition && current.instruction.endPosition) {
+    // Interpolate position within current instruction
+    const pos = lerp(current.instruction.startPosition, current.instruction.endPosition, current.progress);
+    // Convert machine coords to canvas coords (machine X→canvas Y, machine Y→canvas X)
+    penX = pos.y;
+    penY = pos.x;
+  } else {
+    // Use machine state position
+    const machinePos = simulatorStore.machineState.position;
+    penX = machinePos.y;
+    penY = machinePos.x;
+  }
+
+  isPenDown = simulatorStore.machineState.isPenDown;
+  currentToolNum = simulatorStore.machineState.currentTool;
+
+  // Update pen mesh position
+  penMesh.position.x = penX;
+  penMesh.position.y = penY;
+
+  // Animate pen height based on pen state
+  const targetZ = isPenDown ? 5 : 40;
+  penMesh.position.z += (targetZ - penMesh.position.z) * 0.3; // Smooth interpolation
+
+  // Update pen color based on current tool (both body and tip)
+  if (currentToolNum !== null && simulatorStore.toolConfigs[currentToolNum - 1]) {
+    const toolConfig = simulatorStore.toolConfigs[currentToolNum - 1];
+    const color = new THREE.Color(toolConfig.color);
+    (penBodyMesh.material as THREE.MeshBasicMaterial).color = color;
+    (penTipMesh.material as THREE.MeshBasicMaterial).color = color;
+  } else {
+    // No tool - show gray pen
+    (penBodyMesh.material as THREE.MeshBasicMaterial).color = new THREE.Color(0x404040);
+    (penTipMesh.material as THREE.MeshBasicMaterial).color = new THREE.Color(0x404040);
+  }
+}
+
 function animate(timestamp: number) {
   animationFrameId = requestAnimationFrame(animate);
 
@@ -231,6 +307,9 @@ function animate(timestamp: number) {
 
   // Update machine state
   simulatorStore.updateMachineState();
+
+  // Update 3D pen position with interpolation
+  updatePenPosition();
 
   // Render if time changed
   if (simulatorStore.currentTime !== lastRenderedTime) {
@@ -259,7 +338,6 @@ function renderSimulation() {
 
   // Track machine state for rendering
   let currentTool: number | null = null;
-  let isPenDown = false;
 
   // Process all instructions up to current time
   for (const instruction of parsed.instructions) {
@@ -313,20 +391,27 @@ function renderSimulation() {
         }
         break;
 
-      case 'pen_up':
-        isPenDown = false;
-        break;
-
-      case 'pen_down':
-        isPenDown = true;
-        break;
-
       case 'move':
         if (instruction.startPosition && instruction.endPosition) {
-          if (isPenDown && !instruction.isTravel) {
+          if (instruction.isTravel) {
+            // Travel move (pen up)
+            if (simulatorStore.showTravelPaths) {
+              simulatorRenderer.drawTravelPath(instruction.startPosition, instruction.endPosition);
+            }
+          } else {
+            // Drawing move (pen down) - ensure tool is set
+            if (currentTool !== null) {
+              const toolConfig = simulatorStore.toolConfigs[currentTool - 1];
+              if (toolConfig) {
+                simulatorRenderer.setTool({
+                  toolNumber: currentTool,
+                  penType: toolConfig.penType,
+                  color: toolConfig.color,
+                  lineWidth: 0.4,
+                });
+              }
+            }
             simulatorRenderer.drawSegment(instruction.startPosition, instruction.endPosition);
-          } else if (simulatorStore.showTravelPaths && instruction.isTravel) {
-            simulatorRenderer.drawTravelPath(instruction.startPosition, instruction.endPosition);
           }
         }
         break;
@@ -339,12 +424,7 @@ function renderSimulation() {
     }
   }
 
-  // Draw current pen position
-  const machinePos = simulatorStore.machineState.position;
-  simulatorRenderer.drawPenPosition(
-    { x: machinePos.x, y: machinePos.y },
-    simulatorStore.machineState.isPenDown
-  );
+  // Note: Pen position is now shown as 3D mesh, updated in updatePenPosition()
 }
 
 function renderFullSimulation() {

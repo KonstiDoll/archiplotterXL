@@ -30,6 +30,7 @@ export interface GCodeInstruction {
 
   // Derived data
   isTravel?: boolean;           // True if pen is up during this move
+  isMacroMove?: boolean;        // True if this move was expanded from a macro
 
   // Tool change data
   toolNumber?: number;          // Tool number (1-9)

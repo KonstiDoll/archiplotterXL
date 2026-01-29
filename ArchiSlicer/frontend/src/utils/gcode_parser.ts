@@ -23,10 +23,61 @@ const PEN_DOWN_THRESHOLD = 20;
 // Default feedrate
 const DEFAULT_DRAWING_FEEDRATE = 3000;
 
+// Macro data (loaded from public/macros.json)
+interface MacroInstruction {
+  type: string;
+  x?: number;
+  y?: number;
+  z?: number;
+  u?: number;
+  feedrate?: number;
+  isRelative?: boolean;
+}
+
+interface MacrosData {
+  version: string;
+  macros: Record<string, {
+    raw: string[];
+    flattened: MacroInstruction[];
+  }>;
+}
+
+let macrosData: MacrosData | null = null;
+let macrosLoadPromise: Promise<MacrosData | null> | null = null;
+
+/**
+ * Load macros data from public/macros.json
+ */
+async function loadMacros(): Promise<MacrosData | null> {
+  if (macrosData) return macrosData;
+  if (macrosLoadPromise) return macrosLoadPromise;
+
+  macrosLoadPromise = fetch('/macros.json')
+    .then(res => {
+      if (!res.ok) throw new Error(`Failed to load macros: ${res.status}`);
+      return res.json();
+    })
+    .then(data => {
+      macrosData = data;
+      return data;
+    })
+    .catch(err => {
+      console.warn('Could not load macros.json:', err);
+      return null;
+    });
+
+  return macrosLoadPromise;
+}
+
+// Pre-load macros on module init
+loadMacros();
+
 /**
  * Parse a G-Code string into a structured format for the simulator
  */
-export function parseGCode(gcode: string): ParsedGCode {
+export async function parseGCode(gcode: string): Promise<ParsedGCode> {
+  // Ensure macros are loaded
+  await loadMacros();
   const lines = gcode.split('\n');
   const instructions: GCodeInstruction[] = [];
 
@@ -60,110 +111,113 @@ export function parseGCode(gcode: string): ParsedGCode {
     // Skip empty lines
     if (!rawLine) continue;
 
-    // Parse the line
-    const instruction = parseLine(rawLine, lineNumber, state);
+    // Parse the line (may return multiple instructions for macros)
+    const parsedInstructions = parseLine(rawLine, lineNumber, state);
 
-    if (!instruction) continue;
+    if (parsedInstructions.length === 0) continue;
 
-    // Handle pump sequence detection (G91 followed by Z moves, then G90)
-    if (instruction.type === 'set_mode') {
-      if (rawLine.includes('G91')) {
-        inPumpSequence = true;
-      } else if (rawLine.includes('G90') && inPumpSequence) {
-        inPumpSequence = false;
-      }
-    }
-
-    // Detect pump action (Z moves in relative mode)
-    if (inPumpSequence && instruction.type === 'move' && instruction.z !== undefined) {
-      instruction.type = 'pump';
-      instruction.pumpHeight = Math.abs(instruction.z);
-      pumpCount++;
-    }
-
-    // Update machine state and calculate timing
-    const duration = calculateDuration(instruction, state);
-    instruction.estimatedDuration = duration;
-    instruction.cumulativeTime = cumulativeTime;
-    cumulativeTime += duration;
-
-    // Track start/end positions for moves
-    if (instruction.type === 'move' || instruction.type === 'pump') {
-      instruction.startPosition = { x: state.position.x, y: state.position.y };
-
-      // Update position
-      if (instruction.x !== undefined) {
-        state.position.x = state.absoluteMode ? instruction.x : state.position.x + instruction.x;
-      }
-      if (instruction.y !== undefined) {
-        state.position.y = state.absoluteMode ? instruction.y : state.position.y + instruction.y;
-      }
-      if (instruction.z !== undefined) {
-        state.position.z = state.absoluteMode ? instruction.z : state.position.z + instruction.z;
-      }
-
-      instruction.endPosition = { x: state.position.x, y: state.position.y };
-
-      // Calculate distance for statistics
-      if (instruction.startPosition && instruction.endPosition) {
-        const dx = instruction.endPosition.x - instruction.startPosition.x;
-        const dy = instruction.endPosition.y - instruction.startPosition.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
-        if (instruction.isTravel) {
-          totalTravelLength += distance;
-          travelMoves++;
-        } else if (instruction.type === 'move') {
-          totalDrawingLength += distance;
-          drawingMoves++;
+    // Process each instruction from the parsed line
+    for (const instruction of parsedInstructions) {
+      // Handle pump sequence detection (G91 followed by Z moves, then G90)
+      if (instruction.type === 'set_mode') {
+        if (instruction.rawLine.includes('G91')) {
+          inPumpSequence = true;
+        } else if (instruction.rawLine.includes('G90') && inPumpSequence) {
+          inPumpSequence = false;
         }
       }
 
-      // Update bounds (convert machine coords to canvas coords)
-      const canvasX = state.position.y; // Machine Y → Canvas X
-      const canvasY = state.position.x; // Machine X → Canvas Y
-      if (canvasX < minX) minX = canvasX;
-      if (canvasX > maxX) maxX = canvasX;
-      if (canvasY < minY) minY = canvasY;
-      if (canvasY > maxY) maxY = canvasY;
-    }
-
-    // Handle pen up/down
-    if (instruction.type === 'pen_up') {
-      state.isPenDown = false;
-      state.position.u = instruction.u ?? 33;
-    } else if (instruction.type === 'pen_down') {
-      state.isPenDown = true;
-      state.position.u = instruction.u ?? 13;
-    }
-
-    // Handle tool changes
-    if (instruction.type === 'tool_change' && instruction.toolNumber !== undefined) {
-      if (instruction.isGrab) {
-        state.currentTool = instruction.toolNumber;
-        toolsUsed.add(instruction.toolNumber);
-      } else {
-        state.currentTool = null;
+      // Detect pump action (Z moves in relative mode)
+      if (inPumpSequence && instruction.type === 'move' && instruction.z !== undefined) {
+        instruction.type = 'pump';
+        instruction.pumpHeight = Math.abs(instruction.z);
+        pumpCount++;
       }
-    }
 
-    // Handle mode changes
-    if (instruction.type === 'set_mode') {
-      state.absoluteMode = rawLine.includes('G90');
-    }
+      // Update machine state and calculate timing
+      const duration = calculateDuration(instruction, state);
+      instruction.estimatedDuration = duration;
+      instruction.cumulativeTime = cumulativeTime;
+      cumulativeTime += duration;
 
-    // Update feedrate
-    if (instruction.feedrate !== undefined) {
-      state.feedrate = instruction.feedrate;
-    }
+      // Track start/end positions for moves
+      if (instruction.type === 'move' || instruction.type === 'pump') {
+        instruction.startPosition = { x: state.position.x, y: state.position.y };
 
-    // Mark travel moves
-    if (instruction.type === 'move') {
-      instruction.isTravel = !state.isPenDown;
-    }
+        // Update position
+        if (instruction.x !== undefined) {
+          state.position.x = state.absoluteMode ? instruction.x : state.position.x + instruction.x;
+        }
+        if (instruction.y !== undefined) {
+          state.position.y = state.absoluteMode ? instruction.y : state.position.y + instruction.y;
+        }
+        if (instruction.z !== undefined) {
+          state.position.z = state.absoluteMode ? instruction.z : state.position.z + instruction.z;
+        }
 
-    instructions.push(instruction);
-  }
+        instruction.endPosition = { x: state.position.x, y: state.position.y };
+
+        // Calculate distance for statistics
+        if (instruction.startPosition && instruction.endPosition) {
+          const dx = instruction.endPosition.x - instruction.startPosition.x;
+          const dy = instruction.endPosition.y - instruction.startPosition.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (instruction.isTravel) {
+            totalTravelLength += distance;
+            travelMoves++;
+          } else if (instruction.type === 'move') {
+            totalDrawingLength += distance;
+            drawingMoves++;
+          }
+        }
+
+        // Update bounds (convert machine coords to canvas coords)
+        const canvasX = state.position.y; // Machine Y → Canvas X
+        const canvasY = state.position.x; // Machine X → Canvas Y
+        if (canvasX < minX) minX = canvasX;
+        if (canvasX > maxX) maxX = canvasX;
+        if (canvasY < minY) minY = canvasY;
+        if (canvasY > maxY) maxY = canvasY;
+      }
+
+      // Handle pen up/down
+      if (instruction.type === 'pen_up') {
+        state.isPenDown = false;
+        state.position.u = instruction.u ?? 33;
+      } else if (instruction.type === 'pen_down') {
+        state.isPenDown = true;
+        state.position.u = instruction.u ?? 13;
+      }
+
+      // Handle tool changes
+      if (instruction.type === 'tool_change' && instruction.toolNumber !== undefined) {
+        if (instruction.isGrab) {
+          state.currentTool = instruction.toolNumber;
+          toolsUsed.add(instruction.toolNumber);
+        } else {
+          state.currentTool = null;
+        }
+      }
+
+      // Handle mode changes
+      if (instruction.type === 'set_mode') {
+        state.absoluteMode = instruction.rawLine.includes('G90');
+      }
+
+      // Update feedrate
+      if (instruction.feedrate !== undefined) {
+        state.feedrate = instruction.feedrate;
+      }
+
+      // Mark travel moves
+      if (instruction.type === 'move') {
+        instruction.isTravel = !state.isPenDown;
+      }
+
+      instructions.push(instruction);
+    } // End of instruction loop
+  } // End of line loop
 
   // Handle edge case for bounds
   if (minX === Infinity) minX = 0;
@@ -189,77 +243,78 @@ export function parseGCode(gcode: string): ParsedGCode {
 
 /**
  * Parse a single G-Code line
+ * Returns an array of instructions (usually 1, but macros expand to multiple)
  */
 function parseLine(
   rawLine: string,
   lineNumber: number,
   state: MachineState
-): GCodeInstruction | null {
+): GCodeInstruction[] {
   // Comment line
   if (rawLine.startsWith(';')) {
-    return {
+    return [{
       type: 'comment',
       lineNumber,
       rawLine,
       estimatedDuration: 0,
       cumulativeTime: 0,
-    };
+    }];
   }
 
   // Remove inline comments
   const line = rawLine.split(';')[0].trim();
-  if (!line) return null;
+  if (!line) return [];
 
   // G90 - Absolute positioning
   if (line === 'G90') {
-    return {
+    return [{
       type: 'set_mode',
       lineNumber,
       rawLine,
       estimatedDuration: 0,
       cumulativeTime: 0,
-    };
+    }];
   }
 
   // G91 - Relative positioning
   if (line === 'G91') {
-    return {
+    return [{
       type: 'set_mode',
       lineNumber,
       rawLine,
       estimatedDuration: 0,
       cumulativeTime: 0,
-    };
+    }];
   }
 
   // G21 - Millimeter units (ignore, we always use mm)
   if (line === 'G21') {
-    return null;
+    return [];
   }
 
   // M400 - Wait for moves to finish (ignore for simulation)
   if (line === 'M400') {
-    return null;
+    return [];
   }
 
   // G1 - Linear move
   if (line.startsWith('G1')) {
-    return parseG1(line, lineNumber, rawLine, state);
+    return [parseG1(line, lineNumber, rawLine, state)];
   }
 
-  // M98 - Macro call (tool change)
+  // M98 - Macro call (tool change) - returns array of expanded instructions
   if (line.startsWith('M98')) {
-    return parseM98(line, lineNumber, rawLine);
+    return parseM98(line, lineNumber, rawLine, state);
   }
 
   // Unknown command
-  return {
+  return [{
     type: 'unknown',
     lineNumber,
     rawLine,
     estimatedDuration: 0,
     cumulativeTime: 0,
-  };
+  }];
 }
 
 /**
@@ -322,43 +377,109 @@ function parseG1(
 
 /**
  * Parse an M98 macro call (tool change)
+ * Returns array of instructions (the macro expansion + tool_change marker)
  */
 function parseM98(
   line: string,
   lineNumber: number,
-  rawLine: string
-): GCodeInstruction {
-  const instruction: GCodeInstruction = {
-    type: 'tool_change',
-    lineNumber,
-    rawLine,
-    estimatedDuration: 2000, // Tool changes take ~2 seconds
-    cumulativeTime: 0,
-  };
+  rawLine: string,
+  state: MachineState
+): GCodeInstruction[] {
+  const instructions: GCodeInstruction[] = [];
 
   // Parse macro path
   const pathMatch = line.match(/P"([^"]+)"/);
-  if (pathMatch) {
-    const macroPath = pathMatch[1];
-
-    // Check if it's a grab_tool macro
-    const grabMatch = macroPath.match(/grab_tool_(\d+)/);
-    if (grabMatch) {
-      instruction.toolNumber = parseInt(grabMatch[1], 10);
-      instruction.isGrab = true;
-    }
-
-    // Check if it's a place_tool macro
-    const placeMatch = macroPath.match(/place_tool_(\d+)/);
-    if (placeMatch) {
-      instruction.toolNumber = parseInt(placeMatch[1], 10);
-      instruction.isGrab = false;
-    }
-
-    // move_to_drawingHeight macros don't need special handling
+  if (!pathMatch) {
+    return [{
+      type: 'unknown',
+      lineNumber,
+      rawLine,
+      estimatedDuration: 0,
+      cumulativeTime: 0,
+    }];
   }
 
-  return instruction;
+  const macroPath = pathMatch[1];
+  const macroName = macroPath.replace('/macros/', '');
+
+  // Check if it's a grab_tool or place_tool macro
+  let toolNumber: number | undefined;
+  let isGrab = false;
+
+  const grabMatch = macroPath.match(/grab_tool_(\d+)/);
+  if (grabMatch) {
+    toolNumber = parseInt(grabMatch[1], 10);
+    isGrab = true;
+  }
+
+  const placeMatch = macroPath.match(/place_tool_(\d+)/);
+  if (placeMatch) {
+    toolNumber = parseInt(placeMatch[1], 10);
+    isGrab = false;
+  }
+
+  // Expand macro if available
+  if (macrosData?.macros[macroName]) {
+    const macroInstructions = macrosData.macros[macroName].flattened;
+    let isRelative = state.absoluteMode === false;
+    let currentFeedrate = state.feedrate;
+
+    for (const instr of macroInstructions) {
+      if (instr.type === 'set_mode') {
+        isRelative = instr.isRelative ?? false;
+        instructions.push({
+          type: 'set_mode',
+          lineNumber,
+          rawLine: isRelative ? 'G91' : 'G90',
+          estimatedDuration: 0,
+          cumulativeTime: 0,
+        });
+      } else if (instr.type === 'move') {
+        // Create move instruction
+        const moveInstr: GCodeInstruction = {
+          type: 'move',
+          lineNumber,
+          rawLine: `; macro: ${macroName}`,
+          estimatedDuration: 0, // Will be calculated later
+          cumulativeTime: 0,
+          isTravel: true, // Tool change moves are always travel
+          isMacroMove: true, // Mark as macro-generated
+        };
+
+        if (instr.x !== undefined) moveInstr.x = instr.x;
+        if (instr.y !== undefined) moveInstr.y = instr.y;
+        if (instr.z !== undefined) moveInstr.z = instr.z;
+        if (instr.u !== undefined) moveInstr.u = instr.u;
+        if (instr.feedrate !== undefined) {
+          moveInstr.feedrate = instr.feedrate;
+          currentFeedrate = instr.feedrate;
+        } else {
+          moveInstr.feedrate = currentFeedrate;
+        }
+
+        // Skip pure U/Z moves for position animation (only animate X/Y)
+        if (instr.x !== undefined || instr.y !== undefined) {
+          instructions.push(moveInstr);
+        }
+      }
+    }
+  }
+
+  // Only add tool_change instruction if it's actually a grab/place macro
+  if (toolNumber !== undefined) {
+    const toolChangeInstr: GCodeInstruction = {
+      type: 'tool_change',
+      lineNumber,
+      rawLine,
+      estimatedDuration: 500, // Short delay for the actual grab/place
+      cumulativeTime: 0,
+      toolNumber,
+      isGrab,
+    };
+    instructions.push(toolChangeInstr);
+  }
+
+  return instructions;
 }
 
 /**
