@@ -65,6 +65,19 @@ interface Release {
 
 const changelog: Release[] = [
     {
+        version: '0.8.5',
+        date: '29.01.2026',
+        title: 'Visual Hole Editor',
+        changes: [
+            'Neuer visueller Editor für Path-Rollen: Klicke auf Flächen um Outer/Hole/Nested zu ändern',
+            'Farbcodierte Overlays: Grün = Outer, Rot = Hole, Blau = Nested',
+            'Gelber Rand zeigt manuell überschriebene Rollen an',
+            'Nested Objects werden jetzt korrekt aus Parent-Infill ausgespart',
+            'Fix: Kamera zoomt auf korrekte Position inkl. Workpiece-Offset',
+            'Fix: Workpiece Start Marker werden initial angezeigt',
+        ]
+    },
+    {
         version: '0.8.4',
         date: '29.01.2026',
         title: 'Outlines Toggle & Workpiece Start Limits',
