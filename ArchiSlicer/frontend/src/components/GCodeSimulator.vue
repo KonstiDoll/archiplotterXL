@@ -120,10 +120,11 @@ function initThree() {
     viewHeight / 2,
     -viewHeight / 2,
     0.1,
-    2000
+    5000
   );
-  camera.position.set(932, 605, 500); // Center of workpiece
-  camera.lookAt(932, 605, 0);
+  // Position camera directly above the workpiece center, looking down
+  camera.position.set(932, 605, 1000);
+  camera.up.set(0, 1, 0); // Y is up
 
   // Renderer
   threeRenderer = new THREE.WebGLRenderer({ antialias: true });
@@ -133,11 +134,13 @@ function initThree() {
 
   // Controls
   controls = new OrbitControls(camera, threeRenderer.domElement);
-  controls.enableRotate = false; // 2D only
+  controls.target.set(932, 605, 0); // Look at center of workpiece
+  controls.enableRotate = true; // Allow rotation/tilting
   controls.enablePan = true;
   controls.enableZoom = true;
   controls.minZoom = 0.1;
   controls.maxZoom = 10;
+  controls.update();
 
   // Simulator renderer (2D canvas)
   simulatorRenderer = new SimulatorRenderer();
@@ -262,12 +265,13 @@ function renderSimulation() {
   for (const instruction of parsed.instructions) {
     // Stop if we've passed current time
     if (instruction.cumulativeTime > simulatorStore.currentTime) {
-      // Handle partial progress on current instruction
+      // Handle partial progress on current instruction (animate the current move)
       const current = findInstructionAtTime(parsed.instructions, simulatorStore.currentTime);
       if (current && current.instruction.type === 'move' && current.instruction.startPosition && current.instruction.endPosition) {
         const pos = lerp(current.instruction.startPosition, current.instruction.endPosition, current.progress);
 
-        if (isPenDown && !current.instruction.isTravel) {
+        // Drawing move (pen down)
+        if (!current.instruction.isTravel) {
           // Get tool config for drawing
           if (currentTool !== null) {
             const toolConfig = simulatorStore.toolConfigs[currentTool - 1];
@@ -281,7 +285,9 @@ function renderSimulation() {
             }
           }
           simulatorRenderer.drawSegment(current.instruction.startPosition, pos);
-        } else if (simulatorStore.showTravelPaths && current.instruction.isTravel) {
+        }
+        // Travel move (pen up) - always animate if showTravelPaths is on
+        else if (simulatorStore.showTravelPaths) {
           simulatorRenderer.drawTravelPath(current.instruction.startPosition, pos);
         }
       }

@@ -46,13 +46,13 @@ export class SimulatorRenderer {
     }
     this.ctx = ctx;
 
-    // Initialize with white background
-    this.clear();
-
-    // Create Three.js texture
+    // Create Three.js texture BEFORE clear() which calls updateTexture()
     this.texture = new THREE.CanvasTexture(this.canvas);
     this.texture.minFilter = THREE.LinearFilter;
     this.texture.magFilter = THREE.LinearFilter;
+
+    // Initialize with white background
+    this.clear();
   }
 
   /**
@@ -140,13 +140,13 @@ export class SimulatorRenderer {
     const toX = to.x * CANVAS_SCALE;
     const toY = (WORKPIECE_HEIGHT - to.y) * CANVAS_SCALE;
 
-    // Draw dashed line
+    // Draw dashed line in cyan/teal color for visibility
     this.ctx.beginPath();
     this.ctx.moveTo(fromX, fromY);
     this.ctx.lineTo(toX, toY);
-    this.ctx.strokeStyle = 'rgba(128, 128, 128, 0.4)';
-    this.ctx.lineWidth = 0.5 * CANVAS_SCALE;
-    this.ctx.setLineDash([5 * CANVAS_SCALE, 5 * CANVAS_SCALE]);
+    this.ctx.strokeStyle = 'rgba(0, 180, 200, 0.6)';
+    this.ctx.lineWidth = 1.0 * CANVAS_SCALE;
+    this.ctx.setLineDash([8 * CANVAS_SCALE, 4 * CANVAS_SCALE]);
     this.ctx.stroke();
     this.ctx.setLineDash([]); // Reset to solid
 
