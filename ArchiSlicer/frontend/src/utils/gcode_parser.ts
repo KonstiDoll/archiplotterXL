@@ -14,8 +14,15 @@ import type {
   GCodeInstruction,
   ParsedGCode,
   MachineState,
+  ParserWarning,
 } from '../types/simulator';
 import { createDefaultMachineState } from '../types/simulator';
+
+// Workpiece bounds (for out-of-bounds detection)
+const WORKPIECE_MIN_X = 0;
+const WORKPIECE_MAX_X = 1210;  // Machine X range
+const WORKPIECE_MIN_Y = 0;
+const WORKPIECE_MAX_Y = 1864;  // Machine Y range
 
 // Pen threshold: U values below this are considered "pen down"
 const PEN_DOWN_THRESHOLD = 20;
@@ -104,6 +111,9 @@ export async function parseGCode(gcode: string): Promise<ParsedGCode> {
   // Pump detection state
   let inPumpSequence = false;
 
+  // Warnings and errors
+  const warnings: ParserWarning[] = [];
+
   for (let i = 0; i < lines.length; i++) {
     const lineNumber = i + 1;
     const rawLine = lines[i].trim();
@@ -112,7 +122,7 @@ export async function parseGCode(gcode: string): Promise<ParsedGCode> {
     if (!rawLine) continue;
 
     // Parse the line (may return multiple instructions for macros)
-    const parsedInstructions = parseLine(rawLine, lineNumber, state);
+    const parsedInstructions = parseLine(rawLine, lineNumber, state, warnings);
 
     if (parsedInstructions.length === 0) continue;
 
@@ -156,6 +166,21 @@ export async function parseGCode(gcode: string): Promise<ParsedGCode> {
         }
 
         instruction.endPosition = { x: state.position.x, y: state.position.y };
+
+        // Check for out-of-bounds (only for non-macro moves to tool area)
+        if (!instruction.isMacroMove) {
+          const x = state.position.x;
+          const y = state.position.y;
+          if (x < WORKPIECE_MIN_X || x > WORKPIECE_MAX_X ||
+              y < WORKPIECE_MIN_Y || y > WORKPIECE_MAX_Y) {
+            warnings.push({
+              type: 'warning',
+              lineNumber: instruction.lineNumber,
+              message: 'Bewegung außerhalb des Arbeitsbereichs',
+              details: `Position (${x.toFixed(1)}, ${y.toFixed(1)}) liegt außerhalb von (${WORKPIECE_MIN_X}-${WORKPIECE_MAX_X}, ${WORKPIECE_MIN_Y}-${WORKPIECE_MAX_Y})`,
+            });
+          }
+        }
 
         // Calculate distance for statistics
         if (instruction.startPosition && instruction.endPosition) {
@@ -238,6 +263,7 @@ export async function parseGCode(gcode: string): Promise<ParsedGCode> {
       totalTravelLength: Math.round(totalTravelLength * 10) / 10,
       pumpCount,
     },
+    warnings,
   };
 }
 
@@ -248,7 +274,8 @@ export async function parseGCode(gcode: string): Promise<ParsedGCode> {
 function parseLine(
   rawLine: string,
   lineNumber: number,
-  state: MachineState
+  state: MachineState,
+  warnings: ParserWarning[]
 ): GCodeInstruction[] {
   // Comment line
   if (rawLine.startsWith(';')) {
@@ -297,6 +324,17 @@ function parseLine(
     return [];
   }
 
+  // G0 - Rapid move (maximum speed)
+  if (line.startsWith('G0')) {
+    const instr = parseG1(line, lineNumber, rawLine, state);
+    instr.isRapid = true;
+    // G0 uses maximum feedrate if none specified
+    if (instr.feedrate === undefined) {
+      instr.feedrate = 15000; // Machine max rapid speed
+    }
+    return [instr];
+  }
+
   // G1 - Linear move
   if (line.startsWith('G1')) {
     return [parseG1(line, lineNumber, rawLine, state)];
@@ -304,10 +342,22 @@ function parseLine(
 
   // M98 - Macro call (tool change) - returns array of expanded instructions
   if (line.startsWith('M98')) {
-    return parseM98(line, lineNumber, rawLine, state);
+    return parseM98(line, lineNumber, rawLine, state, warnings);
   }
 
-  // Unknown command
+  // G29 - Mesh compensation (ignore for simulation)
+  if (line.startsWith('G29')) {
+    return [];
+  }
+
+  // Unknown command - add warning
+  warnings.push({
+    type: 'warning',
+    lineNumber,
+    message: 'Unbekannter G-Code Befehl',
+    details: line,
+  });
+
   return [{
     type: 'unknown',
     lineNumber,
@@ -383,13 +433,20 @@ function parseM98(
   line: string,
   lineNumber: number,
   rawLine: string,
-  state: MachineState
+  state: MachineState,
+  warnings: ParserWarning[]
 ): GCodeInstruction[] {
   const instructions: GCodeInstruction[] = [];
 
   // Parse macro path
   const pathMatch = line.match(/P"([^"]+)"/);
   if (!pathMatch) {
+    warnings.push({
+      type: 'error',
+      lineNumber,
+      message: 'Ungültiger M98 Befehl',
+      details: 'Makro-Pfad konnte nicht geparst werden',
+    });
     return [{
       type: 'unknown',
       lineNumber,
@@ -419,7 +476,14 @@ function parseM98(
   }
 
   // Expand macro if available
-  if (macrosData?.macros[macroName]) {
+  if (!macrosData?.macros[macroName]) {
+    warnings.push({
+      type: 'error',
+      lineNumber,
+      message: `Makro nicht gefunden: ${macroName}`,
+      details: `Das Makro "${macroPath}" ist nicht in macros.json vorhanden`,
+    });
+  } else if (macrosData?.macros[macroName]) {
     const macroInstructions = macrosData.macros[macroName].flattened;
     let isRelative = state.absoluteMode === false;
     let currentFeedrate = state.feedrate;

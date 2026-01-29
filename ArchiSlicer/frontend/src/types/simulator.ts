@@ -31,6 +31,7 @@ export interface GCodeInstruction {
   // Derived data
   isTravel?: boolean;           // True if pen is up during this move
   isMacroMove?: boolean;        // True if this move was expanded from a macro
+  isRapid?: boolean;            // True if G0 rapid move (max speed)
 
   // Tool change data
   toolNumber?: number;          // Tool number (1-9)
@@ -46,6 +47,14 @@ export interface GCodeInstruction {
   // Position tracking (filled during parsing)
   startPosition?: { x: number; y: number };
   endPosition?: { x: number; y: number };
+}
+
+// Parser warning/error
+export interface ParserWarning {
+  type: 'error' | 'warning';
+  lineNumber: number;
+  message: string;
+  details?: string;
 }
 
 // Parsed G-Code with metadata
@@ -67,6 +76,7 @@ export interface ParsedGCode {
     totalTravelLength: number;  // mm
     pumpCount: number;
   };
+  warnings: ParserWarning[];    // Errors and warnings found during parsing
 }
 
 // Machine state during simulation

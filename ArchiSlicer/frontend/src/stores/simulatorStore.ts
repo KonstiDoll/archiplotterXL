@@ -150,6 +150,13 @@ export const useSimulatorStore = defineStore('simulator', {
     },
 
     /**
+     * Get parser warnings and errors
+     */
+    warnings(state) {
+      return state.parsedGCode?.warnings ?? [];
+    },
+
+    /**
      * Check if simulation is complete
      */
     isComplete(state): boolean {
