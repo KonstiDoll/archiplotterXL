@@ -96,7 +96,9 @@ export const useMainStore = defineStore('main', {
     infillOptimizing: null as { svgIndex: number; colorIndex: number | null } | null,
     // Backend task queue
     taskQueue: [] as BackendTask[],
-    isProcessingQueue: false
+    isProcessingQueue: false,
+    // G-Code Export-Modus: 'tool' = gruppiert nach Werkzeug, 'layer' = Layer-Reihenfolge
+    gcodeExportMode: 'tool' as 'tool' | 'layer'
   }),
   actions: {
     // Altes setLineGeometry für Kompatibilität
@@ -202,7 +204,32 @@ export const useMainStore = defineStore('main', {
         this.svgItems[index + 1] = temp;
       }
     },
-    
+
+    // Methode zum Verschieben einer Farbe nach oben
+    moveColorUp(itemIndex: number, colorIndex: number) {
+      const item = this.svgItems[itemIndex];
+      if (!item?.colorGroups || colorIndex <= 0) return;
+
+      const temp = item.colorGroups[colorIndex];
+      item.colorGroups[colorIndex] = item.colorGroups[colorIndex - 1];
+      item.colorGroups[colorIndex - 1] = temp;
+    },
+
+    // Methode zum Verschieben einer Farbe nach unten
+    moveColorDown(itemIndex: number, colorIndex: number) {
+      const item = this.svgItems[itemIndex];
+      if (!item?.colorGroups || colorIndex >= item.colorGroups.length - 1) return;
+
+      const temp = item.colorGroups[colorIndex];
+      item.colorGroups[colorIndex] = item.colorGroups[colorIndex + 1];
+      item.colorGroups[colorIndex + 1] = temp;
+    },
+
+    // G-Code Export-Modus setzen
+    setGcodeExportMode(mode: 'tool' | 'layer') {
+      this.gcodeExportMode = mode;
+    },
+
     // Methode zum Löschen aller SVGs
     clearSVGItems() {
       this.svgItems = [];

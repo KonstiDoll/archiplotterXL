@@ -509,6 +509,7 @@ interface ColorToolMapping {
     toolNumber: number;
     lineCount: number;
     visible: boolean;
+    useFileDefaults?: boolean;  // Falls true, wird fileToolNumber verwendet
 }
 
 // Neue Funktion für Multi-Color G-Code
@@ -521,7 +522,8 @@ export function createGcodeFromColorGroups(
     offsetX: number = 0,
     offsetY: number = 0,
     infillToolNumber: number = 1,  // Tool-Nummer für File-Level Infill
-    fileToolNumber: number = 1  // NEW: Fallback tool for contours
+    fileToolNumber: number = 1,  // NEW: Fallback tool for contours
+    exportMode: 'tool' | 'layer' = 'tool'  // Export-Modus: 'tool' = gruppiert, 'layer' = Layer-Reihenfolge
 ): string {
     // Map von Farbe zu Tool-Nummer und Sichtbarkeit erstellen
     const colorToTool = new Map<string, number>();
@@ -585,14 +587,89 @@ export function createGcodeFromColorGroups(
         ? `G91\nG1 Z${drawingHeight.toFixed(2)} F6000\nG90\n`
         : '';
 
-    // Sortiere Tools für konsistente Reihenfolge
-    const sortedTools = Array.from(linesByTool.keys()).sort((a, b) => a - b);
-
     // Tracking für Tool-Wechsel Optimierung
     let lastToolNumber: number | null = null;
 
-    // Für jedes Tool die Linien zeichnen
-    sortedTools.forEach((toolNumber) => {
+    // --- LAYER MODE: Iterate over colors in order ---
+    if (exportMode === 'layer') {
+        // Alle sichtbaren Linien nach Farbe gruppieren
+        const linesByColor = new Map<string, THREE.Line[]>();
+        lineGeoGroup.children.forEach((child) => {
+            if (child instanceof THREE.Line && child.name.indexOf('Infill_') !== 0) {
+                const color = child.userData?.effectiveColor
+                           || child.userData?.strokeColor
+                           || '#000000';
+
+                const isVisible = colorVisibility.get(color) ?? true;
+                if (!isVisible) return;
+
+                if (!linesByColor.has(color)) {
+                    linesByColor.set(color, []);
+                }
+                linesByColor.get(color)!.push(child);
+            }
+        });
+
+        // Für jede Farbe in colorGroups-Reihenfolge
+        colorGroups.forEach((cg) => {
+            if (!cg.visible) return;
+
+            const lines = linesByColor.get(cg.color);
+            if (!lines || lines.length === 0) return;
+
+            // Use file defaults if useFileDefaults is true
+            const effectiveTool = cg.useFileDefaults ? fileToolNumber : cg.toolNumber;
+            const toolNumber = effectiveTool;
+
+            // Tool-Konfiguration
+            const toolConfig = toolConfigs[toolNumber - 1] || { penType: 'stabilo', color: '#000000' };
+            const penTypeId = toolConfig.penType;
+            const penTypeConfig = penTypes[penTypeId] || penTypes['stabilo'];
+
+            const penUp = penTypeConfig.penUp;
+            const penDown = penTypeConfig.penDown;
+            const moveUUp = `G1 U${penUp} F6000\n`;
+            const moveUDown = `G1 U${penDown} F6000\n`;
+
+            gCode += `\n; === Layer: ${cg.color} (Tool #${toolNumber}) ===\n`;
+
+            // Tool-Wechsel nur wenn nötig
+            if (lastToolNumber !== toolNumber) {
+                if (lastToolNumber !== null) {
+                    gCode += `M98 P"/macros/place_tool_${lastToolNumber}"\n`;
+                }
+                gCode += `M98 P"/macros/grab_tool_${toolNumber}"\n`;
+                gCode += `M98 P"/macros/move_to_drawingHeight_${penTypeId}"\n`;
+                if (drawingHeight > 0) {
+                    gCode += adjustMaterialHeight;
+                }
+                lastToolNumber = toolNumber;
+            }
+
+            gCode += moveUUp;
+            gCode += `; ${lines.length} Linien\n`;
+
+            // Pump context
+            const pumpCtx: PumpContext = {
+                accumulatedDistance: 0,
+                pumpDistanceThreshold: penTypeConfig.pumpDistanceThreshold || 0,
+                pumpHeight: penTypeConfig.pumpHeight || 50,
+            };
+
+            // Linien zeichnen
+            lines.forEach((lineGeo) => {
+                const { gcode: gcodeLine } = createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY, pumpCtx);
+                gCode += gcodeLine;
+                gCode += checkAndGeneratePump(pumpCtx);
+                gCode += moveUUp;
+            });
+        });
+    } else {
+        // --- TOOL MODE: Group by tool number (original behavior) ---
+        const sortedTools = Array.from(linesByTool.keys()).sort((a, b) => a - b);
+
+        // Für jedes Tool die Linien zeichnen
+        sortedTools.forEach((toolNumber) => {
         const lines = linesByTool.get(toolNumber)!;
         if (lines.length === 0) return;
 
@@ -656,6 +733,7 @@ export function createGcodeFromColorGroups(
             gCode += moveUUp;
         });
     });
+    } // end else (tool mode)
 
     // Infill separat (mit konfiguriertem Infill-Tool)
     if (infillLines.length > 0) {
@@ -714,7 +792,7 @@ export function createGcodeFromColorGroups(
 
     gCode += generateEndGcode();
 
-    console.log(`Multi-Color G-Code generiert: ${sortedTools.length} Tools verwendet`);
+    console.log(`Multi-Color G-Code generiert (${exportMode} mode)`);
 
     return gCode;
 }
@@ -733,6 +811,7 @@ interface ColorGroupWithInfill {
         angle: number;
         outlineOffset: number;
     };
+    useFileDefaults?: boolean;  // Falls true, werden file-level Tools verwendet
 }
 
 /**
@@ -921,6 +1000,7 @@ interface PumpContext {
     accumulatedDistance: number;
     pumpDistanceThreshold: number;  // 0 = disabled
     pumpHeight: number;  // relative Z travel distance for pumping (moves down then back up)
+    penUp?: number;  // Optional pen up position for pumping during infill
 }
 
 // Helper function for creating G-code from a single line

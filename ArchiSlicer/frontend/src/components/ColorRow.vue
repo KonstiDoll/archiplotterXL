@@ -1,8 +1,11 @@
 <template>
     <div class="bg-slate-700 rounded p-2">
-        <!-- Collapsed Header: Eye, Color swatch, Name, Stats, Expand -->
+        <!-- Collapsed Header: Position, Eye, Color swatch, Name, Stats, Arrows, Expand -->
         <div class="flex items-center space-x-2 cursor-pointer hover:bg-slate-600/30 -m-2 p-2 rounded transition-colors"
             @click="expanded = !expanded">
+            <!-- Position Number -->
+            <span class="text-xs text-slate-500 w-4 text-center shrink-0">{{ colorIndex + 1 }}.</span>
+
             <!-- Visibility Toggle -->
             <button @click.stop="$emit('toggle-visibility')"
                 class="w-5 h-5 flex items-center justify-center text-xs rounded shrink-0"
@@ -20,6 +23,22 @@
             <div class="flex-grow min-w-0">
                 <div class="text-xs text-white font-mono truncate">{{ colorGroup.color }}</div>
                 <div class="text-xs text-slate-400">{{ colorGroup.lineCount }} Linien</div>
+            </div>
+
+            <!-- Reorder Buttons -->
+            <div class="flex items-center space-x-0.5 shrink-0" @click.stop>
+                <button @click="$emit('move-up')"
+                    :disabled="isFirst"
+                    class="p-0.5 rounded text-slate-400 hover:bg-slate-600 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Nach oben">
+                    <span class="text-xs">↑</span>
+                </button>
+                <button @click="$emit('move-down')"
+                    :disabled="isLast"
+                    class="p-0.5 rounded text-slate-400 hover:bg-slate-600 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Nach unten">
+                    <span class="text-xs">↓</span>
+                </button>
             </div>
 
             <!-- Expand/Collapse Indicator -->
@@ -210,7 +229,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import type { ColorGroup, InfillStats } from '../store';
+import type { ColorGroup } from '../store';
 import { InfillPatternType } from '../utils/threejs_services';
 import ToolSelect from './ToolSelect.vue';
 
@@ -228,6 +247,8 @@ const props = defineProps<{
     toolConfigs: ToolConfig[];
     isGenerating: boolean;
     isOptimizing: boolean;
+    isFirst: boolean;
+    isLast: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -243,6 +264,8 @@ const emit = defineEmits<{
     (e: 'update-density', value: number): void;
     (e: 'update-angle', value: number): void;
     (e: 'update-outline-offset', value: number): void;
+    (e: 'move-up'): void;
+    (e: 'move-down'): void;
 }>();
 
 const expanded = ref(false);
@@ -256,6 +279,7 @@ const patternTypes = [
     { value: InfillPatternType.HONEYCOMB, label: 'Waben' },
     { value: InfillPatternType.CONCENTRIC, label: 'Konzentrisch' },
     { value: InfillPatternType.CROSSHATCH, label: 'Kreuzschraffur' },
+    { value: InfillPatternType.ZIGZAG, label: 'Zickzack' },
 ];
 
 // Effective tool (file or custom)

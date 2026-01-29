@@ -143,18 +143,22 @@
                             :tool-configs="toolConfigs"
                             :is-generating="store.infillGenerating?.svgIndex === itemIndex && store.infillGenerating?.colorIndex === colorIdx"
                             :is-optimizing="store.infillOptimizing?.svgIndex === itemIndex && store.infillOptimizing?.colorIndex === colorIdx"
+                            :is-first="colorIdx === 0"
+                            :is-last="colorIdx === item.colorGroups.length - 1"
                             @toggle-visibility="store.toggleColorVisibility(itemIndex, colorIdx)"
                             @toggle-use-defaults="store.toggleColorUseFileDefaults(itemIndex, colorIdx)"
                             @update-tool="store.setColorTool(itemIndex, colorIdx, $event)"
                             @toggle-infill="store.toggleColorInfill(itemIndex, colorIdx)"
                             @update-infill-tool="store.setColorInfillTool(itemIndex, colorIdx, $event)"
-                            @update-pattern="store.setColorInfillPattern(itemIndex, colorIdx, $event)"
+                            @update-pattern="store.setColorInfillPattern(itemIndex, colorIdx, $event as InfillPatternType)"
                             @generate-infill="store.queueTask('generate', itemIndex, colorIdx, `Gen: ${item.fileName} - ${colorGroup.color}`)"
                             @optimize-infill="store.queueTask('optimize', itemIndex, colorIdx, `TSP: ${item.fileName} - ${colorGroup.color}`)"
                             @delete-infill="store.deleteColorInfill(itemIndex, colorIdx)"
                             @update-density="store.updateColorInfillOptions(itemIndex, colorIdx, { density: $event })"
                             @update-angle="store.updateColorInfillOptions(itemIndex, colorIdx, { angle: $event })"
                             @update-outline-offset="store.updateColorInfillOptions(itemIndex, colorIdx, { outlineOffset: $event })"
+                            @move-up="store.moveColorUp(itemIndex, colorIdx)"
+                            @move-down="store.moveColorDown(itemIndex, colorIdx)"
                         />
                     </div>
                 </div>

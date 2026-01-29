@@ -182,7 +182,8 @@ const generateGcode = () => {
                     item.offsetX,
                     item.offsetY,
                     item.infillToolNumber,
-                    item.toolNumber  // File-level fallback tool for contours
+                    item.toolNumber,  // File-level fallback tool for contours
+                    store.gcodeExportMode  // Export-Modus: 'tool' oder 'layer'
                 );
 
                 combinedGcode += svgGcode;

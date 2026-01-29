@@ -65,6 +65,17 @@ interface Release {
 
 const changelog: Release[] = [
     {
+        version: '0.8.3',
+        date: '29.01.2026',
+        title: 'Farb-Reihenfolge & Export-Modus',
+        changes: [
+            'Farben manuell sortierbar: Pfeile (↑↓) zum Ändern der Zeichenreihenfolge',
+            'Neuer Export-Modus im G-Code Panel: "Tool" (minimiert Werkzeugwechsel) oder "Layer" (Farb-Reihenfolge)',
+            'Position (1., 2., 3., ...) wird bei jeder Farbe angezeigt',
+            'ZigZag-Pattern jetzt auch im Farb-Infill-Dropdown verfügbar',
+        ]
+    },
+    {
         version: '0.8.2',
         date: '29.01.2026',
         title: 'ZigZag Infill Pattern',

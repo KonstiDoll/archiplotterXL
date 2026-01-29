@@ -3,6 +3,29 @@
         <!-- Header with Generate Button -->
         <div class="flex items-center justify-between p-3 bg-slate-200 border-b">
             <div class="flex items-center space-x-3">
+                <!-- Export Mode Toggle -->
+                <span class="text-xs text-slate-500">Reihenfolge:</span>
+                <div class="flex items-center bg-slate-300 rounded-lg p-0.5">
+                    <button
+                        @click="store.setGcodeExportMode('tool')"
+                        :class="store.gcodeExportMode === 'tool'
+                            ? 'bg-white text-slate-800 shadow'
+                            : 'text-slate-600 hover:text-slate-800'"
+                        class="px-3 py-1 text-sm rounded-md transition-colors"
+                        title="Minimiert Werkzeugwechsel">
+                        Tool
+                    </button>
+                    <button
+                        @click="store.setGcodeExportMode('layer')"
+                        :class="store.gcodeExportMode === 'layer'
+                            ? 'bg-white text-slate-800 shadow'
+                            : 'text-slate-600 hover:text-slate-800'"
+                        class="px-3 py-1 text-sm rounded-md transition-colors"
+                        title="Zeichnet in Layer-Reihenfolge">
+                        Layer
+                    </button>
+                </div>
+
                 <button @click="$emit('generate')"
                     class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors"
                     :disabled="!hasItems">
@@ -38,6 +61,9 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useMainStore } from '../store';
+
+const store = useMainStore();
 
 const props = defineProps<{
     gcode: string;
