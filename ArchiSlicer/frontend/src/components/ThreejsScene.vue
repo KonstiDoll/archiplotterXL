@@ -226,20 +226,35 @@ watch(() => store.svgItems, (newItems) => {
     newItems.forEach(item => {
         const obj = markRaw(item.geometry);
 
-        // NEW: Filter visibility by color if analyzed
+        // Filter visibility by color if analyzed
         if (item.isAnalyzed && item.colorGroups.length > 0) {
-            // Create visibility map
+            // Create visibility and showOutlines maps
             const visibilityMap = new Map<string, boolean>();
+            const showOutlinesMap = new Map<string, boolean>();
             item.colorGroups.forEach(cg => {
                 visibilityMap.set(cg.color.toLowerCase(), cg.visible);
+                showOutlinesMap.set(cg.color.toLowerCase(), cg.showOutlines);
             });
 
-            // Traverse and hide invisible lines
+            // Traverse and hide invisible lines / outlines
             obj.traverse((child) => {
                 if (child instanceof THREE.Line) {
                     const lineColor = (child.userData?.effectiveColor || '#000000').toLowerCase();
                     const isVisible = visibilityMap.get(lineColor) ?? true;
-                    child.visible = isVisible;
+                    const showOutlines = showOutlinesMap.get(lineColor) ?? true;
+
+                    // Check if this is an infill line (name starts with "Infill_")
+                    const isInfillLine = child.name.startsWith('Infill_');
+
+                    if (!isVisible) {
+                        // Color completely hidden
+                        child.visible = false;
+                    } else if (!showOutlines && !isInfillLine) {
+                        // Outlines hidden, but this is a contour line (not infill)
+                        child.visible = false;
+                    } else {
+                        child.visible = true;
+                    }
                 }
             });
         }

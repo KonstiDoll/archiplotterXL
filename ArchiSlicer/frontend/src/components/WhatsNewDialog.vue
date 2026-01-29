@@ -65,6 +65,18 @@ interface Release {
 
 const changelog: Release[] = [
     {
+        version: '0.8.4',
+        date: '29.01.2026',
+        title: 'Outlines Toggle & Workpiece Start Limits',
+        changes: [
+            'Neuer Outlines-Toggle pro Farbe: Konturen ausblenden, nur Infill zeichnen (▢/▣ Button)',
+            'Workpiece Start Limits: X 100-1150mm, Y 50-1800mm (Werkzeugkasten-Bereich ausgespart)',
+            'Eingabefelder zeigen jetzt Maschinen-Koordinaten (nicht Slicer-Koordinaten)',
+            'Neue SVGs werden automatisch am ersten Workpiece Start platziert',
+            'Input-Validierung mit automatischer Korrektur bei ungültigen Werten',
+        ]
+    },
+    {
         version: '0.8.3',
         date: '29.01.2026',
         title: 'Farb-Reihenfolge & Export-Modus',

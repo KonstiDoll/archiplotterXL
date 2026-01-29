@@ -56,6 +56,7 @@ export interface SerializedColorGroup {
   toolNumber: number;
   lineCount: number;
   visible: boolean;
+  showOutlines?: boolean; // Optional for backwards compatibility (default: true)
   useFileDefaults?: boolean; // Optional for backwards compatibility
   infillEnabled: boolean;
   infillToolNumber: number;
@@ -149,6 +150,7 @@ function serializeColorGroup(colorGroup: ColorGroup): SerializedColorGroup {
     toolNumber: colorGroup.toolNumber,
     lineCount: colorGroup.lineCount,
     visible: colorGroup.visible,
+    showOutlines: colorGroup.showOutlines,
     infillEnabled: colorGroup.infillEnabled,
     infillToolNumber: colorGroup.infillToolNumber,
     infillOptions: { ...colorGroup.infillOptions },

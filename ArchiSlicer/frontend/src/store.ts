@@ -33,6 +33,7 @@ export interface ColorGroup {
   toolNumber: number;      // Zugeordnetes Tool für Konturen (1-9), default: 1
   lineCount: number;       // Anzahl Linien mit dieser Farbe
   visible: boolean;        // Sichtbarkeit in Vorschau
+  showOutlines: boolean;   // Konturen anzeigen (false = nur Infill, keine Konturen)
   useFileDefaults: boolean; // Wenn true, werden File-Level Settings als Fallback verwendet
   // Infill-Einstellungen pro Farbe
   infillEnabled: boolean;           // Infill an/aus für diese Farbe
@@ -49,6 +50,15 @@ export interface WorkpieceStart {
   x: number;               // X-Position in mm
   y: number;               // Y-Position in mm
 }
+
+// Workpiece Start Limits (Maschinen-Koordinaten, wie der User sie sieht)
+// Hinweis: Maschine X = Slicer Y, Maschine Y = Slicer X (intern getauscht)
+export const WORKPIECE_LIMITS = {
+  MACHINE_X_MIN: 100,   // Werkzeugkasten-Bereich unten
+  MACHINE_X_MAX: 1150,
+  MACHINE_Y_MIN: 50,
+  MACHINE_Y_MAX: 1800,
+};
 
 // Interface für SVG-Geometrien mit Werkzeug-Informationen
 export interface SVGItem {
@@ -119,6 +129,11 @@ export const useMainStore = defineStore('main', {
       dpi: number = 96,  // Standard-DPI für px→mm Umrechnung
       svgContent?: string  // Original SVG-Inhalt für Neuberechnung bei DPI-Änderung
     ) {
+      // Wenn Workpiece Starts existieren, ersten als Default nutzen
+      const defaultStart = this.workpieceStarts.length > 0
+        ? this.workpieceStarts[0]
+        : null;
+
       this.svgItems.push({
         geometry,
         toolNumber,
@@ -131,8 +146,9 @@ export const useMainStore = defineStore('main', {
         colorGroups: [],    // Leer bis Analyse durchgeführt wird
         isAnalyzed: false,  // Noch nicht analysiert
         isPathAnalyzed: false,  // Path-Analyse noch nicht durchgeführt
-        offsetX: 0,         // Kein Offset standardmäßig
-        offsetY: 0,
+        offsetX: defaultStart?.x ?? 0,
+        offsetY: defaultStart?.y ?? 0,
+        workpieceStartId: defaultStart?.id,
         dpi,
         svgContent
       });
@@ -325,6 +341,7 @@ export const useMainStore = defineStore('main', {
           toolNumber: defaultTool,  // Erbe Kontur-Tool von der Datei
           lineCount: info.lineCount,
           visible: true,
+          showOutlines: true,  // Konturen standardmäßig sichtbar
           useFileDefaults: true,  // Initial immer File-Defaults verwenden
           // Infill-Defaults - erben von Datei
           infillEnabled: false,
@@ -353,6 +370,16 @@ export const useMainStore = defineStore('main', {
         const item = this.svgItems[svgIndex];
         if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
           item.colorGroups[colorIndex].visible = !item.colorGroups[colorIndex].visible;
+        }
+      }
+    },
+
+    // Konturen-Sichtbarkeit einer Farbgruppe togglen (showOutlines)
+    toggleColorOutlines(svgIndex: number, colorIndex: number) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          item.colorGroups[colorIndex].showOutlines = !item.colorGroups[colorIndex].showOutlines;
         }
       }
     },
@@ -815,10 +842,15 @@ export const useMainStore = defineStore('main', {
 
     // ===== Workpiece Start Actions =====
 
-    // Workpiece Start hinzufügen
+    // Workpiece Start hinzufügen (mit Limits)
+    // Parameter sind Slicer-Koordinaten (x = Slicer X = Maschine Y, y = Slicer Y = Maschine X)
     addWorkpieceStart(name: string, x: number, y: number) {
+      // Limits anwenden (Slicer X → Maschine Y Limits, Slicer Y → Maschine X Limits)
+      const clampedX = Math.max(WORKPIECE_LIMITS.MACHINE_Y_MIN, Math.min(WORKPIECE_LIMITS.MACHINE_Y_MAX, x));
+      const clampedY = Math.max(WORKPIECE_LIMITS.MACHINE_X_MIN, Math.min(WORKPIECE_LIMITS.MACHINE_X_MAX, y));
+
       const id = `ws_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      this.workpieceStarts.push({ id, name, x, y });
+      this.workpieceStarts.push({ id, name, x: clampedX, y: clampedY });
       return id;
     },
 
@@ -838,17 +870,22 @@ export const useMainStore = defineStore('main', {
       }
     },
 
-    // Workpiece Start aktualisieren
+    // Workpiece Start aktualisieren (mit Limits)
+    // Parameter sind Slicer-Koordinaten (x = Slicer X = Maschine Y, y = Slicer Y = Maschine X)
     updateWorkpieceStart(id: string, x: number, y: number) {
       const ws = this.workpieceStarts.find(ws => ws.id === id);
       if (ws) {
-        ws.x = x;
-        ws.y = y;
+        // Limits anwenden (Slicer X → Maschine Y Limits, Slicer Y → Maschine X Limits)
+        const clampedX = Math.max(WORKPIECE_LIMITS.MACHINE_Y_MIN, Math.min(WORKPIECE_LIMITS.MACHINE_Y_MAX, x));
+        const clampedY = Math.max(WORKPIECE_LIMITS.MACHINE_X_MIN, Math.min(WORKPIECE_LIMITS.MACHINE_X_MAX, y));
+
+        ws.x = clampedX;
+        ws.y = clampedY;
         // SVGs die diesen Start verwenden aktualisieren
         this.svgItems.forEach(item => {
           if (item.workpieceStartId === id) {
-            item.offsetX = x;
-            item.offsetY = y;
+            item.offsetX = clampedX;
+            item.offsetY = clampedY;
           }
         });
       }
@@ -1093,6 +1130,7 @@ export const useMainStore = defineStore('main', {
               toolNumber: cg.toolNumber,
               lineCount: cg.lineCount,
               visible: cg.visible,
+              showOutlines: cg.showOutlines ?? true, // Default to true for backwards compatibility
               useFileDefaults: cg.useFileDefaults ?? false, // Default to false for backwards compatibility
               infillEnabled: cg.infillEnabled,
               infillToolNumber: cg.infillToolNumber,

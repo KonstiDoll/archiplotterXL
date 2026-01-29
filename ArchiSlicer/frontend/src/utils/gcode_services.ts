@@ -509,6 +509,7 @@ interface ColorToolMapping {
     toolNumber: number;
     lineCount: number;
     visible: boolean;
+    showOutlines?: boolean;     // NEU: false = nur Infill, keine Konturen (default: true)
     useFileDefaults?: boolean;  // Falls true, wird fileToolNumber verwendet
 }
 
@@ -528,11 +529,13 @@ export function createGcodeFromColorGroups(
     // Map von Farbe zu Tool-Nummer und Sichtbarkeit erstellen
     const colorToTool = new Map<string, number>();
     const colorVisibility = new Map<string, boolean>();
+    const colorShowOutlines = new Map<string, boolean>();
     colorGroups.forEach(cg => {
         // Use file defaults if useFileDefaults is true
         const effectiveTool = cg.useFileDefaults ? fileToolNumber : cg.toolNumber;
         colorToTool.set(cg.color, effectiveTool);
         colorVisibility.set(cg.color, cg.visible);
+        colorShowOutlines.set(cg.color, cg.showOutlines ?? true);
     });
 
     // Linien nach Tool gruppieren (für optimale Tool-Wechsel)
@@ -546,10 +549,16 @@ export function createGcodeFromColorGroups(
                        || child.userData?.strokeColor
                        || '#000000';
 
-            // NEW: Skip invisible colors
+            // Skip invisible colors
             const isVisible = colorVisibility.get(color) ?? true;
             if (!isVisible) {
                 return; // Skip this line if color is hidden
+            }
+
+            // Skip outlines if showOutlines is false
+            const showOutlines = colorShowOutlines.get(color) ?? true;
+            if (!showOutlines) {
+                return; // Skip contours if outlines are hidden (only infill)
             }
 
             const toolNumber = colorToTool.get(color) || 1;
@@ -602,6 +611,10 @@ export function createGcodeFromColorGroups(
 
                 const isVisible = colorVisibility.get(color) ?? true;
                 if (!isVisible) return;
+
+                // Skip outlines if showOutlines is false
+                const showOutlines = colorShowOutlines.get(color) ?? true;
+                if (!showOutlines) return;
 
                 if (!linesByColor.has(color)) {
                     linesByColor.set(color, []);
@@ -803,6 +816,7 @@ interface ColorGroupWithInfill {
     toolNumber: number;
     lineCount: number;
     visible: boolean;
+    showOutlines: boolean;      // NEU: false = nur Infill, keine Konturen
     infillEnabled: boolean;
     infillToolNumber: number;
     infillOptions: {
@@ -885,7 +899,8 @@ export function createGcodeWithColorInfill(
         gCode += `\n; === Farbe ${colorGroup.color} ===\n`;
 
         // --- KONTUREN ---
-        if (contourLines.length > 0) {
+        // Konturen nur zeichnen wenn showOutlines true (oder nicht definiert für Rückwärtskompatibilität)
+        if (contourLines.length > 0 && colorGroup.showOutlines !== false) {
             // Use file defaults if useFileDefaults is true
             const contourTool = colorGroup.useFileDefaults ? fileToolNumber : colorGroup.toolNumber;
             const toolConfig = toolConfigs[contourTool - 1] || { penType: 'stabilo', color: '#000000' };
@@ -930,6 +945,8 @@ export function createGcodeWithColorInfill(
                 // Now lift pen
                 gCode += moveUUp;
             });
+        } else if (contourLines.length > 0 && colorGroup.showOutlines === false) {
+            gCode += `; Konturen für ${colorGroup.color} ausgeblendet (${contourLines.length} Linien übersprungen)\n`;
         }
 
         // --- INFILL ---

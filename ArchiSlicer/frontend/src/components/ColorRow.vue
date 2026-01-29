@@ -9,8 +9,18 @@
             <!-- Visibility Toggle -->
             <button @click.stop="$emit('toggle-visibility')"
                 class="w-5 h-5 flex items-center justify-center text-xs rounded shrink-0"
-                :class="colorGroup.visible ? 'bg-green-600 text-white' : 'bg-slate-600 text-slate-400'">
+                :class="colorGroup.visible ? 'bg-green-600 text-white' : 'bg-slate-600 text-slate-400'"
+                :title="colorGroup.visible ? 'Sichtbar' : 'Versteckt'">
                 {{ colorGroup.visible ? '✓' : '○' }}
+            </button>
+
+            <!-- Outlines Toggle (nur wenn visible) -->
+            <button v-if="colorGroup.visible"
+                @click.stop="$emit('toggle-outlines')"
+                class="w-5 h-5 flex items-center justify-center text-xs rounded shrink-0"
+                :class="colorGroup.showOutlines ? 'bg-blue-600 text-white' : 'bg-slate-600 text-slate-400'"
+                :title="colorGroup.showOutlines ? 'Konturen sichtbar' : 'Nur Infill'">
+                {{ colorGroup.showOutlines ? '▢' : '▣' }}
             </button>
 
             <!-- Color Swatch -->
@@ -253,6 +263,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: 'toggle-visibility'): void;
+    (e: 'toggle-outlines'): void;
     (e: 'toggle-use-defaults'): void;
     (e: 'update-tool', value: number): void;
     (e: 'toggle-infill'): void;

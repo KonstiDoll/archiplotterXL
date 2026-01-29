@@ -146,6 +146,7 @@
                             :is-first="colorIdx === 0"
                             :is-last="colorIdx === item.colorGroups.length - 1"
                             @toggle-visibility="store.toggleColorVisibility(itemIndex, colorIdx)"
+                            @toggle-outlines="store.toggleColorOutlines(itemIndex, colorIdx)"
                             @toggle-use-defaults="store.toggleColorUseFileDefaults(itemIndex, colorIdx)"
                             @update-tool="store.setColorTool(itemIndex, colorIdx, $event)"
                             @toggle-infill="store.toggleColorInfill(itemIndex, colorIdx)"
