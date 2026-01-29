@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { markRaw } from 'vue';
 import { InfillOptions, InfillPatternType, defaultInfillOptions, analyzeColorsInGroup, getThreejsObjectFromSvg, generateInfillForColorAsync } from './utils/threejs_services';
 import { optimizePathBackend } from './utils/infill-api';
-import { PathAnalysisResult, PathRole, getEffectiveRole, analyzePathRelationships, extractPolygonsFromGroup } from './utils/geometry/path-analysis';
+import { PathAnalysisResult, PathRole, getEffectiveRole, analyzePathRelationshipsWithColors, extractPolygonsWithColorsFromGroup } from './utils/geometry/path-analysis';
 import type { ProjectData, SerializedSVGItem, SerializedColorGroup, SerializedInfillLine } from './utils/project_services';
 import { deserializeInfillGroup } from './utils/project_services';
 
@@ -108,7 +108,10 @@ export const useMainStore = defineStore('main', {
     taskQueue: [] as BackendTask[],
     isProcessingQueue: false,
     // G-Code Export-Modus: 'tool' = gruppiert nach Werkzeug, 'layer' = Layer-Reihenfolge
-    gcodeExportMode: 'tool' as 'tool' | 'layer'
+    gcodeExportMode: 'tool' as 'tool' | 'layer',
+    // Hole Editor Mode (visueller Editor für Path-Rollen)
+    holeEditorMode: false,
+    selectedPathId: null as string | null
   }),
   actions: {
     // Altes setLineGeometry für Kompatibilität
@@ -500,12 +503,12 @@ export const useMainStore = defineStore('main', {
             colorGroup.infillStats = undefined;
 
             // Neues Infill generieren - OHNE TSP-Optimierung für schnelle Vorschau
-            // Hole-Detection erfolgt innerhalb der Farbgruppe
+            // Nutze pathAnalysis für korrekte Hole-Detection (inkl. userOverriddenRole)
             const infillGroup = await generateInfillForColorAsync(
               item.geometry,
               colorGroup.color,
               colorGroup.infillOptions,
-              undefined,  // Keine globale Analyse - Holes werden pro Farbe erkannt
+              item.pathAnalysis,  // Path-Analyse mit benutzerdefinierten Rollen
               false  // Keine TSP-Optimierung
             );
 
@@ -933,14 +936,14 @@ export const useMainStore = defineStore('main', {
 
     // ===== Path-Analyse (Hole Detection) Actions =====
 
-    // Path-Analyse für ein SVG-Item durchführen
+    // Path-Analyse für ein SVG-Item durchführen (mit Farbinformation für Infill)
     analyzePathRelationshipsAction(index: number) {
       if (index >= 0 && index < this.svgItems.length) {
         const item = this.svgItems[index];
-        const polygons = extractPolygonsFromGroup(item.geometry);
+        const polygonsWithColors = extractPolygonsWithColorsFromGroup(item.geometry);
 
-        if (polygons.length > 0) {
-          item.pathAnalysis = analyzePathRelationships(polygons);
+        if (polygonsWithColors.length > 0) {
+          item.pathAnalysis = analyzePathRelationshipsWithColors(polygonsWithColors);
           item.isPathAnalyzed = true;
           console.log(`Path-Analyse für "${item.fileName}":`,
             `${item.pathAnalysis.outerPaths.length} outer,`,
@@ -983,6 +986,41 @@ export const useMainStore = defineStore('main', {
         this.svgItems[index].pathAnalysis = undefined;
         this.svgItems[index].isPathAnalyzed = false;
       }
+    },
+
+    // ===== Hole Editor Mode Actions =====
+
+    // Hole Editor Modus togglen
+    toggleHoleEditorMode() {
+      this.holeEditorMode = !this.holeEditorMode;
+      if (!this.holeEditorMode) {
+        this.selectedPathId = null;  // Reset bei Deaktivierung
+      }
+    },
+
+    // Path auswählen (für Highlighting)
+    selectPath(pathId: string | null) {
+      this.selectedPathId = pathId;
+    },
+
+    // Path-Rolle zyklisch durchschalten (Outer → Hole → Nested → Outer)
+    cyclePathRole(svgIndex: number, pathId: string) {
+      if (svgIndex < 0 || svgIndex >= this.svgItems.length) return;
+
+      const item = this.svgItems[svgIndex];
+      if (!item.pathAnalysis) return;
+
+      const path = item.pathAnalysis.paths.find(p => p.id === pathId);
+      if (!path) return;
+
+      const current = path.userOverriddenRole ?? path.autoDetectedRole;
+      const cycle: Record<string, PathRole> = {
+        'outer': 'hole',
+        'hole': 'nested-object',
+        'nested-object': 'outer',
+      };
+
+      this.setPathRole(svgIndex, pathId, cycle[current] || 'outer');
     },
 
     // ===== Project Save/Load Actions =====

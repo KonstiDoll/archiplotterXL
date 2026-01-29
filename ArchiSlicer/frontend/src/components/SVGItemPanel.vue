@@ -194,10 +194,44 @@
                         {{ item.pathAnalysis?.nestedObjects.length }} Nested
                     </span>
                 </div>
-                <button @click="pathDetailsExpanded = !pathDetailsExpanded"
-                    class="px-2 py-1 text-xs bg-slate-600 text-white rounded hover:bg-slate-500">
-                    {{ pathDetailsExpanded ? 'Ausblenden' : 'Details' }}
-                </button>
+                <div class="flex items-center space-x-1">
+                    <!-- Hole Editor Toggle Button -->
+                    <button @click="store.toggleHoleEditorMode()"
+                        class="px-2 py-1 text-xs rounded transition-colors"
+                        :class="store.holeEditorMode
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-slate-600 text-slate-400 hover:bg-slate-500'">
+                        {{ store.holeEditorMode ? '✓ Editor' : 'Editor' }}
+                    </button>
+                    <button @click="pathDetailsExpanded = !pathDetailsExpanded"
+                        class="px-2 py-1 text-xs bg-slate-600 text-white rounded hover:bg-slate-500">
+                        {{ pathDetailsExpanded ? 'Ausblenden' : 'Details' }}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Hole Editor Hinweis -->
+            <div v-if="store.holeEditorMode && item.isPathAnalyzed"
+                 class="text-xs p-2 bg-purple-900/30 rounded space-y-1">
+                <div class="text-purple-300">Klicke auf Flächen um Rolle zu ändern:</div>
+                <div class="flex items-center space-x-2">
+                    <span class="inline-flex items-center">
+                        <span class="w-3 h-3 rounded-sm bg-green-500 mr-1"></span>
+                        <span class="text-green-300">Outer</span>
+                    </span>
+                    <span class="text-slate-500">→</span>
+                    <span class="inline-flex items-center">
+                        <span class="w-3 h-3 rounded-sm bg-red-500 mr-1"></span>
+                        <span class="text-red-300">Hole</span>
+                    </span>
+                    <span class="text-slate-500">→</span>
+                    <span class="inline-flex items-center">
+                        <span class="w-3 h-3 rounded-sm bg-blue-500 mr-1"></span>
+                        <span class="text-blue-300">Nested</span>
+                    </span>
+                    <span class="text-slate-500">→ ...</span>
+                </div>
+                <div class="text-yellow-400/70 text-[10px]">Gelber Rand = manuell überschrieben</div>
             </div>
 
             <!-- Path Details (Expandable) -->
@@ -242,8 +276,8 @@
             </button>
         </div>
 
-        <!-- Infill Options (Expandable) -->
-        <div v-if="expanded" class="p-3 bg-slate-700/50 border-t border-slate-600 space-y-3 rounded-b-lg">
+        <!-- Infill Options (Expandable) - only show if NOT analyzed -->
+        <div v-if="expanded && !item.isAnalyzed" class="p-3 bg-slate-700/50 border-t border-slate-600 space-y-3 rounded-b-lg">
             <!-- Pattern Type -->
             <div class="flex items-center">
                 <label class="w-20 text-xs text-slate-400">Pattern:</label>

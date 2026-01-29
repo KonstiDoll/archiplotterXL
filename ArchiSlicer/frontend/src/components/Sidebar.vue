@@ -332,8 +332,8 @@ const removeInfill = (index: number) => {
         store.setSVGItemInfillGroup(index, null);
     }
 
-    item.infillOptions.patternType = InfillPatternType.NONE;
-    store.updateSVGItemInfill(index, item.infillOptions);
+    // Stats zurücksetzen, aber patternType behalten (damit erneutes Generieren möglich ist)
+    item.infillStats = undefined;
 };
 
 const generatePreview = async (index: number) => {

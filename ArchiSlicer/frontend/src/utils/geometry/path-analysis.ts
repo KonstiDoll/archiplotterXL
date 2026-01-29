@@ -376,8 +376,52 @@ export function extractPolygonsFromGroup(group: THREE.Group): THREE.Vector2[][] 
 }
 
 /**
+ * Extract polygons WITH COLOR from a THREE.Group (from SVG)
+ * Converts ONLY CLOSED Line geometries to PolygonWithColor arrays
+ */
+export function extractPolygonsWithColorsFromGroup(group: THREE.Group): PolygonWithColor[] {
+  const polygons: PolygonWithColor[] = [];
+
+  group.traverse((child) => {
+    if (child instanceof THREE.Line) {
+      const geometry = child.geometry as THREE.BufferGeometry;
+      const positions = geometry.getAttribute('position');
+
+      if (positions && positions.count >= 3) {
+        // ONLY process closed paths
+        if (!isPathClosed(positions as THREE.BufferAttribute, child.userData)) {
+          return; // Skip open paths
+        }
+
+        const polygon: THREE.Vector2[] = [];
+
+        for (let i = 0; i < positions.count; i++) {
+          polygon.push(new THREE.Vector2(
+            positions.getX(i),
+            positions.getY(i)
+          ));
+        }
+
+        // Only add if it has significant area (not just a line)
+        if (calculateArea(polygon) > 0.1) {
+          // Extract color from userData
+          const color = (child.userData?.effectiveColor || '#000000').toLowerCase();
+          polygons.push({ polygon, color });
+        }
+      }
+    }
+  });
+
+  return polygons;
+}
+
+/**
  * Get the outer polygon and its holes for infill generation
  * Groups paths by their parent relationships
+ *
+ * WICHTIG: Sowohl "hole" als auch "nested-object" Kinder werden als Holes
+ * für das Parent-Infill behandelt. Nested objects bekommen zusätzlich
+ * ihr eigenes Infill.
  */
 export function getPolygonsWithHoles(
   analysisResult: PathAnalysisResult
@@ -388,11 +432,15 @@ export function getPolygonsWithHoles(
   for (const outerPath of analysisResult.outerPaths) {
     const holes: THREE.Vector2[][] = [];
 
-    // Find direct children that are holes
+    // Find direct children that are holes OR nested-objects
+    // (both should be cut out from parent's infill)
     for (const childId of outerPath.childPathIds) {
       const childPath = analysisResult.paths.find(p => p.id === childId);
-      if (childPath && getEffectiveRole(childPath) === 'hole') {
-        holes.push(childPath.polygon);
+      if (childPath) {
+        const role = getEffectiveRole(childPath);
+        if (role === 'hole' || role === 'nested-object') {
+          holes.push(childPath.polygon);
+        }
       }
     }
 
@@ -406,11 +454,14 @@ export function getPolygonsWithHoles(
   for (const nestedPath of analysisResult.nestedObjects) {
     const holes: THREE.Vector2[][] = [];
 
-    // Find direct children that are holes
+    // Find direct children that are holes OR nested-objects
     for (const childId of nestedPath.childPathIds) {
       const childPath = analysisResult.paths.find(p => p.id === childId);
-      if (childPath && getEffectiveRole(childPath) === 'hole') {
-        holes.push(childPath.polygon);
+      if (childPath) {
+        const role = getEffectiveRole(childPath);
+        if (role === 'hole' || role === 'nested-object') {
+          holes.push(childPath.polygon);
+        }
       }
     }
 
@@ -428,7 +479,8 @@ export function getPolygonsWithHoles(
  *
  * Diese Funktion ist speziell für die Infill-Generierung gedacht:
  * - Filtert Outer-Pfade nach der angegebenen Farbe
- * - Sammelt ALLE Holes die geometrisch innerhalb liegen (unabhängig von deren Farbe)
+ * - Sammelt ALLE Holes UND Nested-Objects die geometrisch innerhalb liegen
+ *   (beide werden aus dem Parent-Infill ausgeschnitten)
  *
  * @param analysisResult Ergebnis von analyzePathRelationshipsWithColors
  * @param targetColor Die Farbe für die Infill generiert werden soll
@@ -449,11 +501,15 @@ export function getPolygonsWithHolesForColor(
   for (const outerPath of fillablePaths) {
     const holes: THREE.Vector2[][] = [];
 
-    // Sammle ALLE direkten Kind-Holes (unabhängig von deren Farbe!)
+    // Sammle ALLE direkten Kind-Holes UND Nested-Objects (unabhängig von deren Farbe!)
+    // Beide müssen aus dem Parent-Infill ausgeschnitten werden
     for (const childId of outerPath.childPathIds) {
       const childPath = analysisResult.paths.find(p => p.id === childId);
-      if (childPath && getEffectiveRole(childPath) === 'hole') {
-        holes.push(childPath.polygon);
+      if (childPath) {
+        const role = getEffectiveRole(childPath);
+        if (role === 'hole' || role === 'nested-object') {
+          holes.push(childPath.polygon);
+        }
       }
     }
 

@@ -10,6 +10,8 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import * as THREE from 'three';
 import { useMainStore } from '../store';
 import { gradientPresets } from '../utils/background_presets';
+import type { PathRole } from '../utils/geometry/path-analysis';
+import { getEffectiveRole } from '../utils/geometry/path-analysis';
 
 // Props für Hintergrund
 const props = defineProps<{
@@ -182,6 +184,114 @@ const workpieceStartMarkers = new THREE.Group();
 workpieceStartMarkers.name = 'workpieceStartMarkers';
 scene.add(workpieceStartMarkers);
 
+// ===== Hole Editor Mode: Raycaster und Overlays =====
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+// Gruppe für Hole-Editor Overlays
+const holeEditorGroup = new THREE.Group();
+holeEditorGroup.name = 'holeEditorOverlays';
+scene.add(holeEditorGroup);
+
+// Farben für die verschiedenen Path-Rollen
+const ROLE_COLORS: Record<PathRole, number> = {
+  'outer': 0x22c55e,        // Grün
+  'hole': 0xef4444,         // Rot
+  'nested-object': 0x3b82f6 // Blau
+};
+
+// Hole Editor Overlays erstellen
+const createHoleEditorOverlays = () => {
+  clearHoleEditorOverlays();
+
+  store.svgItems.forEach((item, svgIndex) => {
+    if (!item.pathAnalysis) return;
+
+    item.pathAnalysis.paths.forEach(path => {
+      const role = getEffectiveRole(path);
+
+      // Shape aus Polygon erstellen
+      const shape = new THREE.Shape();
+      if (path.polygon.length > 0) {
+        shape.moveTo(path.polygon[0].x, path.polygon[0].y);
+        for (let i = 1; i < path.polygon.length; i++) {
+          shape.lineTo(path.polygon[i].x, path.polygon[i].y);
+        }
+        shape.closePath();
+      }
+
+      const geometry = new THREE.ShapeGeometry(shape);
+      const material = new THREE.MeshBasicMaterial({
+        color: ROLE_COLORS[role],
+        opacity: 0.35,
+        transparent: true,
+        side: THREE.DoubleSide,
+      });
+
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.userData = { pathId: path.id, svgIndex };
+      // Z-Position basierend auf Verschachtelungstiefe: Innere Pfade weiter vorne
+      // damit sie beim Klick priorisiert werden (Raycaster trifft nähere Objekte zuerst)
+      const zOffset = 0.1 + path.containmentDepth * 0.05;
+      mesh.position.set(item.offsetX, item.offsetY, zOffset);
+
+      // Gelber Rand wenn Override vorhanden
+      if (path.userOverriddenRole) {
+        const edgeGeometry = new THREE.EdgesGeometry(geometry);
+        const edgeMaterial = new THREE.LineBasicMaterial({ color: 0xfbbf24 });
+        const edge = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+        mesh.add(edge);
+      }
+
+      holeEditorGroup.add(mesh);
+    });
+  });
+};
+
+// Hole Editor Overlays entfernen
+const clearHoleEditorOverlays = () => {
+  while (holeEditorGroup.children.length > 0) {
+    const child = holeEditorGroup.children[0];
+    // Dispose geometry and material
+    if (child instanceof THREE.Mesh) {
+      child.geometry.dispose();
+      if (child.material instanceof THREE.Material) {
+        child.material.dispose();
+      }
+      // Dispose edge children
+      child.children.forEach(c => {
+        if (c instanceof THREE.LineSegments) {
+          c.geometry.dispose();
+          if (c.material instanceof THREE.Material) {
+            c.material.dispose();
+          }
+        }
+      });
+    }
+    holeEditorGroup.remove(child);
+  }
+};
+
+// Click-Handler für Hole Editor
+const onCanvasClick = (event: MouseEvent) => {
+  if (!store.holeEditorMode) return;
+  if (!threejsMap.value) return;
+
+  const rect = threejsMap.value.getBoundingClientRect();
+  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+
+  // Intersect mit Overlay-Meshes
+  const intersects = raycaster.intersectObjects(holeEditorGroup.children);
+  if (intersects.length > 0) {
+    const pathId = intersects[0].object.userData.pathId as string;
+    const svgIndex = intersects[0].object.userData.svgIndex as number;
+    store.cyclePathRole(svgIndex, pathId);
+  }
+};
+
 // Watch für Workpiece Starts
 watch(() => store.workpieceStarts, (newStarts) => {
     // Alte Marker entfernen
@@ -197,6 +307,22 @@ watch(() => store.workpieceStarts, (newStarts) => {
     });
 
     console.log(`Workpiece Starts aktualisiert: ${newStarts.length} Marker`);
+}, { deep: true });
+
+// Watch für Hole Editor Mode
+watch(() => store.holeEditorMode, (enabled) => {
+    if (enabled) {
+        createHoleEditorOverlays();
+    } else {
+        clearHoleEditorOverlays();
+    }
+});
+
+// Watch für pathAnalysis-Änderungen (wenn Rolle geändert wird)
+watch(() => store.svgItems.map(i => i.pathAnalysis), () => {
+    if (store.holeEditorMode) {
+        createHoleEditorOverlays();
+    }
 }, { deep: true });
 
 // Collection of objects added to scene
@@ -271,10 +397,10 @@ watch(() => store.svgItems, (newItems) => {
     // NICHT bei Infill-Änderungen, Farb-Analyse, etc.
     const currentCount = newItems.length;
     if (currentCount !== previousItemCount) {
-        // Neues Item wurde hinzugefügt - zoom auf das neue
+        // Neues Item wurde hinzugefügt - zoom auf das neue (mit Offset)
         if (currentCount > previousItemCount && currentCount > 0) {
             const lastItem = newItems[currentCount - 1];
-            zoomToGeometry(lastItem.geometry);
+            zoomToGeometry(lastItem.geometry, lastItem.offsetX, lastItem.offsetY);
         } else if (currentCount === 0) {
             resetCameraToCanvas();
         }
@@ -296,8 +422,8 @@ const resetCameraToCanvas = () => {
     controller.update();
 };
 
-// Funktion zum Zoomen auf eine bestimmte Geometrie
-const zoomToGeometry = (geometry: THREE.Group) => {
+// Funktion zum Zoomen auf eine bestimmte Geometrie (mit Offset-Berücksichtigung)
+const zoomToGeometry = (geometry: THREE.Group, offsetX: number = 0, offsetY: number = 0) => {
     const box = new THREE.Box3();
 
     geometry.traverse(child => {
@@ -315,6 +441,10 @@ const zoomToGeometry = (geometry: THREE.Group) => {
     // Kamera so positionieren, dass die Geometrie sichtbar ist
     const center = new THREE.Vector3();
     box.getCenter(center);
+
+    // Offset hinzufügen (Workpiece Start Position)
+    center.x += offsetX;
+    center.y += offsetY;
 
     const size = new THREE.Vector3();
     box.getSize(size);
@@ -338,9 +468,16 @@ const zoomToGeometry = (geometry: THREE.Group) => {
 onMounted(() => {
     threejsMap.value?.appendChild(domElement);
     window.addEventListener("resize", setSize);
+    // Click-Handler für Hole Editor
+    domElement.addEventListener('click', onCanvasClick);
     setSize();
     // Kamera initial auf die Zeichenfläche ausrichten
     resetCameraToCanvas();
+    // Initiale Workpiece Start Marker erstellen
+    store.workpieceStarts.forEach(ws => {
+        const marker = createWorkpieceStartMarker(ws.x, ws.y, ws.name);
+        workpieceStartMarkers.add(marker);
+    });
     animate();
 });
 
