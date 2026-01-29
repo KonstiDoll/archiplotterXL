@@ -65,6 +65,20 @@ interface Release {
 
 const changelog: Release[] = [
     {
+        version: '0.9.0',
+        date: '29.01.2026',
+        title: 'G-Code Simulator',
+        changes: [
+            'Neuer interaktiver G-Code Simulator: Visualisiert generierten G-Code in Echtzeit',
+            '3D-Stift-Visualisierung mit Tool-Farbe und animierter Bewegung',
+            'Playback-Steuerung: Play/Pause, Geschwindigkeit (0.5x-10x), Timeline-Scrubbing',
+            'Makro-Expansion: Werkzeugwechsel-Fahrwege werden vollständig animiert',
+            'Fehler-Anzeige: Unbekannte Makros, Out-of-Bounds, ungültige Befehle',
+            'Statistiken: Zeichenlänge, Fahrweg, Pumps, verwendete Tools',
+            'Toggle für Fahrwege und Pump-Indikatoren',
+        ]
+    },
+    {
         version: '0.8.5',
         date: '29.01.2026',
         title: 'Visual Hole Editor',
