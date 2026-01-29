@@ -8,8 +8,11 @@ import AppHeader from './components/AppHeader.vue';
 import Sidebar from './components/Sidebar.vue';
 import ThreejsScene from './components/ThreejsScene.vue';
 import GCodePanel from './components/GCodePanel.vue';
+import GCodeSimulator from './components/GCodeSimulator.vue';
+import { useSimulatorStore } from './stores/simulatorStore';
 
 const store = useMainStore();
+const simulatorStore = useSimulatorStore();
 
 // LocalStorage Keys
 const STORAGE_KEY_TOOLS = 'archislicer_toolConfigs';
@@ -218,6 +221,15 @@ const generateGcode = () => {
 
     gCode.value = combinedGcode;
 };
+
+// Open G-Code Simulator
+const handleSimulate = () => {
+    if (!gCode.value) {
+        alert('Bitte zuerst G-Code generieren!');
+        return;
+    }
+    simulatorStore.open(gCode.value, toolConfigs.value);
+};
 </script>
 
 <template>
@@ -260,10 +272,14 @@ const generateGcode = () => {
                         :has-items="hasItems"
                         :filename="gcodeFilename"
                         @generate="generateGcode"
+                        @simulate="handleSimulate"
                     />
                 </div>
             </main>
         </div>
+
+        <!-- G-Code Simulator Overlay -->
+        <GCodeSimulator v-if="simulatorStore.isOpen" />
     </div>
 </template>
 
