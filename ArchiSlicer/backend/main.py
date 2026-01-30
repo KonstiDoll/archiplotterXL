@@ -1,11 +1,30 @@
+import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from alembic import command
 from alembic.config import Config
 from routers import infill, pen_types, projects, tool_presets
+
+# Request timeout in seconds (5 minutes for complex operations)
+REQUEST_TIMEOUT_SECONDS = 300
+
+
+class TimeoutMiddleware(BaseHTTPMiddleware):
+    """Middleware to timeout long-running requests."""
+
+    async def dispatch(self, request: Request, call_next):
+        try:
+            return await asyncio.wait_for(call_next(request), timeout=REQUEST_TIMEOUT_SECONDS)
+        except asyncio.TimeoutError:
+            return JSONResponse(
+                status_code=504,
+                content={"detail": f"Request timeout after {REQUEST_TIMEOUT_SECONDS}s"},
+            )
 
 
 @asynccontextmanager
@@ -22,6 +41,9 @@ app = FastAPI(
     version="0.6.1",
     lifespan=lifespan,
 )
+
+# Request timeout middleware (must be added first to wrap everything)
+app.add_middleware(TimeoutMiddleware)
 
 # CORS configuration for frontend
 app.add_middleware(

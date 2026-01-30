@@ -1,6 +1,9 @@
 """API endpoints for infill generation and path optimization."""
 
+import asyncio
 import time
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,6 +15,23 @@ from services.infill import InfillService, get_infill_service
 from services.optimization import PathOptimizerService, get_path_optimizer_service
 
 router = APIRouter(prefix="/api/infill", tags=["infill"])
+
+# Thread pool for CPU-bound operations (allows timeout to work)
+_executor = ThreadPoolExecutor(max_workers=4)
+
+
+async def run_with_timeout(func, timeout_seconds: int, *args, **kwargs):
+    """Run a CPU-bound function in thread pool with timeout."""
+    loop = asyncio.get_event_loop()
+    try:
+        return await asyncio.wait_for(
+            loop.run_in_executor(_executor, partial(func, *args, **kwargs)), timeout=timeout_seconds
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail=f"Operation timed out after {timeout_seconds}s - polygon may be too complex",
+        )
 
 
 # --- Pydantic Models ---
@@ -155,6 +175,9 @@ class CenterlineRequest(BaseModel):
         le=10.0,
         description="Filter corner spokes shorter than this (mm), 0 = disabled",
     )
+    timeout_seconds: int = Field(
+        default=120, gt=0, le=600, description="Extraction timeout in seconds"
+    )
 
 
 class CenterlineStats(BaseModel):
@@ -212,8 +235,11 @@ async def generate_infill(
         timings["input_conversion"] = (time.perf_counter() - t0) * 1000
 
         # Generate infill (returns both line segments and polylines)
+        # Run in thread pool with timeout to prevent hanging on complex polygons
         t0 = time.perf_counter()
-        segments, polylines = infill_service.generate_with_polylines(
+        segments, polylines = await run_with_timeout(
+            infill_service.generate_with_polylines,
+            request.timeout_seconds,
             polygons=polygons_data,
             pattern_type=request.pattern,
             density=request.density,
@@ -539,8 +565,10 @@ async def extract_centerline(
             for poly in request.polygons
         ]
 
-        # Extract centerlines
-        centerlines_raw, stats = centerline_service.extract(
+        # Extract centerlines (run in thread pool with timeout)
+        centerlines_raw, stats = await run_with_timeout(
+            centerline_service.extract,
+            request.timeout_seconds,
             polygons=polygons_data,
             resolution=request.resolution,
             min_length=request.min_length,
