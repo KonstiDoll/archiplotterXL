@@ -15,6 +15,14 @@ export type InstructionType =
   | 'comment'     // Comment line
   | 'unknown';    // Unparsed command
 
+// Feature type for navigation (sections of the G-Code)
+export interface Feature {
+  label: string;                // e.g., "Infill #ff0000", "Konturen #ff0000"
+  type: 'color' | 'infill' | 'contour' | 'centerline' | 'tool' | 'other';
+  startTime: number;            // Cumulative time when this feature starts
+  instructionIndex: number;     // Index of the first instruction in this feature
+}
+
 // A single parsed G-Code instruction
 export interface GCodeInstruction {
   type: InstructionType;
@@ -47,6 +55,9 @@ export interface GCodeInstruction {
   // Position tracking (filled during parsing)
   startPosition?: { x: number; y: number };
   endPosition?: { x: number; y: number };
+
+  // Feature tracking (for navigation)
+  featureIndex?: number;        // Index of the feature this instruction belongs to
 }
 
 // Parser warning/error
@@ -77,6 +88,7 @@ export interface ParsedGCode {
     pumpCount: number;
   };
   warnings: ParserWarning[];    // Errors and warnings found during parsing
+  features: Feature[];          // List of features for navigation
 }
 
 // Machine state during simulation

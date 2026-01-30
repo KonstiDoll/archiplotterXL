@@ -14,11 +14,12 @@ import type {
   ParsedGCode,
   MachineState,
   SimulatorToolConfig,
+  Feature,
 } from '../types/simulator';
 import {
   createDefaultMachineState,
-  PEN_LINE_WIDTHS,
 } from '../types/simulator';
+import { penTypes } from '../utils/gcode_services';
 import {
   parseGCode,
   findInstructionAtTime,
@@ -120,11 +121,15 @@ export const useSimulatorStore = defineStore('simulator', {
       }
 
       const config = state.toolConfigs[toolNum - 1];
+      // Use pen width from penTypes (loaded from API or fallback)
+      const penTypeConfig = penTypes[config.penType];
+      const lineWidth = penTypeConfig?.width ?? 0.4;
+
       return {
         toolNumber: toolNum,
         penType: config.penType,
         color: config.color,
-        lineWidth: PEN_LINE_WIDTHS[config.penType] ?? 0.4,
+        lineWidth,
       };
     },
 
@@ -162,6 +167,31 @@ export const useSimulatorStore = defineStore('simulator', {
     isComplete(state): boolean {
       const total = state.parsedGCode?.totalDuration ?? 0;
       return state.currentTime >= total;
+    },
+
+    /**
+     * Get all features for navigation
+     */
+    features(state): Feature[] {
+      return state.parsedGCode?.features ?? [];
+    },
+
+    /**
+     * Get current feature based on current time
+     */
+    currentFeature(state): { feature: Feature; index: number } | null {
+      const features = state.parsedGCode?.features ?? [];
+      if (features.length === 0) return null;
+
+      // Find the last feature that has started
+      for (let i = features.length - 1; i >= 0; i--) {
+        if (features[i].startTime <= state.currentTime) {
+          return { feature: features[i], index: i };
+        }
+      }
+
+      // If before first feature, return first
+      return { feature: features[0], index: 0 };
     },
   },
 
@@ -293,6 +323,64 @@ export const useSimulatorStore = defineStore('simulator', {
     },
 
     /**
+     * Jump to the next feature (e.g., from infill to outline or new color)
+     */
+    nextFeature() {
+      if (!this.parsedGCode) return;
+
+      const features = this.parsedGCode.features;
+      if (features.length === 0) return;
+
+      // Find current feature index
+      let currentIndex = -1;
+      for (let i = features.length - 1; i >= 0; i--) {
+        if (features[i].startTime <= this.currentTime) {
+          currentIndex = i;
+          break;
+        }
+      }
+
+      // Jump to next feature
+      if (currentIndex < features.length - 1) {
+        this.seekTo(features[currentIndex + 1].startTime);
+      }
+    },
+
+    /**
+     * Jump to the previous feature
+     */
+    previousFeature() {
+      if (!this.parsedGCode) return;
+
+      const features = this.parsedGCode.features;
+      if (features.length === 0) return;
+
+      // Find current feature index
+      let currentIndex = -1;
+      for (let i = features.length - 1; i >= 0; i--) {
+        if (features[i].startTime <= this.currentTime) {
+          currentIndex = i;
+          break;
+        }
+      }
+
+      // Jump to previous feature (or start of current if not at start)
+      if (currentIndex >= 0) {
+        const currentFeature = features[currentIndex];
+        // If we're more than 1 second into the feature, go to its start
+        if (this.currentTime - currentFeature.startTime > 1000) {
+          this.seekTo(currentFeature.startTime);
+        } else if (currentIndex > 0) {
+          // Otherwise go to previous feature
+          this.seekTo(features[currentIndex - 1].startTime);
+        } else {
+          // At first feature, go to start
+          this.seekTo(0);
+        }
+      }
+    },
+
+    /**
      * Set playback speed
      */
     setSpeed(speed: number) {
@@ -301,12 +389,31 @@ export const useSimulatorStore = defineStore('simulator', {
 
     /**
      * Update current time (called from animation loop)
+     * When pump indicators are disabled, pump instruction time is skipped
      */
     updateTime(deltaMs: number) {
       if (!this.isPlaying || !this.parsedGCode) return;
 
-      const newTime = this.currentTime + deltaMs * this.playbackSpeed;
+      let newTime = this.currentTime + deltaMs * this.playbackSpeed;
       const total = this.parsedGCode.totalDuration;
+
+      // If pump indicators are disabled, skip pump instruction times
+      if (!this.showPumpIndicators) {
+        for (const instruction of this.parsedGCode.instructions) {
+          if (instruction.type === 'pump') {
+            const pumpDuration = instruction.estimatedDuration ?? 0;
+            // cumulativeTime is the START of the instruction
+            const pumpStart = instruction.cumulativeTime;
+            const pumpEnd = instruction.cumulativeTime + pumpDuration;
+
+            // If newTime falls within this pump, skip to just after it
+            if (newTime >= pumpStart && newTime < pumpEnd) {
+              newTime = pumpEnd;
+              break;
+            }
+          }
+        }
+      }
 
       if (newTime >= total) {
         this.currentTime = total;

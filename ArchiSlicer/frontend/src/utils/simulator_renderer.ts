@@ -10,7 +10,7 @@
 
 import * as THREE from 'three';
 import type { SimulatorToolConfig } from '../types/simulator';
-import { PEN_LINE_WIDTHS, machineToCanvas } from '../types/simulator';
+import { machineToCanvas } from '../types/simulator';
 
 // Canvas dimensions (matching the workpiece area in mm)
 // We use a scale factor to convert mm to pixels for good resolution
@@ -104,8 +104,8 @@ export class SimulatorRenderer {
     if (lineWidth !== undefined) {
       strokeWidth = lineWidth * CANVAS_SCALE;
     } else if (this.currentTool) {
-      const penWidth = PEN_LINE_WIDTHS[this.currentTool.penType] ?? 0.4;
-      strokeWidth = penWidth * CANVAS_SCALE;
+      // Use lineWidth from current tool (set from penTypes)
+      strokeWidth = (this.currentTool.lineWidth ?? 0.4) * CANVAS_SCALE;
     } else {
       strokeWidth = 0.4 * CANVAS_SCALE;
     }
@@ -183,23 +183,24 @@ export class SimulatorRenderer {
       const elapsed = now - indicator.startTime;
       const progress = elapsed / indicator.duration;
 
-      // Fade out and expand
-      const radius = (10 + progress * 20) * CANVAS_SCALE;
+      // Smaller indicator: starts at 2mm, expands to 5mm
+      const radius = (2 + progress * 3) * CANVAS_SCALE;
       const alpha = 1 - progress;
 
       const x = indicator.x * CANVAS_SCALE;
       const y = (WORKPIECE_HEIGHT - indicator.y) * CANVAS_SCALE;
 
+      // Outer ring
       this.ctx.beginPath();
       this.ctx.arc(x, y, radius, 0, Math.PI * 2);
       this.ctx.strokeStyle = `rgba(0, 150, 255, ${alpha})`;
-      this.ctx.lineWidth = 3 * CANVAS_SCALE;
+      this.ctx.lineWidth = 1 * CANVAS_SCALE;
       this.ctx.stroke();
 
-      // Inner circle
+      // Inner filled circle
       this.ctx.beginPath();
-      this.ctx.arc(x, y, radius * 0.5, 0, Math.PI * 2);
-      this.ctx.fillStyle = `rgba(0, 150, 255, ${alpha * 0.3})`;
+      this.ctx.arc(x, y, radius * 0.4, 0, Math.PI * 2);
+      this.ctx.fillStyle = `rgba(0, 150, 255, ${alpha * 0.5})`;
       this.ctx.fill();
     }
 

@@ -916,6 +916,7 @@ interface ColorGroupWithInfill {
         angle: number;
         outlineOffset: number;
     };
+    infillFirst?: boolean;      // Wenn true, wird Infill vor Outline gezeichnet
     useFileDefaults?: boolean;  // Falls true, werden file-level Tools verwendet
     drawingMode?: DrawingMode;  // 'center' | 'inside' | 'outside'
     customOffset?: number;      // Optional: benutzerdefinierter Offset (überschreibt penWidth/2)
@@ -1040,132 +1041,150 @@ export function createGcodeWithColorInfill(
             });
         }
 
-        // --- KONTUREN ---
-        // Konturen zeichnen wenn showOutlines true (unabhängig von Centerline)
-        if (contourLines.length > 0 && colorGroup.showOutlines !== false) {
-            // Use file defaults if useFileDefaults is true
-            const contourTool = colorGroup.useFileDefaults ? fileToolNumber : colorGroup.toolNumber;
-            const toolConfig = toolConfigs[contourTool - 1] || { penType: 'stabilo', color: '#000000' };
-            const penTypeConfig = penTypes[toolConfig.penType] || penTypes['stabilo'];
+        // --- Hilfsfunktion für Konturen ---
+        const generateContourGCode = (): string => {
+            let code = '';
+            if (contourLines.length > 0 && colorGroup.showOutlines !== false) {
+                // Use file defaults if useFileDefaults is true
+                const contourTool = colorGroup.useFileDefaults ? fileToolNumber : colorGroup.toolNumber;
+                const toolConfig = toolConfigs[contourTool - 1] || { penType: 'stabilo', color: '#000000' };
+                const penTypeConfig = penTypes[toolConfig.penType] || penTypes['stabilo'];
 
-            // Tool-Wechsel falls nötig
-            if (lastToolNumber !== contourTool) {
-                // Vorheriges Tool ablegen
-                if (lastToolNumber !== null) {
-                    gCode += `M98 P"/macros/place_tool_${lastToolNumber}"\n`;
-                }
-                // Neues Tool holen
-                gCode += `M98 P"/macros/grab_tool_${contourTool}"\n`;
-                gCode += `M98 P"/macros/move_to_drawingHeight_${toolConfig.penType}"\n`;
-                if (drawingHeight > 0) {
-                    gCode += adjustMaterialHeight;
-                }
-                lastToolNumber = contourTool;
-            }
-
-            const moveUUp = `G1 U${penTypeConfig.penUp} F6000\n`;
-            const moveUDown = `G1 U${penTypeConfig.penDown} F6000\n`;
-
-            // Pump context for contour tool
-            const contourPumpCtx: PumpContext = {
-                accumulatedDistance: 0,
-                pumpDistanceThreshold: penTypeConfig.pumpDistanceThreshold || 0,
-                pumpHeight: penTypeConfig.pumpHeight || 50,
-            };
-
-            gCode += moveUUp;
-
-            // Kontur-Offset ermitteln
-            const drawingMode = colorGroup.drawingMode || 'center';
-            const penWidth = penTypeConfig.width ?? 0.5;
-            const customOffset = colorGroup.customOffset;
-
-            if (drawingMode !== 'center') {
-                gCode += `; Kontur-Offset: ${drawingMode} (${customOffset ?? penWidth / 2}mm)\n`;
-            }
-
-            // Wenn Offset-Kontur vorhanden, diese verwenden (wurde in Preview generiert)
-            if (colorGroup.offsetContourGroup && colorGroup.offsetContourGroup.children.length > 0) {
-                const offsetLines = colorGroup.offsetContourGroup.children.filter(c => c instanceof THREE.Line) as THREE.Line[];
-                gCode += `; Offset-Konturen (${offsetLines.length} Linien) mit Tool #${contourTool}\n`;
-
-                offsetLines.forEach((lineGeo) => {
-                    const positions = lineGeo.geometry.attributes.position.array;
-                    const polygon: THREE.Vector2[] = [];
-                    for (let i = 0; i < positions.length; i += 3) {
-                        polygon.push(new THREE.Vector2(positions[i], positions[i + 1]));
+                // Tool-Wechsel falls nötig
+                if (lastToolNumber !== contourTool) {
+                    // Vorheriges Tool ablegen
+                    if (lastToolNumber !== null) {
+                        code += `M98 P"/macros/place_tool_${lastToolNumber}"\n`;
                     }
+                    // Neues Tool holen
+                    code += `M98 P"/macros/grab_tool_${contourTool}"\n`;
+                    code += `M98 P"/macros/move_to_drawingHeight_${toolConfig.penType}"\n`;
+                    if (drawingHeight > 0) {
+                        code += adjustMaterialHeight;
+                    }
+                    lastToolNumber = contourTool;
+                }
 
-                    if (polygon.length < 2) return;
+                const moveUUp = `G1 U${penTypeConfig.penUp} F6000\n`;
+                const moveUDown = `G1 U${penTypeConfig.penDown} F6000\n`;
 
-                    const { gcode: gcodeLine } = createGcodeFromPoints(polygon, moveUDown, customFeedrate, offsetX, offsetY, contourPumpCtx);
-                    gCode += gcodeLine;
-                    gCode += checkAndGeneratePump(contourPumpCtx);
-                    gCode += moveUUp;
-                });
-            } else {
-                // Keine Offset-Kontur vorhanden → Original-Konturen zeichnen (Mitte)
-                gCode += `; Konturen (${contourLines.length} Linien) mit Tool #${contourTool}\n`;
+                // Pump context for contour tool
+                const contourPumpCtx: PumpContext = {
+                    accumulatedDistance: 0,
+                    pumpDistanceThreshold: penTypeConfig.pumpDistanceThreshold || 0,
+                    pumpHeight: penTypeConfig.pumpHeight || 50,
+                };
 
-                contourLines.forEach((lineGeo) => {
-                    const { gcode: gcodeLine } = createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY, contourPumpCtx);
-                    gCode += gcodeLine;
-                    gCode += checkAndGeneratePump(contourPumpCtx);
-                    gCode += moveUUp;
+                code += moveUUp;
+
+                // Kontur-Offset ermitteln
+                const drawingMode = colorGroup.drawingMode || 'center';
+                const penWidth = penTypeConfig.width ?? 0.5;
+                const customOffset = colorGroup.customOffset;
+
+                if (drawingMode !== 'center') {
+                    code += `; Kontur-Offset: ${drawingMode} (${customOffset ?? penWidth / 2}mm)\n`;
+                }
+
+                // Wenn Offset-Kontur vorhanden, diese verwenden (wurde in Preview generiert)
+                if (colorGroup.offsetContourGroup && colorGroup.offsetContourGroup.children.length > 0) {
+                    const offsetLines = colorGroup.offsetContourGroup.children.filter(c => c instanceof THREE.Line) as THREE.Line[];
+                    code += `; Offset-Konturen (${offsetLines.length} Linien) mit Tool #${contourTool}\n`;
+
+                    offsetLines.forEach((lineGeo) => {
+                        const positions = lineGeo.geometry.attributes.position.array;
+                        const polygon: THREE.Vector2[] = [];
+                        for (let i = 0; i < positions.length; i += 3) {
+                            polygon.push(new THREE.Vector2(positions[i], positions[i + 1]));
+                        }
+
+                        if (polygon.length < 2) return;
+
+                        const { gcode: gcodeLine } = createGcodeFromPoints(polygon, moveUDown, customFeedrate, offsetX, offsetY, contourPumpCtx);
+                        code += gcodeLine;
+                        code += checkAndGeneratePump(contourPumpCtx);
+                        code += moveUUp;
+                    });
+                } else {
+                    // Keine Offset-Kontur vorhanden → Original-Konturen zeichnen (Mitte)
+                    code += `; Konturen (${contourLines.length} Linien) mit Tool #${contourTool}\n`;
+
+                    contourLines.forEach((lineGeo) => {
+                        const { gcode: gcodeLine } = createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY, contourPumpCtx);
+                        code += gcodeLine;
+                        code += checkAndGeneratePump(contourPumpCtx);
+                        code += moveUUp;
+                    });
+                }
+            } else if (contourLines.length > 0 && colorGroup.showOutlines === false) {
+                code += `; Konturen für ${colorGroup.color} ausgeblendet (${contourLines.length} Linien übersprungen)\n`;
+            }
+            return code;
+        };
+
+        // --- Hilfsfunktion für Infill ---
+        const generateInfillGCode = (): string => {
+            let code = '';
+            if (hasInfill) {
+                // Use file defaults if useFileDefaults is true
+                const infillTool = colorGroup.useFileDefaults ? fileInfillToolNumber : colorGroup.infillToolNumber;
+                const toolConfig = toolConfigs[infillTool - 1] || { penType: 'stabilo', color: '#000000' };
+                const penTypeConfig = penTypes[toolConfig.penType] || penTypes['stabilo'];
+
+                // Tool-Wechsel falls nötig
+                if (lastToolNumber !== infillTool) {
+                    // Vorheriges Tool ablegen
+                    if (lastToolNumber !== null) {
+                        code += `M98 P"/macros/place_tool_${lastToolNumber}"\n`;
+                    }
+                    // Neues Tool holen
+                    code += `M98 P"/macros/grab_tool_${infillTool}"\n`;
+                    code += `M98 P"/macros/move_to_drawingHeight_${toolConfig.penType}"\n`;
+                    if (drawingHeight > 0) {
+                        code += adjustMaterialHeight;
+                    }
+                    lastToolNumber = infillTool;
+                }
+
+                const moveUUp = `G1 U${penTypeConfig.penUp} F6000\n`;
+                const moveUDown = `G1 U${penTypeConfig.penDown} F6000\n`;
+
+                // Pump context for infill tool
+                const infillPumpCtx: PumpContext = {
+                    accumulatedDistance: 0,
+                    pumpDistanceThreshold: penTypeConfig.pumpDistanceThreshold || 0,
+                    pumpHeight: penTypeConfig.pumpHeight || 50,
+                };
+
+                code += moveUUp;
+                code += `; Infill (${colorGroup.infillOptions.patternType}, ${infillGroup!.children.length} Linien) mit Tool #${infillTool}\n`;
+
+                infillGroup!.children.forEach((child) => {
+                    if (child instanceof THREE.Line) {
+                        // Pass pumpCtx to enable pumping DURING drawing (important for polylines!)
+                        const { gcode: gcodeLine } = createGcodeFromLine(child, moveUDown, customFeedrate, offsetX, offsetY, infillPumpCtx);
+                        code += gcodeLine;
+
+                        // Check if we need to pump at the END of this line (after drawing finished)
+                        code += checkAndGeneratePump(infillPumpCtx);
+
+                        // Now lift pen
+                        code += moveUUp;
+                    }
                 });
             }
-        } else if (contourLines.length > 0 && colorGroup.showOutlines === false) {
-            gCode += `; Konturen für ${colorGroup.color} ausgeblendet (${contourLines.length} Linien übersprungen)\n`;
-        }
+            return code;
+        };
 
-        // --- INFILL ---
-        if (hasInfill) {
-            // Use file defaults if useFileDefaults is true
-            const infillTool = colorGroup.useFileDefaults ? fileInfillToolNumber : colorGroup.infillToolNumber;
-            const toolConfig = toolConfigs[infillTool - 1] || { penType: 'stabilo', color: '#000000' };
-            const penTypeConfig = penTypes[toolConfig.penType] || penTypes['stabilo'];
-
-            // Tool-Wechsel falls nötig
-            if (lastToolNumber !== infillTool) {
-                // Vorheriges Tool ablegen
-                if (lastToolNumber !== null) {
-                    gCode += `M98 P"/macros/place_tool_${lastToolNumber}"\n`;
-                }
-                // Neues Tool holen
-                gCode += `M98 P"/macros/grab_tool_${infillTool}"\n`;
-                gCode += `M98 P"/macros/move_to_drawingHeight_${toolConfig.penType}"\n`;
-                if (drawingHeight > 0) {
-                    gCode += adjustMaterialHeight;
-                }
-                lastToolNumber = infillTool;
-            }
-
-            const moveUUp = `G1 U${penTypeConfig.penUp} F6000\n`;
-            const moveUDown = `G1 U${penTypeConfig.penDown} F6000\n`;
-
-            // Pump context for infill tool
-            const infillPumpCtx: PumpContext = {
-                accumulatedDistance: 0,
-                pumpDistanceThreshold: penTypeConfig.pumpDistanceThreshold || 0,
-                pumpHeight: penTypeConfig.pumpHeight || 50,
-            };
-
-            gCode += moveUUp;
-            gCode += `; Infill (${colorGroup.infillOptions.patternType}, ${infillGroup!.children.length} Linien) mit Tool #${infillTool}\n`;
-
-            infillGroup!.children.forEach((child) => {
-                if (child instanceof THREE.Line) {
-                    // Pass pumpCtx to enable pumping DURING drawing (important for polylines!)
-                    const { gcode: gcodeLine } = createGcodeFromLine(child, moveUDown, customFeedrate, offsetX, offsetY, infillPumpCtx);
-                    gCode += gcodeLine;
-
-                    // Check if we need to pump at the END of this line (after drawing finished)
-                    gCode += checkAndGeneratePump(infillPumpCtx);
-
-                    // Now lift pen
-                    gCode += moveUUp;
-                }
-            });
+        // --- KONTUREN und INFILL in der richtigen Reihenfolge ---
+        if (colorGroup.infillFirst) {
+            // Infill zuerst, dann Outline
+            gCode += generateInfillGCode();
+            gCode += generateContourGCode();
+        } else {
+            // Standard: Outline zuerst, dann Infill
+            gCode += generateContourGCode();
+            gCode += generateInfillGCode();
         }
     }
 

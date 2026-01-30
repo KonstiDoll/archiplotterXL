@@ -95,7 +95,13 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useSimulatorStore } from '../stores/simulatorStore';
 import { SimulatorRenderer, createSimulatorPlane } from '../utils/simulator_renderer';
 import { findInstructionAtTime, lerp } from '../utils/gcode_parser';
+import { penTypes } from '../utils/gcode_services';
 import SimulatorControls from './SimulatorControls.vue';
+
+// Helper to get pen width from pen type
+function getPenWidth(penTypeId: string): number {
+  return penTypes[penTypeId]?.width ?? 0.4;
+}
 
 const simulatorStore = useSimulatorStore();
 
@@ -296,6 +302,8 @@ function updatePenPosition() {
   let penX = 0, penY = 0;
   let isPenDown = false;
   let currentToolNum: number | null = null;
+  let isPumping = false;
+  let pumpProgress = 0;
 
   if (current && current.instruction.startPosition && current.instruction.endPosition) {
     // Interpolate position within current instruction
@@ -303,6 +311,12 @@ function updatePenPosition() {
     // Convert machine coords to canvas coords (machine X→canvas Y, machine Y→canvas X)
     penX = pos.y;
     penY = pos.x;
+
+    // Check if we're in a pump instruction
+    if (current.instruction.type === 'pump' && simulatorStore.showPumpIndicators) {
+      isPumping = true;
+      pumpProgress = current.progress;
+    }
   } else {
     // Use machine state position
     const machinePos = simulatorStore.machineState.position;
@@ -317,9 +331,28 @@ function updatePenPosition() {
   penMesh.position.x = penX;
   penMesh.position.y = penY;
 
-  // Animate pen height based on pen state
-  const targetZ = isPenDown ? 5 : 40;
-  penMesh.position.z += (targetZ - penMesh.position.z) * 0.3; // Smooth interpolation
+  // Animate pen height based on pen state and pump action
+  let targetZ: number;
+  if (isPumping) {
+    // Pump animation: down in first half (0-50%), up in second half (50-100%)
+    // Goes from 40 (up) -> -5 (below surface for pump) -> 40 (up)
+    const pumpDepth = -5; // Below surface for pumping
+    const upHeight = 40;
+    if (pumpProgress < 0.5) {
+      // Going down: 0->0.5 maps to upHeight->pumpDepth
+      const downProgress = pumpProgress * 2; // 0->1
+      targetZ = upHeight + (pumpDepth - upHeight) * downProgress;
+    } else {
+      // Going up: 0.5->1 maps to pumpDepth->upHeight
+      const upProgress = (pumpProgress - 0.5) * 2; // 0->1
+      targetZ = pumpDepth + (upHeight - pumpDepth) * upProgress;
+    }
+    // Direct position for pump (no smoothing for accurate animation)
+    penMesh.position.z = targetZ;
+  } else {
+    targetZ = isPenDown ? 5 : 40;
+    penMesh.position.z += (targetZ - penMesh.position.z) * 0.3; // Smooth interpolation
+  }
 
   // Update pen color based on current tool (both body and tip)
   if (currentToolNum !== null && simulatorStore.toolConfigs[currentToolNum - 1]) {
@@ -399,7 +432,7 @@ function renderSimulation() {
                 toolNumber: currentTool,
                 penType: toolConfig.penType,
                 color: toolConfig.color,
-                lineWidth: 0.4,
+                lineWidth: getPenWidth(toolConfig.penType),
               });
             }
           }
@@ -424,7 +457,7 @@ function renderSimulation() {
               toolNumber: currentTool,
               penType: toolConfig.penType,
               color: toolConfig.color,
-              lineWidth: 0.4,
+              lineWidth: getPenWidth(toolConfig.penType),
             });
           }
         } else if (!instruction.isGrab) {
@@ -448,7 +481,7 @@ function renderSimulation() {
                   toolNumber: currentTool,
                   penType: toolConfig.penType,
                   color: toolConfig.color,
-                  lineWidth: 0.4,
+                  lineWidth: getPenWidth(toolConfig.penType),
                 });
               }
             }

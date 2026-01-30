@@ -156,6 +156,16 @@
                             {{ pt.label }}
                         </option>
                     </select>
+
+                    <!-- Infill First Toggle -->
+                    <label class="flex items-center space-x-1 text-xs text-slate-300 cursor-pointer"
+                        title="Infill vor Outline zeichnen">
+                        <input type="checkbox"
+                            :checked="colorGroup.infillFirst"
+                            @change="$emit('toggle-infill-first')"
+                            class="w-3 h-3 rounded border-slate-500 bg-slate-600 text-blue-500 focus:ring-blue-500" />
+                        <span>zuerst</span>
+                    </label>
                 </template>
             </div>
 
@@ -560,6 +570,7 @@ const emit = defineEmits<{
     (e: 'toggle-use-defaults'): void;
     (e: 'update-tool', value: number): void;
     (e: 'toggle-infill'): void;
+    (e: 'toggle-infill-first'): void;
     (e: 'update-infill-tool', value: number): void;
     (e: 'update-pattern', value: string): void;
     (e: 'generate-infill'): void;

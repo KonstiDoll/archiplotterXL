@@ -21,6 +21,25 @@
             :style="{ width: `${simulatorStore.progress * 100}%` }"
           ></div>
 
+          <!-- Feature Markers -->
+          <div
+            v-for="(feature, index) in simulatorStore.features"
+            :key="index"
+            class="absolute top-1/2 -translate-y-1/2 w-1 h-4 -ml-0.5 cursor-pointer transition-all"
+            :class="[
+              feature.type === 'color' ? 'bg-yellow-500' :
+              feature.type === 'infill' ? 'bg-green-500' :
+              feature.type === 'contour' ? 'bg-purple-500' :
+              feature.type === 'centerline' ? 'bg-pink-500' :
+              feature.type === 'tool' ? 'bg-red-500' :
+              'bg-gray-500',
+              simulatorStore.currentFeature?.index === index ? 'h-5 opacity-100' : 'opacity-60 hover:opacity-100'
+            ]"
+            :style="{ left: `${getFeatureProgress(feature.startTime) * 100}%` }"
+            :title="feature.label"
+            @click.stop="simulatorStore.seekTo(feature.startTime)"
+          ></div>
+
           <!-- Hover indicator -->
           <div
             v-if="hoverTime !== null"
@@ -40,6 +59,27 @@
         <!-- Total Time -->
         <span class="text-sm text-slate-400 font-mono w-16 text-right">
           {{ simulatorStore.totalDurationFormatted }}
+        </span>
+      </div>
+
+      <!-- Current Feature Display -->
+      <div v-if="simulatorStore.currentFeature" class="mt-2 flex items-center space-x-2 text-xs">
+        <span class="text-slate-500">Feature:</span>
+        <span
+          class="px-2 py-0.5 rounded-full"
+          :class="[
+            simulatorStore.currentFeature.feature.type === 'color' ? 'bg-yellow-500/20 text-yellow-300' :
+            simulatorStore.currentFeature.feature.type === 'infill' ? 'bg-green-500/20 text-green-300' :
+            simulatorStore.currentFeature.feature.type === 'contour' ? 'bg-purple-500/20 text-purple-300' :
+            simulatorStore.currentFeature.feature.type === 'centerline' ? 'bg-pink-500/20 text-pink-300' :
+            simulatorStore.currentFeature.feature.type === 'tool' ? 'bg-red-500/20 text-red-300' :
+            'bg-gray-500/20 text-gray-300'
+          ]"
+        >
+          {{ simulatorStore.currentFeature.feature.label }}
+        </span>
+        <span class="text-slate-500">
+          ({{ simulatorStore.currentFeature.index + 1 }}/{{ simulatorStore.features.length }})
         </span>
       </div>
     </div>
@@ -83,6 +123,33 @@
         >
           <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
             <path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z"/>
+          </svg>
+        </button>
+
+        <!-- Separator -->
+        <div class="w-px h-6 bg-slate-600 mx-1"></div>
+
+        <!-- Previous Feature -->
+        <button
+          @click="simulatorStore.previousFeature()"
+          class="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+          title="Vorheriges Feature"
+          :disabled="!simulatorStore.features.length"
+        >
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+          </svg>
+        </button>
+
+        <!-- Next Feature -->
+        <button
+          @click="simulatorStore.nextFeature()"
+          class="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+          title="Nächstes Feature"
+          :disabled="!simulatorStore.features.length"
+        >
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
           </svg>
         </button>
       </div>
@@ -214,5 +281,12 @@ function startDrag(_event: MouseEvent) {
 // Reset
 function onReset() {
   simulatorStore.reset();
+}
+
+// Calculate feature position as progress (0-1)
+function getFeatureProgress(startTime: number): number {
+  const total = simulatorStore.totalDuration;
+  if (total === 0) return 0;
+  return Math.min(startTime / total, 1);
 }
 </script>

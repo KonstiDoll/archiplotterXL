@@ -86,6 +86,7 @@ export interface SerializedColorGroup {
   infillEnabled: boolean;
   infillToolNumber: number;
   infillOptions: InfillOptions;
+  infillFirst?: boolean;    // Optional: draw infill before outline (default: false)
   // Serialized infill geometry (if generated)
   infillLines?: SerializedInfillLine[];
   // v1.3: Centerline settings
@@ -186,6 +187,7 @@ function serializeColorGroup(colorGroup: ColorGroup): SerializedColorGroup {
     infillEnabled: colorGroup.infillEnabled,
     infillToolNumber: colorGroup.infillToolNumber,
     infillOptions: { ...colorGroup.infillOptions },
+    infillFirst: colorGroup.infillFirst,
     // v1.3: Centerline settings
     centerlineEnabled: colorGroup.centerlineEnabled,
     centerlineOptions: colorGroup.centerlineOptions ? { ...colorGroup.centerlineOptions } : undefined,

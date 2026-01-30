@@ -56,6 +56,7 @@ export interface ColorGroup {
   infillOptions: InfillOptions;     // Pattern, Dichte, Winkel, etc.
   infillGroup?: THREE.Group;        // Generierte Infill-Geometrie (optional)
   infillStats?: InfillStats;        // Statistiken zum Infill (Länge, Travel, etc.)
+  infillFirst: boolean;             // Wenn true, wird Infill vor Outline gezeichnet
   // Centerline-Einstellungen pro Farbe (für dünne Schriftzüge/Formen)
   centerlineEnabled: boolean;       // Mittellinie statt Outline
   centerlineOptions: CenterlineOptions;  // Centerline-Parameter
@@ -374,6 +375,7 @@ export const useMainStore = defineStore('main', {
           infillEnabled: false,
           infillToolNumber: defaultInfillTool,  // Erbe Infill-Tool von der Datei
           infillOptions: { ...defaultInfillOptions },
+          infillFirst: false,  // Standard: Outline zuerst, dann Infill
           // Centerline-Defaults
           centerlineEnabled: false,
           centerlineOptions: { ...defaultCenterlineOptions },
@@ -497,6 +499,16 @@ export const useMainStore = defineStore('main', {
         const item = this.svgItems[svgIndex];
         if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
           item.colorGroups[colorIndex].infillEnabled = !item.colorGroups[colorIndex].infillEnabled;
+        }
+      }
+    },
+
+    // Infill zuerst zeichnen (vor Outline) für eine Farbgruppe aktivieren/deaktivieren
+    toggleColorInfillFirst(svgIndex: number, colorIndex: number) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          item.colorGroups[colorIndex].infillFirst = !item.colorGroups[colorIndex].infillFirst;
         }
       }
     },
@@ -1485,6 +1497,7 @@ export const useMainStore = defineStore('main', {
                 infillEnabled: cg.infillEnabled,
                 infillToolNumber: cg.infillToolNumber,
                 infillOptions: { ...cg.infillOptions },
+                infillFirst: cg.infillFirst,
                 // v1.3: Centerline settings
                 centerlineEnabled: cg.centerlineEnabled,
                 centerlineOptions: cg.centerlineOptions ? { ...cg.centerlineOptions } : undefined,
@@ -1594,6 +1607,7 @@ export const useMainStore = defineStore('main', {
               infillEnabled: cg.infillEnabled,
               infillToolNumber: cg.infillToolNumber,
               infillOptions: { ...cg.infillOptions },
+              infillFirst: cg.infillFirst ?? false, // Default to false for backwards compatibility
               infillGroup,
               // v1.3: Restore centerline settings
               centerlineEnabled: cg.centerlineEnabled ?? false,

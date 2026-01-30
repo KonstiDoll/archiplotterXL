@@ -80,6 +80,50 @@ async function loadMacros(): Promise<MacrosData | null> {
 loadMacros();
 
 /**
+ * Detect feature boundaries from G-Code comments
+ * Returns feature info if this comment starts a new feature, null otherwise
+ */
+function detectFeature(comment: string): { label: string; type: 'color' | 'infill' | 'contour' | 'centerline' | 'tool' | 'other' } | null {
+  // Match: ; === Farbe #ff0000 ===
+  const colorMatch = comment.match(/; === Farbe (#[0-9a-fA-F]+) ===/);
+  if (colorMatch) {
+    return { label: `Farbe ${colorMatch[1]}`, type: 'color' };
+  }
+
+  // Match: ; Konturen (X Linien) mit Tool #Y
+  const contourMatch = comment.match(/; (?:Konturen|Offset-Konturen) \((\d+) Linien\)/);
+  if (contourMatch) {
+    return { label: `Konturen (${contourMatch[1]})`, type: 'contour' };
+  }
+
+  // Match: ; Infill (pattern, X Linien) mit Tool #Y
+  const infillMatch = comment.match(/; Infill \(([^,]+), (\d+) Linien\)/);
+  if (infillMatch) {
+    return { label: `Infill ${infillMatch[1]} (${infillMatch[2]})`, type: 'infill' };
+  }
+
+  // Match: ; Mittellinie (X Linien) mit Tool #Y
+  const centerlineMatch = comment.match(/; Mittellinie \((\d+) Linien\)/);
+  if (centerlineMatch) {
+    return { label: `Mittellinie (${centerlineMatch[1]})`, type: 'centerline' };
+  }
+
+  // Match: ; === Tool #X (name, color) ===
+  const toolMatch = comment.match(/; === Tool #(\d+)/);
+  if (toolMatch) {
+    return { label: `Tool #${toolMatch[1]}`, type: 'tool' };
+  }
+
+  // Match: ; === Layer: #color (Tool #X) ===
+  const layerMatch = comment.match(/; === Layer: (#[0-9a-fA-F]+)/);
+  if (layerMatch) {
+    return { label: `Layer ${layerMatch[1]}`, type: 'color' };
+  }
+
+  return null;
+}
+
+/**
  * Parse a G-Code string into a structured format for the simulator
  */
 export async function parseGCode(gcode: string): Promise<ParsedGCode> {
@@ -111,6 +155,10 @@ export async function parseGCode(gcode: string): Promise<ParsedGCode> {
   // Pump detection state
   let inPumpSequence = false;
 
+  // Feature tracking
+  const features: import('../types/simulator').Feature[] = [];
+  let currentFeatureIndex = -1;
+
   // Warnings and errors
   const warnings: ParserWarning[] = [];
 
@@ -121,6 +169,20 @@ export async function parseGCode(gcode: string): Promise<ParsedGCode> {
     // Skip empty lines
     if (!rawLine) continue;
 
+    // Detect feature boundaries from comments
+    if (rawLine.startsWith(';')) {
+      const featureMatch = detectFeature(rawLine);
+      if (featureMatch) {
+        currentFeatureIndex = features.length;
+        features.push({
+          label: featureMatch.label,
+          type: featureMatch.type,
+          startTime: cumulativeTime,
+          instructionIndex: instructions.length,
+        });
+      }
+    }
+
     // Parse the line (may return multiple instructions for macros)
     const parsedInstructions = parseLine(rawLine, lineNumber, state, warnings);
 
@@ -128,6 +190,8 @@ export async function parseGCode(gcode: string): Promise<ParsedGCode> {
 
     // Process each instruction from the parsed line
     for (const instruction of parsedInstructions) {
+      // Assign feature index to instruction
+      instruction.featureIndex = currentFeatureIndex >= 0 ? currentFeatureIndex : undefined;
       // Handle pump sequence detection (G91 followed by Z moves, then G90)
       if (instruction.type === 'set_mode') {
         if (instruction.rawLine.includes('G91')) {
@@ -264,6 +328,7 @@ export async function parseGCode(gcode: string): Promise<ParsedGCode> {
       pumpCount,
     },
     warnings,
+    features,
   };
 }
 

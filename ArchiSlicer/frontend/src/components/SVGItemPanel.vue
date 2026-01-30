@@ -152,6 +152,7 @@
                             @toggle-use-defaults="store.toggleColorUseFileDefaults(itemIndex, colorIdx)"
                             @update-tool="store.setColorTool(itemIndex, colorIdx, $event)"
                             @toggle-infill="store.toggleColorInfill(itemIndex, colorIdx)"
+                            @toggle-infill-first="store.toggleColorInfillFirst(itemIndex, colorIdx)"
                             @update-infill-tool="store.setColorInfillTool(itemIndex, colorIdx, $event)"
                             @update-pattern="store.setColorInfillPattern(itemIndex, colorIdx, $event as InfillPatternType)"
                             @generate-infill="store.queueTask('generate', itemIndex, colorIdx, `Gen: ${item.fileName} - ${colorGroup.color}`)"
