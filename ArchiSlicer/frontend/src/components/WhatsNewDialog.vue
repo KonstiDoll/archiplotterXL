@@ -65,6 +65,20 @@ interface Release {
 
 const changelog: Release[] = [
     {
+        version: '0.11.0',
+        date: '30.01.2026',
+        title: 'Kontur-Offset (Innen/Außen Zeichnen)',
+        changes: [
+            'Neuer Drawing Mode: Konturen innen, mittig oder außen zeichnen',
+            'Auto-Offset: Basiert auf Stiftbreite (halbe Breite = Linie perfekt an Kante)',
+            'Custom Offset: Manuelles Überschreiben des Auto-Offsets möglich',
+            'Hole-Handling: Offset-Richtung wird bei Holes automatisch invertiert',
+            'Despike-Bereinigung: Entfernt Artefakte bei engen Kurven',
+            'Live-Preview: Offset-Konturen werden in der 3D-Szene angezeigt',
+            'G-Code nutzt vorberechnete Offset-Linien (kein On-the-fly Berechnung)',
+        ]
+    },
+    {
         version: '0.10.0',
         date: '30.01.2026',
         title: 'Mittellinie-Extraktion für Text',

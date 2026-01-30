@@ -328,7 +328,7 @@ export function applyContourOffset(
         }
 
         try {
-            const offsetPolygons = offsetPolygon(polygonForOffset, delta, 'miter');
+            const offsetPolygons = offsetPolygon(polygonForOffset, delta, 'round');
 
             // If offset produced no result (completely shrunk), return empty
             if (offsetPolygons.length === 0) {
@@ -919,6 +919,7 @@ interface ColorGroupWithInfill {
     useFileDefaults?: boolean;  // Falls true, werden file-level Tools verwendet
     drawingMode?: DrawingMode;  // 'center' | 'inside' | 'outside'
     customOffset?: number;      // Optional: benutzerdefinierter Offset (überschreibt penWidth/2)
+    offsetContourGroup?: THREE.Group;  // Generierte Offset-Kontur (für Preview + Export)
     // Centerline (Mittellinie) - ersetzt Outline wenn aktiv
     centerlineEnabled?: boolean;
     centerlineGroup?: THREE.Group;
@@ -1037,15 +1038,11 @@ export function createGcodeWithColorInfill(
                     gCode += moveUUp;
                 }
             });
-
-            // Hinweis wenn auch Infill aktiv
-            if (hasInfill) {
-                gCode += `; Hinweis: Infill für ${colorGroup.color} wird übersprungen (Mittellinie aktiv)\n`;
-            }
         }
-        // --- KONTUREN (nur wenn KEINE Centerline) ---
-        // Konturen nur zeichnen wenn showOutlines true (oder nicht definiert für Rückwärtskompatibilität)
-        else if (contourLines.length > 0 && colorGroup.showOutlines !== false) {
+
+        // --- KONTUREN ---
+        // Konturen zeichnen wenn showOutlines true (oder nicht definiert für Rückwärtskompatibilität)
+        if (contourLines.length > 0 && colorGroup.showOutlines !== false) {
             // Use file defaults if useFileDefaults is true
             const contourTool = colorGroup.useFileDefaults ? fileToolNumber : colorGroup.toolNumber;
             const toolConfig = toolConfigs[contourTool - 1] || { penType: 'stabilo', color: '#000000' };
@@ -1086,33 +1083,43 @@ export function createGcodeWithColorInfill(
             if (drawingMode !== 'center') {
                 gCode += `; Kontur-Offset: ${drawingMode} (${customOffset ?? penWidth / 2}mm)\n`;
             }
-            gCode += `; Konturen (${contourLines.length} Linien) mit Tool #${contourTool}\n`;
 
-            contourLines.forEach((lineGeo) => {
-                // Apply contour offset if needed
-                const offsetPolygons = applyContourOffset(lineGeo, drawingMode, penWidth, customOffset);
+            // Wenn Offset-Kontur vorhanden, diese verwenden (wurde in Preview generiert)
+            if (colorGroup.offsetContourGroup && colorGroup.offsetContourGroup.children.length > 0) {
+                const offsetLines = colorGroup.offsetContourGroup.children.filter(c => c instanceof THREE.Line) as THREE.Line[];
+                gCode += `; Offset-Konturen (${offsetLines.length} Linien) mit Tool #${contourTool}\n`;
 
-                // Draw each resulting polygon (may be multiple if polygon splits, or empty if shrunk away)
-                offsetPolygons.forEach((polygon) => {
-                    if (polygon.length < 2) return; // Skip degenerate polygons
+                offsetLines.forEach((lineGeo) => {
+                    const positions = lineGeo.geometry.attributes.position.array;
+                    const polygon: THREE.Vector2[] = [];
+                    for (let i = 0; i < positions.length; i += 3) {
+                        polygon.push(new THREE.Vector2(positions[i], positions[i + 1]));
+                    }
 
-                    // Use createGcodeFromPoints for offset polygons
+                    if (polygon.length < 2) return;
+
                     const { gcode: gcodeLine } = createGcodeFromPoints(polygon, moveUDown, customFeedrate, offsetX, offsetY, contourPumpCtx);
                     gCode += gcodeLine;
-
-                    // Check if we need to pump at the END of this line (after drawing finished)
                     gCode += checkAndGeneratePump(contourPumpCtx);
-
-                    // Now lift pen
                     gCode += moveUUp;
                 });
-            });
+            } else {
+                // Keine Offset-Kontur vorhanden → Original-Konturen zeichnen (Mitte)
+                gCode += `; Konturen (${contourLines.length} Linien) mit Tool #${contourTool}\n`;
+
+                contourLines.forEach((lineGeo) => {
+                    const { gcode: gcodeLine } = createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY, contourPumpCtx);
+                    gCode += gcodeLine;
+                    gCode += checkAndGeneratePump(contourPumpCtx);
+                    gCode += moveUUp;
+                });
+            }
         } else if (contourLines.length > 0 && colorGroup.showOutlines === false) {
             gCode += `; Konturen für ${colorGroup.color} ausgeblendet (${contourLines.length} Linien übersprungen)\n`;
         }
 
-        // --- INFILL (nur wenn KEINE Centerline) ---
-        if (hasInfill && !hasCenterline) {
+        // --- INFILL ---
+        if (hasInfill) {
             // Use file defaults if useFileDefaults is true
             const infillTool = colorGroup.useFileDefaults ? fileInfillToolNumber : colorGroup.infillToolNumber;
             const toolConfig = toolConfigs[infillTool - 1] || { penType: 'stabilo', color: '#000000' };

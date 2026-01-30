@@ -79,6 +79,78 @@ export function clipperPathsToPolygons(paths: ClipperPaths): THREE.Vector2[][] {
 }
 
 // ============================================================================
+// Polygon Cleanup Utilities
+// ============================================================================
+
+/**
+ * Remove spikes from a Clipper path.
+ * A spike is where point i+2 is closer to point i than point i+1 is.
+ *
+ * @param path - The Clipper path to clean
+ * @param threshold - Maximum distance for spike detection (in Clipper scale)
+ * @returns Cleaned path without spikes
+ */
+export function despikeClipperPath(path: ClipperPath, threshold: number): ClipperPath {
+  const cleaned: ClipperPath = [];
+  let i = 0;
+
+  while (i < path.length) {
+    if (i + 2 < path.length) {
+      const dxTo1 = path[i+1].X - path[i].X;
+      const dyTo1 = path[i+1].Y - path[i].Y;
+      const distTo1 = Math.sqrt(dxTo1*dxTo1 + dyTo1*dyTo1);
+
+      const dxTo2 = path[i+2].X - path[i].X;
+      const dyTo2 = path[i+2].Y - path[i].Y;
+      const distTo2 = Math.sqrt(dxTo2*dxTo2 + dyTo2*dyTo2);
+
+      // Spike: i+2 is closer to i than i+1, and i+2 is very close
+      if (distTo2 < threshold && distTo2 < distTo1 * 0.5) {
+        cleaned.push(path[i]);
+        i += 2; // Skip the spike point (i+1)
+        continue;
+      }
+    }
+
+    cleaned.push(path[i]);
+    i++;
+  }
+
+  return cleaned;
+}
+
+/**
+ * Remove spikes from a Vector2 polygon.
+ *
+ * @param polygon - The polygon to clean
+ * @param threshold - Maximum distance for spike detection (in mm)
+ * @returns Cleaned polygon without spikes
+ */
+export function despikePolygon(polygon: THREE.Vector2[], threshold: number): THREE.Vector2[] {
+  const cleaned: THREE.Vector2[] = [];
+  let i = 0;
+
+  while (i < polygon.length) {
+    if (i + 2 < polygon.length) {
+      const distTo1 = polygon[i].distanceTo(polygon[i+1]);
+      const distTo2 = polygon[i].distanceTo(polygon[i+2]);
+
+      // Spike: i+2 is closer to i than i+1, and i+2 is very close
+      if (distTo2 < threshold && distTo2 < distTo1 * 0.5) {
+        cleaned.push(polygon[i].clone());
+        i += 2; // Skip the spike point (i+1)
+        continue;
+      }
+    }
+
+    cleaned.push(polygon[i].clone());
+    i++;
+  }
+
+  return cleaned;
+}
+
+// ============================================================================
 // Polygon Operations
 // ============================================================================
 
@@ -95,25 +167,57 @@ export function offsetPolygon(
   delta: number,
   joinType: JoinType = 'miter'
 ): THREE.Vector2[][] {
+  const first = polygon[0];
+  const last = polygon[polygon.length - 1];
+  const closeDist = first.distanceTo(last);
+
+  // Close polygon explicitly if start and end are close but not identical
+  let cleanedPolygon = polygon;
+  if (closeDist > 0.001 && closeDist < 1.0) {
+    cleanedPolygon = [...polygon.slice(0, -1), first.clone()];
+  }
+
   const co = new ClipperLib.ClipperOffset();
   const solution: ClipperPaths = [];
 
-  // Map join type
+  // Miter limit prevents long spikes at sharp corners
+  co.MiterLimit = 2.0;
+
   const jt = joinType === 'miter' ? ClipperLib.JoinType.jtMiter :
              joinType === 'round' ? ClipperLib.JoinType.jtRound :
              ClipperLib.JoinType.jtSquare;
 
-  // Add path
   co.AddPath(
-    polygonToClipperPath(polygon),
+    polygonToClipperPath(cleanedPolygon),
     jt,
     ClipperLib.EndType.etClosedPolygon
   );
 
-  // Execute offset
   co.Execute(solution, delta * SCALE);
 
-  return clipperPathsToPolygons(solution);
+  // Clean short segments
+  ClipperLib.JS.Clean(solution, 0.1 * SCALE);
+
+  // Union to merge overlapping areas
+  const clipper = new ClipperLib.Clipper();
+  const unified: ClipperPaths = [];
+
+  solution.forEach(poly => {
+    clipper.AddPath(poly, ClipperLib.PolyType.ptSubject, true);
+  });
+
+  clipper.Execute(
+    ClipperLib.ClipType.ctUnion,
+    unified,
+    ClipperLib.PolyFillType.pftPositive,
+    ClipperLib.PolyFillType.pftPositive
+  );
+
+  // Remove spikes (80% of offset as threshold)
+  const spikeThreshold = Math.abs(delta) * SCALE * 0.8;
+  const despiked = unified.map(poly => despikeClipperPath(poly, spikeThreshold));
+
+  return clipperPathsToPolygons(despiked);
 }
 
 /**
@@ -126,6 +230,8 @@ export function offsetPolygons(
 ): THREE.Vector2[][] {
   const co = new ClipperLib.ClipperOffset();
   const solution: ClipperPaths = [];
+
+  co.MiterLimit = 2.0;
 
   const jt = joinType === 'miter' ? ClipperLib.JoinType.jtMiter :
              joinType === 'round' ? ClipperLib.JoinType.jtRound :
@@ -141,7 +247,14 @@ export function offsetPolygons(
 
   co.Execute(solution, delta * SCALE);
 
-  return clipperPathsToPolygons(solution);
+  // Clean short segments
+  ClipperLib.JS.Clean(solution, 0.1 * SCALE);
+
+  // Remove spikes
+  const spikeThreshold = Math.abs(delta) * SCALE * 0.8;
+  const despiked = solution.map(poly => despikeClipperPath(poly, spikeThreshold));
+
+  return clipperPathsToPolygons(despiked);
 }
 
 /**
