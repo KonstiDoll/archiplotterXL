@@ -65,6 +65,20 @@ interface Release {
 
 const changelog: Release[] = [
     {
+        version: '0.10.0',
+        date: '30.01.2026',
+        title: 'Mittellinie-Extraktion für Text',
+        changes: [
+            'Neue Centerline-Funktion: Extrahiert Mittellinien aus geschlossenen Formen (Text, schmale Objekte)',
+            'Voronoi-Methode (empfohlen): Mathematisch korrekte Medial-Axis-Extraktion',
+            'Skeleton-Methode: Zhang-Suen Thinning mit Endpoint-Extension',
+            'Offset-Methode: Polygon-Schrumpf für Ring-Formen (O, P, Q, R)',
+            'Spoke-Filter: Entfernt Eck-Artefakte bei Voronoi-Extraktion',
+            'Live-Preview: Centerline wird bei Parameteränderung automatisch aktualisiert',
+            'G-Code Export: Centerline ersetzt Outline für saubere einzeilige Schrift',
+        ]
+    },
+    {
         version: '0.9.0',
         date: '29.01.2026',
         title: 'G-Code Simulator',

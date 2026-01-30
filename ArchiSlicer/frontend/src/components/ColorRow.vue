@@ -80,12 +80,20 @@
                 </button>
             </div>
 
-            <!-- Infill Toggle -->
+            <!-- Infill & Centerline Toggles -->
             <div class="flex items-center space-x-2">
                 <button @click="$emit('toggle-infill')"
                     class="px-2 py-1 text-xs rounded transition-colors"
                     :class="colorGroup.infillEnabled ? 'bg-blue-600 text-white' : 'bg-slate-600 text-slate-400 hover:bg-slate-500'">
                     {{ colorGroup.infillEnabled ? 'Infill ✓' : 'Infill' }}
+                </button>
+
+                <!-- Centerline Toggle -->
+                <button @click="$emit('toggle-centerline')"
+                    class="px-2 py-1 text-xs rounded transition-colors"
+                    :class="colorGroup.centerlineEnabled ? 'bg-fuchsia-600 text-white' : 'bg-slate-600 text-slate-400 hover:bg-slate-500'"
+                    title="Mittellinie statt Kontur (für Text/dünne Formen)">
+                    {{ colorGroup.centerlineEnabled ? 'Mittellinie ✓' : 'Mittellinie' }}
                 </button>
 
                 <!-- Infill Tool (only when enabled) -->
@@ -176,6 +184,248 @@
                 </span>
             </div>
 
+            <!-- Centerline Actions (only when enabled) -->
+            <div v-if="colorGroup.centerlineEnabled" class="flex items-center space-x-2">
+                <!-- Generate Centerline Button -->
+                <button @click="$emit('generate-centerline')"
+                    :disabled="isGeneratingCenterline"
+                    class="px-2 py-1 text-xs rounded transition-colors whitespace-nowrap"
+                    :class="isGeneratingCenterline
+                        ? 'bg-yellow-600 text-yellow-100 cursor-wait'
+                        : colorGroup.centerlineGroup
+                            ? 'bg-fuchsia-700 text-fuchsia-200 hover:bg-fuchsia-600'
+                            : 'bg-fuchsia-600 text-white hover:bg-fuchsia-500'">
+                    <template v-if="isGeneratingCenterline">
+                        <svg class="inline-block w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                        </svg>
+                        Extrahiere...
+                    </template>
+                    <template v-else>
+                        {{ colorGroup.centerlineGroup ? 'Neu' : 'Generieren' }}
+                    </template>
+                </button>
+
+                <!-- Delete Centerline Button -->
+                <button v-if="colorGroup.centerlineGroup && !isGeneratingCenterline"
+                    @click="$emit('delete-centerline')"
+                    class="px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-500 transition-colors"
+                    title="Mittellinie löschen">
+                    ✕
+                </button>
+            </div>
+
+            <!-- Centerline Stats (only if generated) -->
+            <div v-if="colorGroup.centerlineGroup && colorGroup.centerlineStats && !isGeneratingCenterline"
+                class="flex items-center space-x-3 text-xs text-fuchsia-300">
+                <span>{{ colorGroup.centerlineStats.numPolylines }} Linien</span>
+                <span>{{ colorGroup.centerlineStats.totalLengthMm }}mm</span>
+            </div>
+
+            <!-- Warning: Centerline + Infill active -->
+            <div v-if="colorGroup.centerlineEnabled && colorGroup.infillEnabled && colorGroup.centerlineGroup && colorGroup.infillGroup"
+                class="text-xs text-amber-400 bg-amber-900/30 px-2 py-1 rounded">
+                Hinweis: Mittellinie + Infill aktiv. Beim Export wird nur Mittellinie verwendet.
+            </div>
+
+            <!-- Centerline Options (collapsible) -->
+            <div v-if="colorGroup.centerlineEnabled" class="pt-1">
+                <button @click="centerlineOptionsExpanded = !centerlineOptionsExpanded"
+                    class="w-full text-xs text-fuchsia-400 hover:text-fuchsia-300 transition-colors">
+                    {{ centerlineOptionsExpanded ? '▲ Weniger' : '▼ Centerline-Optionen' }}
+                </button>
+
+                <div v-if="centerlineOptionsExpanded" class="space-y-2 pt-2 bg-slate-800/50 rounded p-2">
+                    <!-- Live Preview Toggle -->
+                    <div class="flex items-center justify-between pb-1 border-b border-slate-700">
+                        <label class="text-xs text-slate-400">Live Preview</label>
+                        <button @click="centerlineLivePreview = !centerlineLivePreview"
+                            class="px-2 py-0.5 text-xs rounded transition-colors"
+                            :class="centerlineLivePreview
+                                ? 'bg-fuchsia-600 text-white'
+                                : 'bg-slate-600 text-slate-400 hover:bg-slate-500'">
+                            {{ centerlineLivePreview ? 'An' : 'Aus' }}
+                        </button>
+                    </div>
+
+                    <!-- Method Selector -->
+                    <div class="flex items-center space-x-2">
+                        <label class="w-20 text-xs text-slate-400">Methode:</label>
+                        <select :value="colorGroup.centerlineOptions.method"
+                            @change="updateCenterlineOption('method', ($event.target as HTMLSelectElement).value)"
+                            class="flex-grow p-1 text-xs border border-slate-600 rounded bg-slate-600 text-white">
+                            <option value="voronoi">Voronoi (Medial Axis)</option>
+                            <option value="skeleton">Skeleton (Zhang-Suen)</option>
+                            <option value="offset">Offset (Polygon-Schrumpf)</option>
+                        </select>
+                    </div>
+
+                    <!-- === Skeleton-only parameters === -->
+                    <template v-if="colorGroup.centerlineOptions.method === 'skeleton'">
+                        <!-- Resolution (Skeleton only) -->
+                        <div class="flex items-center space-x-2">
+                            <label class="w-20 text-xs text-slate-400">Auflösung:</label>
+                            <input type="range"
+                                :value="colorGroup.centerlineOptions.resolution"
+                                @input="updateCenterlineOption('resolution', Number(($event.target as HTMLInputElement).value))"
+                                min="0.01" max="0.2" step="0.01"
+                                class="flex-grow h-1 bg-slate-600 rounded appearance-none cursor-pointer" />
+                            <input type="number"
+                                :value="colorGroup.centerlineOptions.resolution"
+                                @change="updateCenterlineOption('resolution', Number(($event.target as HTMLInputElement).value))"
+                                min="0.01" max="0.2" step="0.01"
+                                class="w-14 px-1 py-0.5 text-xs text-right text-slate-300 bg-slate-600 border border-slate-500 rounded" />
+                            <span class="text-xs text-slate-400">mm/px</span>
+                        </div>
+
+                        <!-- Merge Tolerance (Skeleton only) -->
+                        <div class="flex items-center space-x-2">
+                            <label class="w-20 text-xs text-slate-400">Merge:</label>
+                            <input type="range"
+                                :value="colorGroup.centerlineOptions.mergeTolerance"
+                                @input="updateCenterlineOption('mergeTolerance', Number(($event.target as HTMLInputElement).value))"
+                                min="0.05" max="2" step="0.05"
+                                class="flex-grow h-1 bg-slate-600 rounded appearance-none cursor-pointer" />
+                            <input type="number"
+                                :value="colorGroup.centerlineOptions.mergeTolerance"
+                                @change="updateCenterlineOption('mergeTolerance', Number(($event.target as HTMLInputElement).value))"
+                                min="0.05" max="2" step="0.05"
+                                class="w-14 px-1 py-0.5 text-xs text-right text-slate-300 bg-slate-600 border border-slate-500 rounded" />
+                            <span class="text-xs text-slate-400">mm</span>
+                        </div>
+
+                        <!-- Loop Threshold (Skeleton only) -->
+                        <div class="flex items-center space-x-2">
+                            <label class="w-20 text-xs text-slate-400">Loop:</label>
+                            <input type="range"
+                                :value="colorGroup.centerlineOptions.loopThreshold"
+                                @input="updateCenterlineOption('loopThreshold', Number(($event.target as HTMLInputElement).value))"
+                                min="0.5" max="20" step="0.5"
+                                class="flex-grow h-1 bg-slate-600 rounded appearance-none cursor-pointer" />
+                            <input type="number"
+                                :value="colorGroup.centerlineOptions.loopThreshold"
+                                @change="updateCenterlineOption('loopThreshold', Number(($event.target as HTMLInputElement).value))"
+                                min="0.5" max="20" step="0.5"
+                                class="w-14 px-1 py-0.5 text-xs text-right text-slate-300 bg-slate-600 border border-slate-500 rounded" />
+                            <span class="text-xs text-slate-400">mm</span>
+                        </div>
+
+                        <!-- Max Extension (Skeleton only) -->
+                        <div class="flex items-center space-x-2">
+                            <label class="w-20 text-xs text-slate-400">Extend:</label>
+                            <input type="range"
+                                :value="colorGroup.centerlineOptions.maxExtend"
+                                @input="updateCenterlineOption('maxExtend', Number(($event.target as HTMLInputElement).value))"
+                                min="0" max="20" step="0.5"
+                                class="flex-grow h-1 bg-slate-600 rounded appearance-none cursor-pointer" />
+                            <input type="number"
+                                :value="colorGroup.centerlineOptions.maxExtend"
+                                @change="updateCenterlineOption('maxExtend', Number(($event.target as HTMLInputElement).value))"
+                                min="0" max="20" step="0.5"
+                                class="w-14 px-1 py-0.5 text-xs text-right text-slate-300 bg-slate-600 border border-slate-500 rounded" />
+                            <span class="text-xs text-slate-400">mm</span>
+                        </div>
+                    </template>
+
+                    <!-- === Voronoi parameters === -->
+                    <template v-if="colorGroup.centerlineOptions.method === 'voronoi'">
+                        <!-- Interpolation Distance -->
+                        <div class="flex items-center space-x-2">
+                            <label class="w-20 text-xs text-slate-400">Sampling:</label>
+                            <input type="range"
+                                :value="voronoiSampling"
+                                @input="updateCenterlineOption('resolution', Number(($event.target as HTMLInputElement).value))"
+                                min="0.1" max="1" step="0.05"
+                                class="flex-grow h-1 bg-slate-600 rounded appearance-none cursor-pointer" />
+                            <input type="number"
+                                :value="voronoiSampling"
+                                @change="updateCenterlineOption('resolution', Number(($event.target as HTMLInputElement).value))"
+                                min="0.1" max="1" step="0.05"
+                                class="w-14 px-1 py-0.5 text-xs text-right text-slate-300 bg-slate-600 border border-slate-500 rounded" />
+                            <span class="text-xs text-slate-400">mm</span>
+                        </div>
+
+                        <!-- Min Length -->
+                        <div class="flex items-center space-x-2">
+                            <label class="w-20 text-xs text-slate-400">Min Länge:</label>
+                            <input type="range"
+                                :value="colorGroup.centerlineOptions.minLength"
+                                @input="updateCenterlineOption('minLength', Number(($event.target as HTMLInputElement).value))"
+                                min="0" max="3" step="0.1"
+                                class="flex-grow h-1 bg-slate-600 rounded appearance-none cursor-pointer" />
+                            <input type="number"
+                                :value="colorGroup.centerlineOptions.minLength"
+                                @change="updateCenterlineOption('minLength', Number(($event.target as HTMLInputElement).value))"
+                                min="0" max="3" step="0.1"
+                                class="w-14 px-1 py-0.5 text-xs text-right text-slate-300 bg-slate-600 border border-slate-500 rounded" />
+                            <span class="text-xs text-slate-400">mm</span>
+                        </div>
+                        <!-- Spoke Filter -->
+                        <div class="flex items-center space-x-2">
+                            <label class="w-20 text-xs text-slate-400">Spoke:</label>
+                            <input type="range"
+                                :value="colorGroup.centerlineOptions.spokeFilter"
+                                @input="updateCenterlineOption('spokeFilter', Number(($event.target as HTMLInputElement).value))"
+                                min="0" max="5" step="0.01"
+                                class="flex-grow h-1 bg-slate-600 rounded appearance-none cursor-pointer" />
+                            <input type="number"
+                                :value="colorGroup.centerlineOptions.spokeFilter"
+                                @change="updateCenterlineOption('spokeFilter', Number(($event.target as HTMLInputElement).value))"
+                                min="0" max="5" step="0.01"
+                                class="w-14 px-1 py-0.5 text-xs text-right text-slate-300 bg-slate-600 border border-slate-500 rounded" />
+                            <span class="text-xs text-slate-400">mm</span>
+                        </div>
+                        <p class="text-xs text-slate-500">Spoke: Eck-Artefakte filtern (0=aus). Min Länge: kürzeste Linie.</p>
+                    </template>
+
+                    <!-- === Shared parameters (both methods) === -->
+
+                    <!-- Chaikin Smoothing Iterations -->
+                    <div class="flex items-center space-x-2">
+                        <label class="w-20 text-xs text-slate-400">Smooth:</label>
+                        <input type="range"
+                            :value="colorGroup.centerlineOptions.chaikinIterations"
+                            @input="updateCenterlineOption('chaikinIterations', Number(($event.target as HTMLInputElement).value))"
+                            min="0" max="10" step="1"
+                            class="flex-grow h-1 bg-slate-600 rounded appearance-none cursor-pointer" />
+                        <input type="number"
+                            :value="colorGroup.centerlineOptions.chaikinIterations"
+                            @change="updateCenterlineOption('chaikinIterations', Number(($event.target as HTMLInputElement).value))"
+                            min="0" max="10" step="1"
+                            class="w-14 px-1 py-0.5 text-xs text-right text-slate-300 bg-slate-600 border border-slate-500 rounded" />
+                        <span class="text-xs text-slate-400">x</span>
+                    </div>
+
+                    <!-- Min Angle for smoothing -->
+                    <div class="flex items-center space-x-2">
+                        <label class="w-20 text-xs text-slate-400">Winkel:</label>
+                        <input type="range"
+                            :value="colorGroup.centerlineOptions.minAngle"
+                            @input="updateCenterlineOption('minAngle', Number(($event.target as HTMLInputElement).value))"
+                            min="0" max="180" step="5"
+                            class="flex-grow h-1 bg-slate-600 rounded appearance-none cursor-pointer" />
+                        <input type="number"
+                            :value="colorGroup.centerlineOptions.minAngle"
+                            @change="updateCenterlineOption('minAngle', Number(($event.target as HTMLInputElement).value))"
+                            min="0" max="180" step="5"
+                            class="w-14 px-1 py-0.5 text-xs text-right text-slate-300 bg-slate-600 border border-slate-500 rounded" />
+                        <span class="text-xs text-slate-400">°</span>
+                    </div>
+
+                    <!-- Help text based on method -->
+                    <p v-if="colorGroup.centerlineOptions.method === 'skeleton'" class="text-xs text-slate-500 italic">
+                        Auflösung: niedriger = feiner. Merge/Loop/Extend: Endpunkt-Verbindung.
+                    </p>
+                    <p v-else-if="colorGroup.centerlineOptions.method === 'voronoi'" class="text-xs text-slate-500 italic">
+                        Voronoi: Mathematisch korrekte Medial-Axis. Robust für komplexe Formen.
+                    </p>
+                    <p v-else class="text-xs text-slate-500 italic">
+                        Offset: Schrumpft Polygon iterativ. Nur für Ring-Formen (O, P, Q, R).
+                    </p>
+                </div>
+            </div>
+
             <!-- Advanced Infill Options (collapsible) -->
             <div v-if="colorGroup.infillEnabled" class="pt-1">
                 <button @click="advancedExpanded = !advancedExpanded"
@@ -257,6 +507,7 @@ const props = defineProps<{
     toolConfigs: ToolConfig[];
     isGenerating: boolean;
     isOptimizing: boolean;
+    isGeneratingCenterline: boolean;
     isFirst: boolean;
     isLast: boolean;
 }>();
@@ -277,10 +528,54 @@ const emit = defineEmits<{
     (e: 'update-outline-offset', value: number): void;
     (e: 'move-up'): void;
     (e: 'move-down'): void;
+    (e: 'toggle-centerline'): void;
+    (e: 'generate-centerline'): void;
+    (e: 'delete-centerline'): void;
+    (e: 'update-centerline-option', key: string, value: number | string): void;
 }>();
 
 const expanded = ref(false);
 const advancedExpanded = ref(false);
+const centerlineOptionsExpanded = ref(false);
+const centerlineLivePreview = ref(true);
+
+// Voronoi sampling uses resolution but with different scale
+// If resolution is very small (skeleton default), use 0.5 as voronoi default
+const voronoiSampling = computed(() => {
+    const res = props.colorGroup.centerlineOptions.resolution;
+    // Skeleton uses 0.02, Voronoi needs 0.3-0.5
+    return res < 0.1 ? 0.5 : res;
+});
+
+// Debounce timer for live preview
+let livePreviewTimeout: ReturnType<typeof setTimeout> | null = null;
+
+// Update centerline option with optional live preview
+function updateCenterlineOption(key: string, value: number | string) {
+    // When switching methods, adjust resolution to appropriate default
+    if (key === 'method') {
+        const currentRes = props.colorGroup.centerlineOptions.resolution;
+        if (value === 'voronoi' && currentRes < 0.1) {
+            // Voronoi needs larger sampling distance
+            emit('update-centerline-option', 'resolution', 0.5);
+        } else if (value === 'skeleton' && currentRes > 0.1) {
+            // Skeleton needs smaller resolution (mm/px)
+            emit('update-centerline-option', 'resolution', 0.02);
+        }
+    }
+
+    emit('update-centerline-option', key, value);
+
+    // If live preview is enabled, regenerate after a short delay
+    if (centerlineLivePreview.value && props.colorGroup.centerlineGroup) {
+        if (livePreviewTimeout) {
+            clearTimeout(livePreviewTimeout);
+        }
+        livePreviewTimeout = setTimeout(() => {
+            emit('generate-centerline');
+        }, 300); // 300ms debounce
+    }
+}
 
 // Pattern types for dropdown
 const patternTypes = [

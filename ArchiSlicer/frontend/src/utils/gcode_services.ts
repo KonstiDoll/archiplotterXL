@@ -826,6 +826,9 @@ interface ColorGroupWithInfill {
         outlineOffset: number;
     };
     useFileDefaults?: boolean;  // Falls true, werden file-level Tools verwendet
+    // Centerline (Mittellinie) - ersetzt Outline wenn aktiv
+    centerlineEnabled?: boolean;
+    centerlineGroup?: THREE.Group;
 }
 
 /**
@@ -898,9 +901,58 @@ export function createGcodeWithColorInfill(
 
         gCode += `\n; === Farbe ${colorGroup.color} ===\n`;
 
-        // --- KONTUREN ---
+        // --- CENTERLINE (ersetzt Konturen wenn aktiv) ---
+        const hasCenterline = colorGroup.centerlineEnabled && colorGroup.centerlineGroup && colorGroup.centerlineGroup.children.length > 0;
+
+        if (hasCenterline) {
+            // Centerline zeichnen STATT Konturen
+            const centerlineTool = colorGroup.useFileDefaults ? fileToolNumber : colorGroup.toolNumber;
+            const toolConfig = toolConfigs[centerlineTool - 1] || { penType: 'stabilo', color: '#000000' };
+            const penTypeConfig = penTypes[toolConfig.penType] || penTypes['stabilo'];
+
+            // Tool-Wechsel falls nötig
+            if (lastToolNumber !== centerlineTool) {
+                if (lastToolNumber !== null) {
+                    gCode += `M98 P"/macros/place_tool_${lastToolNumber}"\n`;
+                }
+                gCode += `M98 P"/macros/grab_tool_${centerlineTool}"\n`;
+                gCode += `M98 P"/macros/move_to_drawingHeight_${toolConfig.penType}"\n`;
+                if (drawingHeight > 0) {
+                    gCode += adjustMaterialHeight;
+                }
+                lastToolNumber = centerlineTool;
+            }
+
+            const moveUUp = `G1 U${penTypeConfig.penUp} F6000\n`;
+            const moveUDown = `G1 U${penTypeConfig.penDown} F6000\n`;
+
+            // Pump context for centerline tool
+            const centerlinePumpCtx: PumpContext = {
+                accumulatedDistance: 0,
+                pumpDistanceThreshold: penTypeConfig.pumpDistanceThreshold || 0,
+                pumpHeight: penTypeConfig.pumpHeight || 50,
+            };
+
+            gCode += moveUUp;
+            gCode += `; Mittellinie (${colorGroup.centerlineGroup!.children.length} Linien) mit Tool #${centerlineTool}\n`;
+
+            colorGroup.centerlineGroup!.children.forEach((child) => {
+                if (child instanceof THREE.Line) {
+                    const { gcode: gcodeLine } = createGcodeFromLine(child, moveUDown, customFeedrate, offsetX, offsetY, centerlinePumpCtx);
+                    gCode += gcodeLine;
+                    gCode += checkAndGeneratePump(centerlinePumpCtx);
+                    gCode += moveUUp;
+                }
+            });
+
+            // Hinweis wenn auch Infill aktiv
+            if (hasInfill) {
+                gCode += `; Hinweis: Infill für ${colorGroup.color} wird übersprungen (Mittellinie aktiv)\n`;
+            }
+        }
+        // --- KONTUREN (nur wenn KEINE Centerline) ---
         // Konturen nur zeichnen wenn showOutlines true (oder nicht definiert für Rückwärtskompatibilität)
-        if (contourLines.length > 0 && colorGroup.showOutlines !== false) {
+        else if (contourLines.length > 0 && colorGroup.showOutlines !== false) {
             // Use file defaults if useFileDefaults is true
             const contourTool = colorGroup.useFileDefaults ? fileToolNumber : colorGroup.toolNumber;
             const toolConfig = toolConfigs[contourTool - 1] || { penType: 'stabilo', color: '#000000' };
@@ -949,8 +1001,8 @@ export function createGcodeWithColorInfill(
             gCode += `; Konturen für ${colorGroup.color} ausgeblendet (${contourLines.length} Linien übersprungen)\n`;
         }
 
-        // --- INFILL ---
-        if (hasInfill) {
+        // --- INFILL (nur wenn KEINE Centerline) ---
+        if (hasInfill && !hasCenterline) {
             // Use file defaults if useFileDefaults is true
             const infillTool = colorGroup.useFileDefaults ? fileInfillToolNumber : colorGroup.infillToolNumber;
             const toolConfig = toolConfigs[infillTool - 1] || { penType: 'stabilo', color: '#000000' };

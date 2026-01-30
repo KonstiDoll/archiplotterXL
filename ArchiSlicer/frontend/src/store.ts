@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import * as THREE from 'three';
 import { markRaw } from 'vue';
 import { InfillOptions, InfillPatternType, defaultInfillOptions, analyzeColorsInGroup, getThreejsObjectFromSvg, generateInfillForColorAsync } from './utils/threejs_services';
-import { optimizePathBackend } from './utils/infill-api';
+import { optimizePathBackend, extractCenterlineBackend, CenterlineOptions, defaultCenterlineOptions } from './utils/infill-api';
 import { PathAnalysisResult, PathRole, getEffectiveRole, analyzePathRelationshipsWithColors, extractPolygonsWithColorsFromGroup } from './utils/geometry/path-analysis';
 import type { ProjectData, SerializedSVGItem, SerializedColorGroup, SerializedInfillLine } from './utils/project_services';
 import { deserializeInfillGroup } from './utils/project_services';
@@ -15,6 +15,13 @@ export interface InfillStats {
   numPenLifts: number;        // Anzahl Pen-Lifts
   isOptimized: boolean;       // Wurde TSP-Optimierung angewandt?
   optimizationMethod?: string; // Methode: "greedy" | "ortools"
+}
+
+// Interface für Centerline-Statistiken
+export interface CenterlineStats {
+  totalLengthMm: number;      // Gesamte Linienlänge
+  numPolylines: number;       // Anzahl Polylinien
+  processingTimeMs: number;   // Verarbeitungszeit
 }
 
 // Interface für Backend-Tasks in der Queue
@@ -41,6 +48,11 @@ export interface ColorGroup {
   infillOptions: InfillOptions;     // Pattern, Dichte, Winkel, etc.
   infillGroup?: THREE.Group;        // Generierte Infill-Geometrie (optional)
   infillStats?: InfillStats;        // Statistiken zum Infill (Länge, Travel, etc.)
+  // Centerline-Einstellungen pro Farbe (für dünne Schriftzüge/Formen)
+  centerlineEnabled: boolean;       // Mittellinie statt Outline
+  centerlineOptions: CenterlineOptions;  // Centerline-Parameter
+  centerlineGroup?: THREE.Group;    // Generierte Mittellinie-Geometrie
+  centerlineStats?: CenterlineStats; // Statistiken zur Mittellinie
 }
 
 // Interface für Workpiece Starts (Platzierungspunkte)
@@ -104,6 +116,7 @@ export const useMainStore = defineStore('main', {
     // Loading states für async Operationen
     infillGenerating: null as { svgIndex: number; colorIndex: number | null } | null,
     infillOptimizing: null as { svgIndex: number; colorIndex: number | null } | null,
+    centerlineGenerating: null as { svgIndex: number; colorIndex: number } | null,
     // Backend task queue
     taskQueue: [] as BackendTask[],
     isProcessingQueue: false,
@@ -349,7 +362,10 @@ export const useMainStore = defineStore('main', {
           // Infill-Defaults - erben von Datei
           infillEnabled: false,
           infillToolNumber: defaultInfillTool,  // Erbe Infill-Tool von der Datei
-          infillOptions: { ...defaultInfillOptions }
+          infillOptions: { ...defaultInfillOptions },
+          // Centerline-Defaults
+          centerlineEnabled: false,
+          centerlineOptions: { ...defaultCenterlineOptions },
         }));
 
         item.isAnalyzed = true;
@@ -679,6 +695,170 @@ export const useMainStore = defineStore('main', {
             // Trigger scene update
             this.svgItems = [...this.svgItems];
           }
+        }
+      }
+    },
+
+    // ===== Centerline (Mittellinie) Actions =====
+
+    // Centerline für eine Farbgruppe aktivieren/deaktivieren
+    toggleColorCenterline(svgIndex: number, colorIndex: number) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          item.colorGroups[colorIndex].centerlineEnabled = !item.colorGroups[colorIndex].centerlineEnabled;
+        }
+      }
+    },
+
+    // Centerline für eine Farbgruppe generieren
+    async generateColorCenterline(svgIndex: number, colorIndex: number) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          const colorGroup = item.colorGroups[colorIndex];
+
+          // Set loading state
+          this.centerlineGenerating = { svgIndex, colorIndex };
+
+          try {
+            // Vorhandene Centerline entfernen
+            if (colorGroup.centerlineGroup) {
+              item.geometry.remove(colorGroup.centerlineGroup);
+              colorGroup.centerlineGroup = undefined;
+            }
+            colorGroup.centerlineStats = undefined;
+
+            // Konvertiere zu API-Format (mit Path-Analyse für Holes)
+            const polygonsForApi: { outer: THREE.Vector2[]; holes: THREE.Vector2[][] }[] = [];
+
+            // Nutze pathAnalysis falls vorhanden
+            if (item.pathAnalysis) {
+              // Filtere Pfade nach Farbe und Rolle
+              const colorPaths = item.pathAnalysis.paths.filter(
+                p => (p.color?.toLowerCase() || '#000000') === colorGroup.color.toLowerCase()
+              );
+
+              for (const pathInfo of colorPaths) {
+                const effectiveRole = pathInfo.userOverriddenRole ?? pathInfo.autoDetectedRole;
+                // Nur Outer und Nested-Objects als eigenständige Polygone (nicht Holes)
+                if (effectiveRole === 'hole') {
+                  continue;
+                }
+
+                // Finde zugehörige Holes
+                const holes: THREE.Vector2[][] = [];
+                for (const childId of pathInfo.childPathIds) {
+                  const childPath = item.pathAnalysis.paths.find(p => p.id === childId);
+                  if (childPath) {
+                    const childRole = childPath.userOverriddenRole ?? childPath.autoDetectedRole;
+                    if (childRole === 'hole') {
+                      holes.push(childPath.polygon);
+                    }
+                  }
+                }
+
+                polygonsForApi.push({
+                  outer: pathInfo.polygon,
+                  holes: holes
+                });
+              }
+            } else {
+              // Fallback: Nutze extractPolygonsWithColorsFromGroup ohne Hole-Erkennung
+              const polygonsWithColors = extractPolygonsWithColorsFromGroup(item.geometry);
+              const colorPolygons = polygonsWithColors.filter(
+                p => p.color.toLowerCase() === colorGroup.color.toLowerCase()
+              );
+
+              for (const poly of colorPolygons) {
+                polygonsForApi.push({
+                  outer: poly.polygon,
+                  holes: []
+                });
+              }
+            }
+
+            if (polygonsForApi.length === 0) {
+              console.warn(`Keine äußeren Polygone für Farbe ${colorGroup.color} gefunden`);
+              return;
+            }
+
+            // Backend aufrufen mit Optionen aus der Farbgruppe
+            const result = await extractCenterlineBackend(
+              polygonsForApi,
+              colorGroup.centerlineOptions,
+              0xff00ff  // Magenta
+            );
+
+            if (result && result.lines.length > 0) {
+              // Gruppe erstellen
+              const centerlineGroup = new THREE.Group();
+              centerlineGroup.name = `CenterlineGroup_${colorGroup.color.replace('#', '')}`;
+
+              result.lines.forEach((line, idx) => {
+                line.name = `Centerline_${colorGroup.color.replace('#', '')}_Line${idx}`;
+                line.userData = {
+                  isCenterline: true,
+                  colorGroup: colorGroup.color
+                };
+                centerlineGroup.add(line);
+              });
+
+              // Mit markRaw für Vue-Reaktivität
+              colorGroup.centerlineGroup = markRaw(centerlineGroup);
+              item.geometry.add(centerlineGroup);
+
+              // Stats speichern
+              colorGroup.centerlineStats = {
+                totalLengthMm: result.stats.total_length_mm,
+                numPolylines: result.stats.num_polylines,
+                processingTimeMs: result.stats.processing_time_ms
+              };
+
+              console.log(`Centerline für Farbe ${colorGroup.color} generiert: ${result.lines.length} Linien, ${result.stats.total_length_mm}mm`);
+
+              // Trigger scene update
+              this.svgItems = [...this.svgItems];
+            } else {
+              console.warn(`Keine Centerline für Farbe ${colorGroup.color} generiert`);
+            }
+          } finally {
+            // Clear loading state
+            this.centerlineGenerating = null;
+          }
+        }
+      }
+    },
+
+    // Centerline für eine Farbgruppe löschen
+    deleteColorCenterline(svgIndex: number, colorIndex: number) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          const colorGroup = item.colorGroups[colorIndex];
+
+          if (colorGroup.centerlineGroup) {
+            // Aus Szene entfernen
+            item.geometry.remove(colorGroup.centerlineGroup);
+            colorGroup.centerlineGroup = undefined;
+            colorGroup.centerlineStats = undefined;
+            console.log(`Centerline für Farbe ${colorGroup.color} gelöscht`);
+
+            // Trigger scene update
+            this.svgItems = [...this.svgItems];
+          }
+        }
+      }
+    },
+
+    // Centerline-Optionen für eine Farbe ändern
+    updateCenterlineOptions(svgIndex: number, colorIndex: number, options: Partial<CenterlineOptions>) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          const colorGroup = item.colorGroups[colorIndex];
+          colorGroup.centerlineOptions = { ...colorGroup.centerlineOptions, ...options };
+          console.log(`Centerline-Optionen für Farbe ${colorGroup.color} aktualisiert:`, options);
         }
       }
     },
@@ -1174,6 +1354,9 @@ export const useMainStore = defineStore('main', {
               infillToolNumber: cg.infillToolNumber,
               infillOptions: { ...cg.infillOptions },
               infillGroup,
+              // Centerline defaults (not persisted yet)
+              centerlineEnabled: false,
+              centerlineOptions: { ...defaultCenterlineOptions },
             };
           });
 

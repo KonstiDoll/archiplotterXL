@@ -143,6 +143,7 @@
                             :tool-configs="toolConfigs"
                             :is-generating="store.infillGenerating?.svgIndex === itemIndex && store.infillGenerating?.colorIndex === colorIdx"
                             :is-optimizing="store.infillOptimizing?.svgIndex === itemIndex && store.infillOptimizing?.colorIndex === colorIdx"
+                            :is-generating-centerline="store.centerlineGenerating?.svgIndex === itemIndex && store.centerlineGenerating?.colorIndex === colorIdx"
                             :is-first="colorIdx === 0"
                             :is-last="colorIdx === item.colorGroups.length - 1"
                             @toggle-visibility="store.toggleColorVisibility(itemIndex, colorIdx)"
@@ -160,6 +161,10 @@
                             @update-outline-offset="store.updateColorInfillOptions(itemIndex, colorIdx, { outlineOffset: $event })"
                             @move-up="store.moveColorUp(itemIndex, colorIdx)"
                             @move-down="store.moveColorDown(itemIndex, colorIdx)"
+                            @toggle-centerline="store.toggleColorCenterline(itemIndex, colorIdx)"
+                            @generate-centerline="store.generateColorCenterline(itemIndex, colorIdx)"
+                            @delete-centerline="store.deleteColorCenterline(itemIndex, colorIdx)"
+                            @update-centerline-option="(key: string, value: number | string) => store.updateCenterlineOptions(itemIndex, colorIdx, { [key]: value })"
                         />
                     </div>
                 </div>
