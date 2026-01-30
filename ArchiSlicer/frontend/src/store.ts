@@ -1394,7 +1394,12 @@ export const useMainStore = defineStore('main', {
      * Serialize the current project state to a ProjectData object.
      * Used for saving to API or downloading as file.
      */
-    getProjectData(projectName: string): ProjectData {
+    getProjectData(
+      projectName: string,
+      backgroundPreset?: string,
+      customBackgroundColor?: string,
+      toolConfigs?: { penType: string; color: string }[]
+    ): ProjectData {
       const now = new Date().toISOString();
 
       // Helper to extract points from a THREE.Line
@@ -1436,6 +1441,21 @@ export const useMainStore = defineStore('main', {
             console.log(`Serialized ${fileInfillLines.length} file-level infill lines for ${item.fileName}`);
           }
 
+          // v1.3: Extract path analysis overrides (user-changed hole markings)
+          let pathAnalysisOverrides: { pathId: string; overriddenRole: PathRole }[] | undefined = undefined;
+          if (item.pathAnalysis) {
+            const overrides = item.pathAnalysis.paths
+              .filter(p => p.userOverriddenRole !== null)
+              .map(p => ({
+                pathId: p.id,
+                overriddenRole: p.userOverriddenRole!
+              }));
+            if (overrides.length > 0) {
+              pathAnalysisOverrides = overrides;
+              console.log(`Serialized ${overrides.length} path analysis overrides for ${item.fileName}`);
+            }
+          }
+
           return {
             fileName: item.fileName,
             svgContent: item.svgContent!,
@@ -1456,30 +1476,52 @@ export const useMainStore = defineStore('main', {
                 toolNumber: cg.toolNumber,
                 lineCount: cg.lineCount,
                 visible: cg.visible,
+                // v1.3: Outline and drawing mode settings
+                showOutlines: cg.showOutlines,
                 useFileDefaults: cg.useFileDefaults,
+                drawingMode: cg.drawingMode,
+                customOffset: cg.customOffset,
+                // Infill settings
                 infillEnabled: cg.infillEnabled,
                 infillToolNumber: cg.infillToolNumber,
                 infillOptions: { ...cg.infillOptions },
+                // v1.3: Centerline settings
+                centerlineEnabled: cg.centerlineEnabled,
+                centerlineOptions: cg.centerlineOptions ? { ...cg.centerlineOptions } : undefined,
               };
               // Serialize infill geometry if present
               if (cg.infillGroup && cg.infillGroup.children.length > 0) {
                 serialized.infillLines = serializeInfillGroup(cg.infillGroup);
                 console.log(`Serialized ${serialized.infillLines.length} infill lines for color ${cg.color}`);
               }
+              // Serialize centerline geometry if present
+              if (cg.centerlineGroup && cg.centerlineGroup.children.length > 0) {
+                serialized.centerlineLines = serializeInfillGroup(cg.centerlineGroup);
+                console.log(`Serialized ${serialized.centerlineLines.length} centerline lines for color ${cg.color}`);
+              }
               return serialized;
             }),
             isAnalyzed: item.isAnalyzed,
+            // v1.3: Path analysis overrides
+            pathAnalysisOverrides,
           };
         });
 
       return {
-        version: '1.1',
+        version: '1.3',
         name: projectName,
         createdAt: now,
         updatedAt: now,
         defaultDpi: this.defaultDpi,
         workpieceStarts: this.workpieceStarts.map(ws => ({ ...ws })),
         svgItems: serializedItems,
+        // v1.2: Background settings
+        backgroundPreset,
+        customBackgroundColor,
+        // v1.2: Tool configurations
+        toolConfigs: toolConfigs ? [...toolConfigs] : undefined,
+        // v1.3: G-Code export mode
+        gcodeExportMode: this.gcodeExportMode,
       };
     },
 
@@ -1497,6 +1539,9 @@ export const useMainStore = defineStore('main', {
 
       // Restore default DPI
       this.defaultDpi = projectData.defaultDpi || 72;
+
+      // v1.3: Restore G-Code export mode
+      this.gcodeExportMode = projectData.gcodeExportMode || 'tool';
 
       // Restore SVG items (requires parsing SVG content)
       for (const serialized of projectData.svgItems) {
@@ -1516,9 +1561,10 @@ export const useMainStore = defineStore('main', {
             console.log(`Restored ${serialized.infillLines.length} file-level infill lines for ${serialized.fileName}`);
           }
 
-          // Restore color groups with infill geometry
+          // Restore color groups with infill and centerline geometry
           const colorGroups: ColorGroup[] = serialized.colorGroups.map(cg => {
             let infillGroup: THREE.Group | undefined = undefined;
+            let centerlineGroup: THREE.Group | undefined = undefined;
 
             // Reconstruct infill geometry if it was saved
             if (cg.infillLines && cg.infillLines.length > 0) {
@@ -1528,6 +1574,14 @@ export const useMainStore = defineStore('main', {
               console.log(`Restored ${cg.infillLines.length} infill lines for color ${cg.color}`);
             }
 
+            // v1.3: Reconstruct centerline geometry if it was saved
+            if (cg.centerlineLines && cg.centerlineLines.length > 0) {
+              centerlineGroup = markRaw(deserializeInfillGroup(cg.centerlineLines, cg.color));
+              // Add the centerline group to the main geometry so it renders
+              geometry.add(centerlineGroup);
+              console.log(`Restored ${cg.centerlineLines.length} centerline lines for color ${cg.color}`);
+            }
+
             return {
               color: cg.color,
               toolNumber: cg.toolNumber,
@@ -1535,15 +1589,16 @@ export const useMainStore = defineStore('main', {
               visible: cg.visible,
               showOutlines: cg.showOutlines ?? true, // Default to true for backwards compatibility
               useFileDefaults: cg.useFileDefaults ?? false, // Default to false for backwards compatibility
-              drawingMode: (cg as any).drawingMode ?? 'center',  // Default to center for backwards compatibility
-              customOffset: (cg as any).customOffset,
+              drawingMode: cg.drawingMode ?? 'center',  // Default to center for backwards compatibility
+              customOffset: cg.customOffset,
               infillEnabled: cg.infillEnabled,
               infillToolNumber: cg.infillToolNumber,
               infillOptions: { ...cg.infillOptions },
               infillGroup,
-              // Centerline defaults (not persisted yet)
-              centerlineEnabled: false,
-              centerlineOptions: { ...defaultCenterlineOptions },
+              // v1.3: Restore centerline settings
+              centerlineEnabled: cg.centerlineEnabled ?? false,
+              centerlineOptions: cg.centerlineOptions ? { ...cg.centerlineOptions } : { ...defaultCenterlineOptions },
+              centerlineGroup,
             };
           });
 
@@ -1573,6 +1628,20 @@ export const useMainStore = defineStore('main', {
           // Run path analysis for the new item
           const newIndex = this.svgItems.length - 1;
           this.analyzePathRelationshipsAction(newIndex);
+
+          // v1.3: Apply path analysis overrides after analysis is done
+          if (serialized.pathAnalysisOverrides && serialized.pathAnalysisOverrides.length > 0) {
+            const svgItem = this.svgItems[newIndex];
+            if (svgItem.pathAnalysis) {
+              for (const override of serialized.pathAnalysisOverrides) {
+                const path = svgItem.pathAnalysis.paths.find(p => p.id === override.pathId);
+                if (path) {
+                  path.userOverriddenRole = override.overriddenRole;
+                  console.log(`Restored path override: ${override.pathId} -> ${override.overriddenRole}`);
+                }
+              }
+            }
+          }
 
           console.log(`Loaded SVG "${serialized.fileName}" from project`);
         } catch (error) {

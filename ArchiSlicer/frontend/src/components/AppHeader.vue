@@ -73,13 +73,16 @@
     <ProjectBrowser
         :is-open="showProjectBrowser"
         @close="showProjectBrowser = false"
-        @project-loaded="handleProjectLoaded"
+        @project-loaded="handleProjectLoadedFromBrowser"
     />
 
     <!-- Save Project Dialog -->
     <SaveProjectDialog
         :is-open="showSaveDialog"
         :mode="saveDialogMode"
+        :background-preset="props.backgroundPreset"
+        :custom-background-color="props.customBackgroundColor"
+        :tool-configs="props.toolConfigs"
         @close="showSaveDialog = false"
         @saved="handleProjectSaved"
     />
@@ -125,6 +128,21 @@ import {
     currentProjectName,
     clearCurrentProject,
 } from '../utils/project_services';
+
+interface ToolConfig {
+    penType: string;
+    color: string;
+}
+
+const props = defineProps<{
+    backgroundPreset?: string;
+    customBackgroundColor?: string;
+    toolConfigs?: ToolConfig[];
+}>();
+
+const emit = defineEmits<{
+    (e: 'project-loaded', data: { backgroundPreset?: string; customBackgroundColor?: string; toolConfigs?: ToolConfig[] }): void;
+}>();
 
 const store = useMainStore();
 
@@ -182,8 +200,16 @@ function openSaveDialog(mode: 'save' | 'saveAs') {
     showSaveDialog.value = true;
 }
 
-function handleProjectLoaded() {
-    console.log('Project loaded successfully');
+interface ProjectLoadedData {
+    backgroundPreset?: string;
+    customBackgroundColor?: string;
+    toolConfigs?: ToolConfig[];
+}
+
+function handleProjectLoadedFromBrowser(data: ProjectLoadedData) {
+    console.log('Project loaded successfully, forwarding settings:', data);
+    // Forward to App.vue
+    emit('project-loaded', data);
 }
 
 function handleProjectSaved() {

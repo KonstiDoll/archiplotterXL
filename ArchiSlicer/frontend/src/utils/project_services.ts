@@ -2,13 +2,18 @@ import { ref } from 'vue';
 import * as THREE from 'three';
 import type { SVGItem, ColorGroup, WorkpieceStart } from '../store';
 import type { InfillOptions } from './threejs_services';
+import type { ToolConfig } from './gcode_services';
+import type { CenterlineOptions } from './infill-api';
+import type { PathRole } from './geometry/path-analysis';
 
 // API base URL - use env var for dev, empty for production (relative URLs)
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 // Project file version for format migrations
 // v1.1: Added infill line data serialization
-const PROJECT_VERSION = '1.1';
+// v1.2: Added background settings and tool configs
+// v1.3: Added centerline settings, path analysis overrides, gcodeExportMode
+const PROJECT_VERSION = '1.3';
 
 // Project file extension
 export const PROJECT_FILE_EXTENSION = '.archislicer';
@@ -23,6 +28,19 @@ export interface ProjectData {
   defaultDpi: number;
   workpieceStarts: WorkpieceStart[];
   svgItems: SerializedSVGItem[];
+  // v1.2: Background settings (optional for backwards compatibility)
+  backgroundPreset?: string;
+  customBackgroundColor?: string;
+  // v1.2: Tool configurations (optional for backwards compatibility)
+  toolConfigs?: ToolConfig[];
+  // v1.3: G-Code export mode (optional for backwards compatibility, default: 'tool')
+  gcodeExportMode?: 'tool' | 'layer';
+}
+
+// Serialized path analysis override (user-changed hole markings)
+export interface SerializedPathOverride {
+  pathId: string;
+  overriddenRole: PathRole;
 }
 
 // Serializable version of SVGItem (without THREE.js objects)
@@ -42,6 +60,8 @@ export interface SerializedSVGItem {
   infillLines?: SerializedInfillLine[]; // File-level infill (from FilePanel)
   colorGroups: SerializedColorGroup[];
   isAnalyzed: boolean;
+  // v1.3: Path analysis overrides (user-changed hole markings)
+  pathAnalysisOverrides?: SerializedPathOverride[];
 }
 
 // Serialized infill line (array of [x, y] points)
@@ -68,6 +88,10 @@ export interface SerializedColorGroup {
   infillOptions: InfillOptions;
   // Serialized infill geometry (if generated)
   infillLines?: SerializedInfillLine[];
+  // v1.3: Centerline settings
+  centerlineEnabled?: boolean;
+  centerlineOptions?: CenterlineOptions;
+  centerlineLines?: SerializedInfillLine[]; // Serialized centerline geometry
 }
 
 // API response types
@@ -162,12 +186,21 @@ function serializeColorGroup(colorGroup: ColorGroup): SerializedColorGroup {
     infillEnabled: colorGroup.infillEnabled,
     infillToolNumber: colorGroup.infillToolNumber,
     infillOptions: { ...colorGroup.infillOptions },
+    // v1.3: Centerline settings
+    centerlineEnabled: colorGroup.centerlineEnabled,
+    centerlineOptions: colorGroup.centerlineOptions ? { ...colorGroup.centerlineOptions } : undefined,
   };
 
   // Serialize infill geometry if it exists
   if (colorGroup.infillGroup && colorGroup.infillGroup.children.length > 0) {
     serialized.infillLines = serializeInfillGroup(colorGroup.infillGroup);
     console.log(`Serialized ${serialized.infillLines.length} infill lines for color ${colorGroup.color}`);
+  }
+
+  // Serialize centerline geometry if it exists
+  if (colorGroup.centerlineGroup && colorGroup.centerlineGroup.children.length > 0) {
+    serialized.centerlineLines = serializeInfillGroup(colorGroup.centerlineGroup);
+    console.log(`Serialized ${serialized.centerlineLines.length} centerline lines for color ${colorGroup.color}`);
   }
 
   return serialized;
@@ -182,6 +215,21 @@ function serializeSVGItem(item: SVGItem): SerializedSVGItem | null {
   if (!item.svgContent) {
     console.warn(`Cannot serialize SVG "${item.fileName}" - no svgContent available`);
     return null;
+  }
+
+  // v1.3: Extract path analysis overrides (user-changed hole markings)
+  let pathAnalysisOverrides: SerializedPathOverride[] | undefined = undefined;
+  if (item.pathAnalysis) {
+    const overrides = item.pathAnalysis.paths
+      .filter(p => p.userOverriddenRole !== null)
+      .map(p => ({
+        pathId: p.id,
+        overriddenRole: p.userOverriddenRole!
+      }));
+    if (overrides.length > 0) {
+      pathAnalysisOverrides = overrides;
+      console.log(`Serialized ${overrides.length} path analysis overrides for ${item.fileName}`);
+    }
   }
 
   return {
@@ -199,6 +247,7 @@ function serializeSVGItem(item: SVGItem): SerializedSVGItem | null {
     infillOptions: { ...item.infillOptions },
     colorGroups: item.colorGroups.map(serializeColorGroup),
     isAnalyzed: item.isAnalyzed,
+    pathAnalysisOverrides,
   };
 }
 
@@ -209,7 +258,10 @@ export function serializeProject(
   svgItems: SVGItem[],
   workpieceStarts: WorkpieceStart[],
   defaultDpi: number,
-  projectName: string
+  projectName: string,
+  backgroundPreset?: string,
+  customBackgroundColor?: string,
+  toolConfigs?: ToolConfig[]
 ): ProjectData {
   const now = new Date().toISOString();
 
@@ -229,6 +281,11 @@ export function serializeProject(
     defaultDpi,
     workpieceStarts: workpieceStarts.map(ws => ({ ...ws })),
     svgItems: serializedItems,
+    // v1.2: Background settings
+    backgroundPreset,
+    customBackgroundColor,
+    // v1.2: Tool configurations
+    toolConfigs: toolConfigs ? [...toolConfigs] : undefined,
   };
 }
 

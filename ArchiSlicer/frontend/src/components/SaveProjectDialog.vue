@@ -116,9 +116,17 @@ import {
     currentProjectName,
 } from '../utils/project_services';
 
+interface ToolConfig {
+    penType: string;
+    color: string;
+}
+
 const props = defineProps<{
     isOpen: boolean;
     mode: 'save' | 'saveAs';
+    backgroundPreset?: string;
+    customBackgroundColor?: string;
+    toolConfigs?: ToolConfig[];
 }>();
 
 const emit = defineEmits<{
@@ -164,8 +172,13 @@ async function save() {
     const name = projectName.value.trim();
 
     try {
-        // Get project data from store
-        const projectData = store.getProjectData(name);
+        // Get project data from store (including background and tool settings)
+        const projectData = store.getProjectData(
+            name,
+            props.backgroundPreset,
+            props.customBackgroundColor,
+            props.toolConfigs
+        );
 
         // Save to server if requested
         if (saveLocation.value === 'server' || saveLocation.value === 'both') {

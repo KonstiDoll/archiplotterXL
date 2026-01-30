@@ -1041,7 +1041,7 @@ export function createGcodeWithColorInfill(
         }
 
         // --- KONTUREN ---
-        // Konturen zeichnen wenn showOutlines true (oder nicht definiert für Rückwärtskompatibilität)
+        // Konturen zeichnen wenn showOutlines true (unabhängig von Centerline)
         if (contourLines.length > 0 && colorGroup.showOutlines !== false) {
             // Use file defaults if useFileDefaults is true
             const contourTool = colorGroup.useFileDefaults ? fileToolNumber : colorGroup.toolNumber;

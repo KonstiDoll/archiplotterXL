@@ -205,9 +205,20 @@ const props = defineProps<{
     isOpen: boolean;
 }>();
 
+interface ToolConfig {
+    penType: string;
+    color: string;
+}
+
+interface ProjectLoadedData {
+    backgroundPreset?: string;
+    customBackgroundColor?: string;
+    toolConfigs?: ToolConfig[];
+}
+
 const emit = defineEmits<{
     (e: 'close'): void;
-    (e: 'project-loaded'): void;
+    (e: 'project-loaded', data: ProjectLoadedData): void;
 }>();
 
 const store = useMainStore();
@@ -252,7 +263,12 @@ async function openProject(projectId: number) {
         await store.loadProjectData(response.project_data);
         currentProjectId.value = projectId;
         currentProjectName.value = response.name;
-        emit('project-loaded');
+        // Emit project settings for App.vue to restore
+        emit('project-loaded', {
+            backgroundPreset: response.project_data.backgroundPreset,
+            customBackgroundColor: response.project_data.customBackgroundColor,
+            toolConfigs: response.project_data.toolConfigs,
+        });
         close();
     } catch (e) {
         error.value = e instanceof Error ? e.message : 'Fehler beim Öffnen';
@@ -325,7 +341,12 @@ async function restoreConfirmed() {
         await store.loadProjectData(response.project_data);
         currentProjectId.value = response.id;
         currentProjectName.value = response.name;
-        emit('project-loaded');
+        // Emit project settings for App.vue to restore
+        emit('project-loaded', {
+            backgroundPreset: response.project_data.backgroundPreset,
+            customBackgroundColor: response.project_data.customBackgroundColor,
+            toolConfigs: response.project_data.toolConfigs,
+        });
         restoreInfo.value = null;
 
         // Refresh project list and version history
@@ -353,7 +374,12 @@ async function handleFileUpload(event: Event) {
         // Local file - no server ID
         clearCurrentProject();
         currentProjectName.value = projectData.name;
-        emit('project-loaded');
+        // Emit project settings for App.vue to restore
+        emit('project-loaded', {
+            backgroundPreset: projectData.backgroundPreset,
+            customBackgroundColor: projectData.customBackgroundColor,
+            toolConfigs: projectData.toolConfigs,
+        });
         close();
     } catch (e) {
         error.value = e instanceof Error ? e.message : 'Fehler beim Laden der Datei';

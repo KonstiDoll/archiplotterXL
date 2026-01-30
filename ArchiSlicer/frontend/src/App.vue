@@ -16,6 +16,8 @@ const simulatorStore = useSimulatorStore();
 
 // LocalStorage Keys
 const STORAGE_KEY_TOOLS = 'archislicer_toolConfigs';
+const STORAGE_KEY_BACKGROUND = 'archislicer_backgroundPreset';
+const STORAGE_KEY_CUSTOM_COLOR = 'archislicer_customBackgroundColor';
 
 // Default Tool-Konfiguration
 const createDefaultToolConfigs = (): ToolConfig[] =>
@@ -35,10 +37,10 @@ onMounted(async () => {
     await fetchPenTypes();
 
     // Load tool configs from localStorage
-    const saved = localStorage.getItem(STORAGE_KEY_TOOLS);
-    if (saved) {
+    const savedTools = localStorage.getItem(STORAGE_KEY_TOOLS);
+    if (savedTools) {
         try {
-            const parsed = JSON.parse(saved);
+            const parsed = JSON.parse(savedTools);
             if (Array.isArray(parsed) && parsed.length === 9) {
                 toolConfigs.value = parsed;
                 console.log('Tool-Konfiguration aus localStorage geladen');
@@ -47,7 +49,26 @@ onMounted(async () => {
             console.warn('Fehler beim Laden der Tool-Konfiguration:', e);
         }
     }
+
+    // Load background settings from localStorage
+    const savedBackground = localStorage.getItem(STORAGE_KEY_BACKGROUND);
+    if (savedBackground) {
+        backgroundPreset.value = savedBackground;
+        console.log('Hintergrund-Preset aus localStorage geladen:', savedBackground);
+    }
+
+    const savedCustomColor = localStorage.getItem(STORAGE_KEY_CUSTOM_COLOR);
+    if (savedCustomColor) {
+        customBackgroundColor.value = savedCustomColor;
+        console.log('Benutzerdefinierte Hintergrundfarbe aus localStorage geladen:', savedCustomColor);
+    }
 });
+
+const globalDrawingHeight = ref(0);
+const gCode = ref('');
+// Hintergrund-Preset für die 3D-Vorschau
+const backgroundPreset = ref('forest');
+const customBackgroundColor = ref('#e0e0e0');
 
 // Bei Änderungen in localStorage speichern
 watch(toolConfigs, (newConfigs) => {
@@ -55,11 +76,16 @@ watch(toolConfigs, (newConfigs) => {
     console.log('Tool-Konfiguration gespeichert');
 }, { deep: true });
 
-const globalDrawingHeight = ref(0);
-const gCode = ref('');
-// Hintergrund-Preset für die 3D-Vorschau
-const backgroundPreset = ref('forest');
-const customBackgroundColor = ref('#e0e0e0');
+// Hintergrund-Einstellungen in localStorage speichern
+watch(backgroundPreset, (newPreset) => {
+    localStorage.setItem(STORAGE_KEY_BACKGROUND, newPreset);
+    console.log('Hintergrund-Preset gespeichert:', newPreset);
+});
+
+watch(customBackgroundColor, (newColor) => {
+    localStorage.setItem(STORAGE_KEY_CUSTOM_COLOR, newColor);
+    console.log('Benutzerdefinierte Hintergrundfarbe gespeichert:', newColor);
+});
 
 // Computed
 const hasItems = computed(() => store.svgItems.length > 0);
@@ -113,6 +139,29 @@ const handleLoadPreset = (configs: ToolConfig[]) => {
     });
 };
 
+// Handler für geladenes Projekt - stellt Hintergrund und Stiftpalette wieder her
+const handleProjectLoaded = (data: { backgroundPreset?: string; customBackgroundColor?: string; toolConfigs?: ToolConfig[] }) => {
+    console.log('Projekt geladen, Einstellungen wiederherstellen:', data);
+
+    // Hintergrund-Einstellungen wiederherstellen (falls im Projekt gespeichert)
+    if (data.backgroundPreset) {
+        backgroundPreset.value = data.backgroundPreset;
+    }
+    if (data.customBackgroundColor) {
+        customBackgroundColor.value = data.customBackgroundColor;
+    }
+
+    // Stiftpalette wiederherstellen (falls im Projekt gespeichert)
+    if (data.toolConfigs && Array.isArray(data.toolConfigs)) {
+        data.toolConfigs.forEach((config, index) => {
+            if (index < toolConfigs.value.length && config.penType && config.color) {
+                toolConfigs.value[index] = config;
+            }
+        });
+        console.log('Stiftpalette aus Projekt wiederhergestellt');
+    }
+};
+
 // G-Code generation
 const generateGcode = () => {
     if (store.svgItems.length === 0) {
@@ -142,10 +191,14 @@ const generateGcode = () => {
             combinedGcode += `; Verwendete Tools: ${Array.from(usedTools).sort().join(', ')}\n`;
             combinedGcode += `; Feedrate ${item.feedrate} mm/min\n`;
 
-            // Prüfen ob farb-basiertes Infill aktiv ist (nur wenn bereits generiert)
-            const hasColorInfill = item.colorGroups.some(cg => cg.infillEnabled && cg.infillGroup && cg.infillGroup.children.length > 0);
+            // Prüfen ob erweiterte G-Code Generierung nötig ist (Infill, Centerlines, oder Offset-Konturen)
+            const needsAdvancedGCode = item.colorGroups.some(cg =>
+                (cg.infillEnabled && cg.infillGroup && cg.infillGroup.children.length > 0) ||
+                (cg.centerlineEnabled && cg.centerlineGroup && cg.centerlineGroup.children.length > 0) ||
+                (cg.offsetContourGroup && cg.offsetContourGroup.children.length > 0)
+            );
 
-            if (hasColorInfill) {
+            if (needsAdvancedGCode) {
                 // Farb-basiertes Infill: Verwende bereits generiertes Infill
                 const infillGroups = new Map<string, THREE.Group>();
                 const colorsWithInfill: string[] = [];
@@ -158,7 +211,9 @@ const generateGcode = () => {
                     }
                 }
 
-                combinedGcode += `; Farb-basiertes Infill für: ${colorsWithInfill.join(', ')}\n`;
+                if (colorsWithInfill.length > 0) {
+                    combinedGcode += `; Farb-basiertes Infill für: ${colorsWithInfill.join(', ')}\n`;
+                }
 
                 const svgGcode = createGcodeWithColorInfill(
                     item.geometry,
@@ -235,7 +290,12 @@ const handleSimulate = async () => {
 <template>
     <div class="flex flex-col h-screen w-screen overflow-hidden bg-slate-900">
         <!-- Header -->
-        <AppHeader />
+        <AppHeader
+            :background-preset="backgroundPreset"
+            :custom-background-color="customBackgroundColor"
+            :tool-configs="toolConfigs"
+            @project-loaded="handleProjectLoaded"
+        />
 
         <!-- Main Content -->
         <div class="flex flex-grow overflow-hidden">
