@@ -36,6 +36,11 @@
                 </span>
             </div>
             <div class="flex items-center space-x-2">
+                <button v-if="gcode" @click="$emit('simulate')"
+                    class="px-3 py-1 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors"
+                    title="G-Code im Simulator visualisieren">
+                    Simulieren
+                </button>
                 <button v-if="gcode" @click="copyToClipboard"
                     class="px-3 py-1 text-sm bg-slate-600 hover:bg-slate-700 text-white rounded transition-colors">
                     {{ copied ? '✓ Kopiert' : 'Kopieren' }}
@@ -73,6 +78,7 @@ const props = defineProps<{
 
 defineEmits<{
     (e: 'generate'): void;
+    (e: 'simulate'): void;
 }>();
 
 const copied = ref(false);

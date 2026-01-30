@@ -13,3 +13,9 @@ scipy>=1.10.0
 
 # TSP optimization for path ordering
 ortools>=9.5.0
+
+# Centerline extraction (morphological thinning)
+opencv-contrib-python>=4.8.0
+
+# Voronoi-based centerline extraction
+centerline>=1.0.0

@@ -1,0 +1,4642 @@
+{
+  "version": "1.0",
+  "generated": "2026-01-29T18:43:41.268Z",
+  "macros": {
+    "close_grabber": {
+      "raw": [
+        ";G0 Z38",
+        ";G0 U6.3 ;fahre bis mitnehmer",
+        "G0 Z46.20 F800 ; go to the correct Z height",
+        "G0 U5.2 ; move U axis until the jaws open",
+        "G91 ; relative coordinates",
+        "G0 Z5.2 U-5.2 ; open grabber",
+        "G90; absolute coordinates",
+        "G0 X0 F 10000;move to position",
+        "G91",
+        "G0 Z-5.2 U5.2 F800 ; close grabber",
+        "G0 Z10 ;lift",
+        "G90",
+        "G0 X55 F10000 ; move away from the tools",
+        "G0 U0 ; avoid zouching pen on base after job starts"
+      ],
+      "flattened": [
+        {
+          "type": "move",
+          "z": 46.2,
+          "feedrate": 800
+        },
+        {
+          "type": "move",
+          "u": 5.2
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 0
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 800
+        },
+        {
+          "type": "move",
+          "z": 10
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "u": 0
+        }
+      ]
+    },
+    "demo.g": {
+      "raw": [
+        "g0 x2340 F18000",
+        "g0 y1744 F18000",
+        "g0 x10 y10 F18000"
+      ],
+      "flattened": [
+        {
+          "type": "move",
+          "x": 2340,
+          "feedrate": 18000
+        },
+        {
+          "type": "move",
+          "y": 1744,
+          "feedrate": 18000
+        },
+        {
+          "type": "move",
+          "x": 10,
+          "y": 10,
+          "feedrate": 18000
+        }
+      ]
+    },
+    "grab_tool_1": {
+      "raw": [
+        "G29 S2 ; stop using meshcompensation",
+        "M98 P/macros/move_in_front_of_tools",
+        "G0 Y333.3 F10000 ; move in front of the first tool",
+        "M98 P/macros/take_tool",
+        "G29 S1 ; start using meshcompensation"
+      ],
+      "flattened": [
+        {
+          "type": "other"
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "y": 333.3,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 46.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 5000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 0
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "z": 10,
+          "feedrate": 1000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "u": 33
+        },
+        {
+          "type": "other"
+        }
+      ]
+    },
+    "grab_tool_2": {
+      "raw": [
+        "G29 S2 ; stop using meshcompensation; new",
+        "M98 P/macros/move_in_front_of_tools",
+        "G0 Y411 F10000 ; move in front of the second tool",
+        "M98 P/macros/take_tool",
+        "G29 S1 ; start using meshcompensation"
+      ],
+      "flattened": [
+        {
+          "type": "other"
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "y": 411,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 46.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 5000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 0
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "z": 10,
+          "feedrate": 1000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "u": 33
+        },
+        {
+          "type": "other"
+        }
+      ]
+    },
+    "grab_tool_3": {
+      "raw": [
+        "G29 S2 ; stop using meshcompensation;new",
+        "M98 P/macros/move_in_front_of_tools",
+        "G0 Y489.6 F10000 ; move in front of the third tool",
+        "M98 P/macros/take_tool",
+        "G29 S1 ; start using meshcompensation"
+      ],
+      "flattened": [
+        {
+          "type": "other"
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "y": 489.6,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 46.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 5000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 0
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "z": 10,
+          "feedrate": 1000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "u": 33
+        },
+        {
+          "type": "other"
+        }
+      ]
+    },
+    "grab_tool_4": {
+      "raw": [
+        "G29 S2 ; stop using meshcompensation;new",
+        "M98 P/macros/move_in_front_of_tools",
+        "G0 Y567.6 F10000 ; move in front of the third tool",
+        "M98 P/macros/take_tool",
+        "G29 S1 ; start using meshcompensation"
+      ],
+      "flattened": [
+        {
+          "type": "other"
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "y": 567.6,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 46.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 5000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 0
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "z": 10,
+          "feedrate": 1000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "u": 33
+        },
+        {
+          "type": "other"
+        }
+      ]
+    },
+    "grab_tool_5": {
+      "raw": [
+        "G29 S2 ; stop using meshcompensation;new",
+        "M98 P/macros/move_in_front_of_tools",
+        "G0 Y645.4 F10000 ; move in front of the third tool",
+        "M98 P/macros/take_tool",
+        "G29 S1 ; start using meshcompensation"
+      ],
+      "flattened": [
+        {
+          "type": "other"
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "y": 645.4,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 46.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 5000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 0
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "z": 10,
+          "feedrate": 1000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "u": 33
+        },
+        {
+          "type": "other"
+        }
+      ]
+    },
+    "grab_tool_6": {
+      "raw": [
+        "G29 S2 ; stop using meshcompensation;new",
+        "M98 P/macros/move_in_front_of_tools",
+        "G0 Y723.6 F10000 ; move in front of the third tool",
+        "M98 P/macros/take_tool",
+        "G29 S1 ; start using meshcompensation"
+      ],
+      "flattened": [
+        {
+          "type": "other"
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "y": 723.6,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 46.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 5000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 0
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "z": 10,
+          "feedrate": 1000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "u": 33
+        },
+        {
+          "type": "other"
+        }
+      ]
+    },
+    "grab_tool_7": {
+      "raw": [
+        "G29 S2 ; stop using meshcompensation;new",
+        "M98 P/macros/move_in_front_of_tools",
+        "G0 Y801.1 F10000 ; move in front of the third tool",
+        "M98 P/macros/take_tool",
+        "G29 S1 ; start using meshcompensation"
+      ],
+      "flattened": [
+        {
+          "type": "other"
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "y": 801.1,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 46.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 5000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 0
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "z": 10,
+          "feedrate": 1000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "u": 33
+        },
+        {
+          "type": "other"
+        }
+      ]
+    },
+    "grab_tool_8": {
+      "raw": [
+        "G29 S2 ; stop using meshcompensation;new",
+        "M98 P/macros/move_in_front_of_tools",
+        "G0 Y879.2 F10000 ; move in front of the third tool",
+        "M98 P/macros/take_tool",
+        "G29 S1 ; start using meshcompensation"
+      ],
+      "flattened": [
+        {
+          "type": "other"
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "y": 879.2,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 46.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 5000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 0
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "z": 10,
+          "feedrate": 1000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "u": 33
+        },
+        {
+          "type": "other"
+        }
+      ]
+    },
+    "grabber_close": {
+      "raw": [
+        "G91",
+        "G0 Z-5.2 U5.2 F800 ; close grabber",
+        "G90"
+      ],
+      "flattened": [
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 800
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        }
+      ]
+    },
+    "grabber_demo": {
+      "raw": [
+        ";grab tool 1",
+        "G0 Y319.5 F10000",
+        "G0 X2275.2 ",
+        "G0 Z51.20 F800",
+        "G0 U29.4 ;fahre bis mitnehmer",
+        ";open grabber",
+        "G91",
+        "G0 U5.2",
+        ";move to position",
+        "G0 X40",
+        ";close grabber",
+        "G0 Z-5.2 U-5.2",
+        ";lift",
+        "G0 Z10",
+        ";go back",
+        "G0 X-40",
+        "G90",
+        "G90",
+        "G21",
+        "M201 X200 Y200",
+        ";startgcode",
+        ";G28 ; home all axes",
+        "G29 S1",
+        "G1 Z5 F5000 ; lift nozzle",
+        "G1 U8 ",
+        "G1 Z.4 F1800 ",
+        "G1 F2400 ",
+        "G1 Z8.4 F1800 ",
+        "G1 X1795.11 Y826.93 F7800 ",
+        "; Pumpen",
+        "G91 ; Pumpen",
+        "G1 U20",
+        "G1 U-20",
+        "G90 ; Pumpen",
+        "G1 Z.4 F1800 ",
+        "G1 F2400 ",
+        "G1 F6000 ",
+        "G1 X1796.296 Y837.328 ",
+        "G1 X1797.298 Y847.744 ",
+        "G1 X1798.12 Y858.176 ",
+        "G1 X1798.758 Y868.62 ",
+        "G1 X1799.214 Y879.076 ",
+        "G1 X1799.488 Y889.536 ",
+        "G1 X1799.58 Y900.0 ",
+        "G1 X1799.488 Y910.464 ",
+        "G1 X1799.214 Y920.926 ",
+        "G1 X1798.758 Y931.38 ",
+        "G1 X1798.12 Y941.824 ",
+        "G1 X1797.298 Y952.256 ",
+        "G1 X1796.296 Y962.672 ",
+        "G1 X1795.11 Y973.07 ",
+        "G1 X1793.744 Y983.446 ",
+        "G1 X1792.198 Y993.796 ",
+        "G1 X1790.47 Y1004.116 ",
+        "G1 X1788.564 Y1014.406 ",
+        "G1 X1786.478 Y1024.66 ",
+        "; Pumpen",
+        "G91 ; Pumpen",
+        "G1 U20",
+        "G1 U-20",
+        "G90 ; Pumpen",
+        "G1 X1784.212 Y1034.876 ",
+        "G1 X1781.77 Y1045.052 ",
+        "G1 X1779.15 Y1055.182 ",
+        "G1 X1776.354 Y1065.266 ",
+        "G1 X1773.382 Y1075.3 ",
+        "G1 X1770.234 Y1085.28 ",
+        "G1 X1766.914 Y1095.204 ",
+        "G1 X1763.42 Y1105.068 ",
+        "G1 X1759.756 Y1114.87 ",
+        "G1 X1755.92 Y1124.606 ",
+        "G1 X1751.916 Y1134.274 ",
+        "G1 X1747.744 Y1143.872 ",
+        "G1 X1743.404 Y1153.394 ",
+        "G1 X1738.9 Y1162.838 ",
+        "G1 X1734.23 Y1172.204 ",
+        "G1 X1729.398 Y1181.486 ",
+        "G1 X1724.404 Y1190.682 ",
+        "G1 X1719.252 Y1199.79 ",
+        "G1 X1713.94 Y1208.806 ",
+        "G1 X1708.472 Y1217.728 ",
+        "; Pumpen",
+        "G91 ; Pumpen",
+        "G1 U20",
+        "G1 U-20",
+        "G90 ; Pumpen",
+        "G1 X1702.85 Y1226.554 ",
+        "G1 X1697.074 Y1235.28 ",
+        "G1 X1691.148 Y1243.904 ",
+        "G1 X1685.07 Y1252.424 ",
+        "G1 X1678.846 Y1260.836 ",
+        "G1 X1672.476 Y1269.138 ",
+        "G1 X1665.962 Y1277.328 ",
+        "G1 X1659.304 Y1285.402 ",
+        "G1 X1652.508 Y1293.36 ",
+        "G1 X1645.574 Y1301.198 ",
+        "G1 X1638.504 Y1308.912 ",
+        "G1 X1631.302 Y1316.504 ",
+        "G1 X1623.968 Y1323.968 ",
+        "G1 X1616.504 Y1331.302 ",
+        "G1 X1608.912 Y1338.506 ",
+        "G1 X1601.198 Y1345.574 ",
+        "G1 X1593.36 Y1352.508 ",
+        "G1 X1585.402 Y1359.304 ",
+        "G1 X1577.328 Y1365.962 ",
+        "G1 X1569.138 Y1372.476 ",
+        "; Pumpen",
+        "G91 ; Pumpen",
+        "G1 U20",
+        "G1 U-20",
+        "G90 ; Pumpen",
+        "G1 X1560.836 Y1378.846 ",
+        "G1 X1552.424 Y1385.07 ",
+        "G1 X1543.904 Y1391.148 ",
+        "G1 X1535.28 Y1397.074 ",
+        "G1 X1526.554 Y1402.85 ",
+        "G1 X1517.728 Y1408.472 ",
+        "G1 X1508.806 Y1413.94 ",
+        "G1 X1499.79 Y1419.252 ",
+        "G1 X1490.682 Y1424.404 ",
+        "G1 X1481.486 Y1429.398 ",
+        "G1 X1472.204 Y1434.23 ",
+        "G1 X1462.838 Y1438.9 ",
+        "G1 X1453.394 Y1443.404 ",
+        "G1 X1443.87 Y1447.744 ",
+        "G1 X1434.274 Y1451.916 ",
+        "G1 X1424.606 Y1455.92 ",
+        "G1 X1414.87 Y1459.756 ",
+        "G1 X1405.068 Y1463.42 ",
+        "G1 X1395.204 Y1466.914 ",
+        "G1 X1385.28 Y1470.234 ",
+        "; Pumpen",
+        "G91 ; Pumpen",
+        "G1 U20",
+        "G1 U-20",
+        "G90 ; Pumpen",
+        "G1 X1375.3 Y1473.382 ",
+        "G1 X1365.266 Y1476.354 ",
+        "G1 X1355.182 Y1479.15 ",
+        "G1 X1345.052 Y1481.77 ",
+        "G1 X1334.876 Y1484.212 ",
+        "G1 X1324.66 Y1486.478 ",
+        "G1 X1314.406 Y1488.564 ",
+        "G1 X1304.116 Y1490.472 ",
+        "G1 X1293.794 Y1492.198 ",
+        "G1 X1283.446 Y1493.744 ",
+        "G1 X1273.07 Y1495.11 ",
+        "G1 X1262.674 Y1496.296 ",
+        "G1 X1252.256 Y1497.298 ",
+        "G1 X1241.824 Y1498.12 ",
+        "G1 X1231.38 Y1498.758 ",
+        "G1 X1220.926 Y1499.214 ",
+        "G1 X1210.464 Y1499.488 ",
+        "G1 X1200.0 Y1499.58 ",
+        "G1 X1189.536 Y1499.488 ",
+        "G1 X1179.074 Y1499.214 ",
+        "; Pumpen",
+        "G91 ; Pumpen",
+        "G1 U20",
+        "G1 U-20",
+        "G90 ; Pumpen",
+        "G1 X1168.62 Y1498.758 ",
+        "G1 X1158.176 Y1498.12 ",
+        "G1 X1147.744 Y1497.298 ",
+        "G1 X1137.328 Y1496.296 ",
+        "G1 X1126.93 Y1495.11 ",
+        "G1 X1116.554 Y1493.744 ",
+        "G1 X1106.204 Y1492.198 ",
+        "G1 X1095.884 Y1490.47 ",
+        "G1 X1085.594 Y1488.564 ",
+        "G1 X1075.34 Y1486.478 ",
+        "G1 X1065.124 Y1484.212 ",
+        "G1 X1054.948 Y1481.77 ",
+        "G1 X1044.818 Y1479.15 ",
+        "G1 X1034.734 Y1476.354 ",
+        "G1 X1024.7 Y1473.382 ",
+        "G1 X1014.72 Y1470.234 ",
+        "G1 X1004.796 Y1466.914 ",
+        "G1 X994.932 Y1463.42 ",
+        "G1 X985.13 Y1459.756 ",
+        "G1 X975.394 Y1455.92 ",
+        "; Pumpen",
+        "G91 ; Pumpen",
+        "G1 U20",
+        "G1 U-20",
+        "G90 ; Pumpen",
+        "G1 X965.726 Y1451.916 ",
+        "G1 X956.13 Y1447.744 ",
+        "G1 X946.606 Y1443.404 ",
+        "G1 X937.162 Y1438.9 ",
+        "G1 X927.796 Y1434.23 ",
+        "G1 X918.514 Y1429.398 ",
+        "G1 X909.318 Y1424.404 ",
+        "G1 X900.21 Y1419.252 ",
+        "G1 X891.194 Y1413.94 ",
+        "G1 X882.272 Y1408.472 ",
+        "G1 X873.446 Y1402.85 ",
+        "G1 X864.72 Y1397.074 ",
+        "G1 X856.096 Y1391.148 ",
+        "G1 X847.576 Y1385.07 ",
+        "G1 X839.164 Y1378.846 ",
+        "G1 X830.862 Y1372.476 ",
+        "G1 X822.672 Y1365.962 ",
+        "G1 X814.598 Y1359.304 ",
+        "G1 X806.64 Y1352.508 ",
+        "G1 X798.802 Y1345.574 ",
+        "; Pumpen",
+        "G91 ; Pumpen",
+        "G1 U20",
+        "G1 U-20",
+        "G90 ; Pumpen",
+        "G1 X791.088 Y1338.506 ",
+        "G1 X783.496 Y1331.302 ",
+        "G1 X776.032 Y1323.968 ",
+        "G1 X768.698 Y1316.504 ",
+        "G1 X761.494 Y1308.912 ",
+        "G1 X754.426 Y1301.198 ",
+        "G1 X747.492 Y1293.36 ",
+        "G1 X740.696 Y1285.402 ",
+        "G1 X734.038 Y1277.328 ",
+        "G1 X727.524 Y1269.138 ",
+        "G1 X721.154 Y1260.836 ",
+        "G1 X714.93 Y1252.424 ",
+        "G1 X708.852 Y1243.904 ",
+        "G1 X702.926 Y1235.28 ",
+        "G1 X697.15 Y1226.554 ",
+        "G1 X691.528 Y1217.728 ",
+        "G1 X686.06 Y1208.806 ",
+        "G1 X680.748 Y1199.79 ",
+        "G1 X675.596 Y1190.682 ",
+        "G1 X670.602 Y1181.486 ",
+        "; Pumpen",
+        "G91 ; Pumpen",
+        "G1 U20",
+        "G1 U-20",
+        "G90 ; Pumpen",
+        "G1 X665.77 Y1172.204 ",
+        "G1 X661.102 Y1162.838 ",
+        "G1 X656.596 Y1153.394 ",
+        "G1 X652.256 Y1143.87 ",
+        "G1 X648.084 Y1134.274 ",
+        "G1 X644.08 Y1124.606 ",
+        "G1 X640.244 Y1114.87 ",
+        "G1 X636.58 Y1105.068 ",
+        "G1 X633.086 Y1095.204 ",
+        "G1 X629.766 Y1085.28 ",
+        "G1 X626.618 Y1075.3 ",
+        "G1 X623.646 Y1065.266 ",
+        "G1 X620.85 Y1055.182 ",
+        "G1 X618.23 Y1045.052 ",
+        "G1 X615.788 Y1034.876 ",
+        "G1 X613.522 Y1024.66 ",
+        "G1 X611.436 Y1014.406 ",
+        "G1 X609.53 Y1004.116 ",
+        "G1 X607.802 Y993.796 ",
+        "G1 X606.256 Y983.446 ",
+        "; Pumpen",
+        "G91 ; Pumpen",
+        "G1 U20",
+        "G1 U-20",
+        "G90 ; Pumpen",
+        "G1 X604.89 Y973.07 ",
+        "G1 X603.704 Y962.672 ",
+        "G1 X602.702 Y952.256 ",
+        "G1 X601.88 Y941.824 ",
+        "G1 X601.242 Y931.38 ",
+        "G1 X600.786 Y920.926 ",
+        "G1 X600.512 Y910.464 ",
+        "G1 X600.42 Y900.0 ",
+        "G1 X600.512 Y889.536 ",
+        "G1 X600.786 Y879.074 ",
+        "G1 X601.242 Y868.62 ",
+        "G1 X601.88 Y858.176 ",
+        "G1 X602.702 Y847.744 ",
+        "G1 X603.704 Y837.328 ",
+        "G1 X604.89 Y826.93 ",
+        "G1 X606.256 Y816.554 ",
+        "G1 X607.802 Y806.204 ",
+        "G1 X609.53 Y795.884 ",
+        "G1 X611.436 Y785.594 ",
+        "G1 X613.522 Y775.34 ",
+        "; Pumpen",
+        "G91 ; Pumpen",
+        "G1 U20",
+        "G1 U-20",
+        "G90 ; Pumpen",
+        "G1 X615.788 Y765.124 ",
+        "G1 X618.23 Y754.948 ",
+        "G1 X620.85 Y744.818 ",
+        "G1 X623.646 Y734.734 ",
+        "G1 X626.618 Y724.7 ",
+        "G1 X629.766 Y714.72 ",
+        "G1 X633.086 Y704.796 ",
+        "G1 X636.58 Y694.932 ",
+        "G1 X640.244 Y685.13 ",
+        "G1 X644.08 Y675.394 ",
+        "G1 X648.084 Y665.726 ",
+        "G1 X652.256 Y656.13 ",
+        "G1 X656.596 Y646.606 ",
+        "G1 X661.102 Y637.162 ",
+        "G1 X665.77 Y627.796 ",
+        "G1 X670.602 Y618.514 ",
+        "G1 X675.596 Y609.318 ",
+        "G1 X680.748 Y600.21 ",
+        "G1 X686.06 Y591.194 ",
+        "G1 X691.528 Y582.272 ",
+        "; Pumpen",
+        "G91 ; Pumpen",
+        "G1 U20",
+        "G1 U-20",
+        "G90 ; Pumpen",
+        "G1 X697.15 Y573.446 ",
+        "G1 X702.926 Y564.72 ",
+        "G1 X708.852 Y556.096 ",
+        "G1 X714.93 Y547.576 ",
+        "G1 X721.154 Y539.164 ",
+        "G1 X727.524 Y530.862 ",
+        "G1 X734.038 Y522.672 ",
+        "G1 X740.696 Y514.598 ",
+        "G1 X747.492 Y506.64 ",
+        "G1 X754.426 Y498.802 ",
+        "G1 X761.494 Y491.088 ",
+        "G1 X768.698 Y483.496 ",
+        "G1 X776.032 Y476.032 ",
+        "G1 X783.496 Y468.698 ",
+        "G1 X791.088 Y461.494 ",
+        "G1 X798.802 Y454.426 ",
+        "G1 X806.64 Y447.492 ",
+        "G1 X814.598 Y440.696 ",
+        "G1 X822.672 Y434.038 ",
+        "G1 X830.862 Y427.524 ",
+        "; Pumpen",
+        "G91 ; Pumpen",
+        "G1 U20",
+        "G1 U-20",
+        "G90 ; Pumpen",
+        "G1 X839.164 Y421.154 ",
+        "G1 X847.576 Y414.93 ",
+        "G1 X856.096 Y408.852 ",
+        "G1 X864.72 Y402.926 ",
+        "G1 X873.446 Y397.15 ",
+        "G1 X882.272 Y391.528 ",
+        "G1 X891.194 Y386.06 ",
+        "G1 X900.21 Y380.748 ",
+        "G1 X909.318 Y375.596 ",
+        "G1 X918.514 Y370.602 ",
+        "G1 X927.796 Y365.77 ",
+        "G1 X937.162 Y361.102 ",
+        "G1 X946.606 Y356.596 ",
+        "G1 X956.13 Y352.256 ",
+        "G1 X965.726 Y348.084 ",
+        "G1 X975.394 Y344.08 ",
+        "G1 X985.13 Y340.244 ",
+        "G1 X994.932 Y336.58 ",
+        "G1 X1004.796 Y333.086 ",
+        "G1 X1014.72 Y329.766 ",
+        "; Pumpen",
+        "G91 ; Pumpen",
+        "G1 U20",
+        "G1 U-20",
+        "G90 ; Pumpen",
+        "G1 X1024.7 Y326.618 ",
+        "G1 X1034.734 Y323.646 ",
+        "G1 X1044.818 Y320.85 ",
+        "G1 X1054.948 Y318.23 ",
+        "G1 X1065.124 Y315.788 ",
+        "G1 X1075.34 Y313.522 ",
+        "G1 X1085.594 Y311.436 ",
+        "G1 X1095.884 Y309.53 ",
+        "G1 X1106.204 Y307.802 ",
+        "G1 X1116.554 Y306.256 ",
+        "G1 X1126.93 Y304.89 ",
+        "G1 X1137.328 Y303.704 ",
+        "G1 X1147.744 Y302.702 ",
+        "G1 X1158.176 Y301.88 ",
+        "G1 X1168.62 Y301.242 ",
+        "G1 X1179.074 Y300.786 ",
+        "G1 X1189.536 Y300.512 ",
+        "G1 X1200.0 Y300.42 ",
+        "G1 X1210.464 Y300.512 ",
+        "G1 X1220.926 Y300.786 ",
+        "; Pumpen",
+        "G91 ; Pumpen",
+        "G1 U20",
+        "G1 U-20",
+        "G90 ; Pumpen",
+        "G1 X1231.38 Y301.242 ",
+        "G1 X1241.824 Y301.88 ",
+        "G1 X1252.256 Y302.702 ",
+        "G1 X1262.672 Y303.704 ",
+        "G1 X1273.07 Y304.89 ",
+        "G1 X1283.446 Y306.256 ",
+        "G1 X1293.794 Y307.802 ",
+        "G1 X1304.116 Y309.53 ",
+        "G1 X1314.406 Y311.436 ",
+        "G1 X1324.66 Y313.522 ",
+        "G1 X1334.876 Y315.788 ",
+        "G1 X1345.052 Y318.23 ",
+        "G1 X1355.182 Y320.85 ",
+        "G1 X1365.266 Y323.646 ",
+        "G1 X1375.3 Y326.618 ",
+        "G1 X1385.28 Y329.766 ",
+        "G1 X1395.204 Y333.086 ",
+        "G1 X1405.068 Y336.58 ",
+        "G1 X1414.87 Y340.244 ",
+        "G1 X1424.606 Y344.08 ",
+        "; Pumpen",
+        "G91 ; Pumpen",
+        "G1 U20",
+        "G1 U-20",
+        "G90 ; Pumpen",
+        "G1 X1434.274 Y348.084 ",
+        "G1 X1443.872 Y352.256 ",
+        "G1 X1453.394 Y356.596 ",
+        "G1 X1462.838 Y361.1 ",
+        "G1 X1472.204 Y365.77 ",
+        "G1 X1481.486 Y370.602 ",
+        "G1 X1490.682 Y375.596 ",
+        "G1 X1499.79 Y380.748 ",
+        "G1 X1508.806 Y386.06 ",
+        "G1 X1517.728 Y391.528 ",
+        "G1 X1526.554 Y397.15 ",
+        "G1 X1535.28 Y402.926 ",
+        "G1 X1543.904 Y408.852 ",
+        "G1 X1552.424 Y414.93 ",
+        "G1 X1560.836 Y421.154 ",
+        "G1 X1569.138 Y427.524 ",
+        "G1 X1577.328 Y434.038 ",
+        "G1 X1585.402 Y440.696 ",
+        "G1 X1593.36 Y447.492 ",
+        "G1 X1601.198 Y454.426 ",
+        "; Pumpen",
+        "G91 ; Pumpen",
+        "G1 U20",
+        "G1 U-20",
+        "G90 ; Pumpen",
+        "G1 X1608.912 Y461.494 ",
+        "G1 X1616.504 Y468.698 ",
+        "G1 X1623.968 Y476.032 ",
+        "G1 X1631.302 Y483.496 ",
+        "G1 X1638.506 Y491.088 ",
+        "G1 X1645.574 Y498.802 ",
+        "G1 X1652.508 Y506.64 ",
+        "G1 X1659.304 Y514.598 ",
+        "G1 X1665.962 Y522.672 ",
+        "G1 X1672.476 Y530.862 ",
+        "G1 X1678.846 Y539.164 ",
+        "G1 X1685.07 Y547.576 ",
+        "G1 X1691.148 Y556.096 ",
+        "G1 X1697.074 Y564.72 ",
+        "G1 X1702.85 Y573.446 ",
+        "G1 X1708.472 Y582.272 ",
+        "G1 X1713.94 Y591.194 ",
+        "G1 X1719.252 Y600.21 ",
+        "G1 X1724.404 Y609.318 ",
+        "G1 X1729.398 Y618.514 ",
+        "; Pumpen",
+        "G91 ; Pumpen",
+        "G1 U20",
+        "G1 U-20",
+        "G90 ; Pumpen",
+        "G1 X1734.23 Y627.796 ",
+        "G1 X1738.9 Y637.162 ",
+        "G1 X1743.404 Y646.606 ",
+        "G1 X1747.744 Y656.128 ",
+        "G1 X1751.916 Y665.726 ",
+        "G1 X1755.92 Y675.394 ",
+        "G1 X1759.756 Y685.13 ",
+        "G1 X1763.42 Y694.932 ",
+        "G1 X1766.914 Y704.796 ",
+        "G1 X1770.234 Y714.72 ",
+        "G1 X1773.382 Y724.7 ",
+        "G1 X1776.354 Y734.734 ",
+        "G1 X1779.15 Y744.818 ",
+        "G1 X1781.77 Y754.948 ",
+        "G1 X1784.212 Y765.124 ",
+        "G1 X1786.478 Y775.34 ",
+        "G1 X1788.564 Y785.594 ",
+        "G1 X1790.472 Y795.884 ",
+        "G1 X1792.198 Y806.204 ",
+        "G1 X1793.744 Y816.554 ",
+        "; Pumpen",
+        "G91 ; Pumpen",
+        "G1 U20",
+        "G1 U-20",
+        "G90 ; Pumpen",
+        "G1 X1795.096 Y826.81 ",
+        "G1 F2400 ",
+        "G1 Z8.4 F1800 ",
+        "G0 X0 Y0",
+        "G29 S2; mesh comensation off",
+        ";place tool 1",
+        "G0 Y319.5 F10000",
+        "G0 X2275.2 ",
+        "G0 Z51.2 F800",
+        "G0 U29.4 ;fahre bis mitnehmer",
+        "G91",
+        ";lift",
+        "G0 Z10",
+        "G0 X40 ; fahre ueber position",
+        "G0 Z-10",
+        ";open grabber",
+        "G0 U5.2 F800",
+        "G0 X-40",
+        "G90"
+      ],
+      "flattened": [
+        {
+          "type": "move",
+          "y": 319.5,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "x": 2275.2
+        },
+        {
+          "type": "move",
+          "z": 51.2,
+          "feedrate": 800
+        },
+        {
+          "type": "move",
+          "u": 29.4
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 5.2
+        },
+        {
+          "type": "move",
+          "x": 40
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": -5.2
+        },
+        {
+          "type": "move",
+          "z": 10
+        },
+        {
+          "type": "move",
+          "x": -40
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "other"
+        },
+        {
+          "type": "other"
+        },
+        {
+          "type": "other"
+        },
+        {
+          "type": "move",
+          "z": 5,
+          "feedrate": 5000
+        },
+        {
+          "type": "move",
+          "u": 8
+        },
+        {
+          "type": "move",
+          "z": 0.4,
+          "feedrate": 1800
+        },
+        {
+          "type": "move",
+          "feedrate": 2400
+        },
+        {
+          "type": "move",
+          "z": 8.4,
+          "feedrate": 1800
+        },
+        {
+          "type": "move",
+          "x": 1795.11,
+          "y": 826.93,
+          "feedrate": 7800
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": -20
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "z": 0.4,
+          "feedrate": 1800
+        },
+        {
+          "type": "move",
+          "feedrate": 2400
+        },
+        {
+          "type": "move",
+          "feedrate": 6000
+        },
+        {
+          "type": "move",
+          "x": 1796.296,
+          "y": 837.328
+        },
+        {
+          "type": "move",
+          "x": 1797.298,
+          "y": 847.744
+        },
+        {
+          "type": "move",
+          "x": 1798.12,
+          "y": 858.176
+        },
+        {
+          "type": "move",
+          "x": 1798.758,
+          "y": 868.62
+        },
+        {
+          "type": "move",
+          "x": 1799.214,
+          "y": 879.076
+        },
+        {
+          "type": "move",
+          "x": 1799.488,
+          "y": 889.536
+        },
+        {
+          "type": "move",
+          "x": 1799.58,
+          "y": 900
+        },
+        {
+          "type": "move",
+          "x": 1799.488,
+          "y": 910.464
+        },
+        {
+          "type": "move",
+          "x": 1799.214,
+          "y": 920.926
+        },
+        {
+          "type": "move",
+          "x": 1798.758,
+          "y": 931.38
+        },
+        {
+          "type": "move",
+          "x": 1798.12,
+          "y": 941.824
+        },
+        {
+          "type": "move",
+          "x": 1797.298,
+          "y": 952.256
+        },
+        {
+          "type": "move",
+          "x": 1796.296,
+          "y": 962.672
+        },
+        {
+          "type": "move",
+          "x": 1795.11,
+          "y": 973.07
+        },
+        {
+          "type": "move",
+          "x": 1793.744,
+          "y": 983.446
+        },
+        {
+          "type": "move",
+          "x": 1792.198,
+          "y": 993.796
+        },
+        {
+          "type": "move",
+          "x": 1790.47,
+          "y": 1004.116
+        },
+        {
+          "type": "move",
+          "x": 1788.564,
+          "y": 1014.406
+        },
+        {
+          "type": "move",
+          "x": 1786.478,
+          "y": 1024.66
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": -20
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 1784.212,
+          "y": 1034.876
+        },
+        {
+          "type": "move",
+          "x": 1781.77,
+          "y": 1045.052
+        },
+        {
+          "type": "move",
+          "x": 1779.15,
+          "y": 1055.182
+        },
+        {
+          "type": "move",
+          "x": 1776.354,
+          "y": 1065.266
+        },
+        {
+          "type": "move",
+          "x": 1773.382,
+          "y": 1075.3
+        },
+        {
+          "type": "move",
+          "x": 1770.234,
+          "y": 1085.28
+        },
+        {
+          "type": "move",
+          "x": 1766.914,
+          "y": 1095.204
+        },
+        {
+          "type": "move",
+          "x": 1763.42,
+          "y": 1105.068
+        },
+        {
+          "type": "move",
+          "x": 1759.756,
+          "y": 1114.87
+        },
+        {
+          "type": "move",
+          "x": 1755.92,
+          "y": 1124.606
+        },
+        {
+          "type": "move",
+          "x": 1751.916,
+          "y": 1134.274
+        },
+        {
+          "type": "move",
+          "x": 1747.744,
+          "y": 1143.872
+        },
+        {
+          "type": "move",
+          "x": 1743.404,
+          "y": 1153.394
+        },
+        {
+          "type": "move",
+          "x": 1738.9,
+          "y": 1162.838
+        },
+        {
+          "type": "move",
+          "x": 1734.23,
+          "y": 1172.204
+        },
+        {
+          "type": "move",
+          "x": 1729.398,
+          "y": 1181.486
+        },
+        {
+          "type": "move",
+          "x": 1724.404,
+          "y": 1190.682
+        },
+        {
+          "type": "move",
+          "x": 1719.252,
+          "y": 1199.79
+        },
+        {
+          "type": "move",
+          "x": 1713.94,
+          "y": 1208.806
+        },
+        {
+          "type": "move",
+          "x": 1708.472,
+          "y": 1217.728
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": -20
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 1702.85,
+          "y": 1226.554
+        },
+        {
+          "type": "move",
+          "x": 1697.074,
+          "y": 1235.28
+        },
+        {
+          "type": "move",
+          "x": 1691.148,
+          "y": 1243.904
+        },
+        {
+          "type": "move",
+          "x": 1685.07,
+          "y": 1252.424
+        },
+        {
+          "type": "move",
+          "x": 1678.846,
+          "y": 1260.836
+        },
+        {
+          "type": "move",
+          "x": 1672.476,
+          "y": 1269.138
+        },
+        {
+          "type": "move",
+          "x": 1665.962,
+          "y": 1277.328
+        },
+        {
+          "type": "move",
+          "x": 1659.304,
+          "y": 1285.402
+        },
+        {
+          "type": "move",
+          "x": 1652.508,
+          "y": 1293.36
+        },
+        {
+          "type": "move",
+          "x": 1645.574,
+          "y": 1301.198
+        },
+        {
+          "type": "move",
+          "x": 1638.504,
+          "y": 1308.912
+        },
+        {
+          "type": "move",
+          "x": 1631.302,
+          "y": 1316.504
+        },
+        {
+          "type": "move",
+          "x": 1623.968,
+          "y": 1323.968
+        },
+        {
+          "type": "move",
+          "x": 1616.504,
+          "y": 1331.302
+        },
+        {
+          "type": "move",
+          "x": 1608.912,
+          "y": 1338.506
+        },
+        {
+          "type": "move",
+          "x": 1601.198,
+          "y": 1345.574
+        },
+        {
+          "type": "move",
+          "x": 1593.36,
+          "y": 1352.508
+        },
+        {
+          "type": "move",
+          "x": 1585.402,
+          "y": 1359.304
+        },
+        {
+          "type": "move",
+          "x": 1577.328,
+          "y": 1365.962
+        },
+        {
+          "type": "move",
+          "x": 1569.138,
+          "y": 1372.476
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": -20
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 1560.836,
+          "y": 1378.846
+        },
+        {
+          "type": "move",
+          "x": 1552.424,
+          "y": 1385.07
+        },
+        {
+          "type": "move",
+          "x": 1543.904,
+          "y": 1391.148
+        },
+        {
+          "type": "move",
+          "x": 1535.28,
+          "y": 1397.074
+        },
+        {
+          "type": "move",
+          "x": 1526.554,
+          "y": 1402.85
+        },
+        {
+          "type": "move",
+          "x": 1517.728,
+          "y": 1408.472
+        },
+        {
+          "type": "move",
+          "x": 1508.806,
+          "y": 1413.94
+        },
+        {
+          "type": "move",
+          "x": 1499.79,
+          "y": 1419.252
+        },
+        {
+          "type": "move",
+          "x": 1490.682,
+          "y": 1424.404
+        },
+        {
+          "type": "move",
+          "x": 1481.486,
+          "y": 1429.398
+        },
+        {
+          "type": "move",
+          "x": 1472.204,
+          "y": 1434.23
+        },
+        {
+          "type": "move",
+          "x": 1462.838,
+          "y": 1438.9
+        },
+        {
+          "type": "move",
+          "x": 1453.394,
+          "y": 1443.404
+        },
+        {
+          "type": "move",
+          "x": 1443.87,
+          "y": 1447.744
+        },
+        {
+          "type": "move",
+          "x": 1434.274,
+          "y": 1451.916
+        },
+        {
+          "type": "move",
+          "x": 1424.606,
+          "y": 1455.92
+        },
+        {
+          "type": "move",
+          "x": 1414.87,
+          "y": 1459.756
+        },
+        {
+          "type": "move",
+          "x": 1405.068,
+          "y": 1463.42
+        },
+        {
+          "type": "move",
+          "x": 1395.204,
+          "y": 1466.914
+        },
+        {
+          "type": "move",
+          "x": 1385.28,
+          "y": 1470.234
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": -20
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 1375.3,
+          "y": 1473.382
+        },
+        {
+          "type": "move",
+          "x": 1365.266,
+          "y": 1476.354
+        },
+        {
+          "type": "move",
+          "x": 1355.182,
+          "y": 1479.15
+        },
+        {
+          "type": "move",
+          "x": 1345.052,
+          "y": 1481.77
+        },
+        {
+          "type": "move",
+          "x": 1334.876,
+          "y": 1484.212
+        },
+        {
+          "type": "move",
+          "x": 1324.66,
+          "y": 1486.478
+        },
+        {
+          "type": "move",
+          "x": 1314.406,
+          "y": 1488.564
+        },
+        {
+          "type": "move",
+          "x": 1304.116,
+          "y": 1490.472
+        },
+        {
+          "type": "move",
+          "x": 1293.794,
+          "y": 1492.198
+        },
+        {
+          "type": "move",
+          "x": 1283.446,
+          "y": 1493.744
+        },
+        {
+          "type": "move",
+          "x": 1273.07,
+          "y": 1495.11
+        },
+        {
+          "type": "move",
+          "x": 1262.674,
+          "y": 1496.296
+        },
+        {
+          "type": "move",
+          "x": 1252.256,
+          "y": 1497.298
+        },
+        {
+          "type": "move",
+          "x": 1241.824,
+          "y": 1498.12
+        },
+        {
+          "type": "move",
+          "x": 1231.38,
+          "y": 1498.758
+        },
+        {
+          "type": "move",
+          "x": 1220.926,
+          "y": 1499.214
+        },
+        {
+          "type": "move",
+          "x": 1210.464,
+          "y": 1499.488
+        },
+        {
+          "type": "move",
+          "x": 1200,
+          "y": 1499.58
+        },
+        {
+          "type": "move",
+          "x": 1189.536,
+          "y": 1499.488
+        },
+        {
+          "type": "move",
+          "x": 1179.074,
+          "y": 1499.214
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": -20
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 1168.62,
+          "y": 1498.758
+        },
+        {
+          "type": "move",
+          "x": 1158.176,
+          "y": 1498.12
+        },
+        {
+          "type": "move",
+          "x": 1147.744,
+          "y": 1497.298
+        },
+        {
+          "type": "move",
+          "x": 1137.328,
+          "y": 1496.296
+        },
+        {
+          "type": "move",
+          "x": 1126.93,
+          "y": 1495.11
+        },
+        {
+          "type": "move",
+          "x": 1116.554,
+          "y": 1493.744
+        },
+        {
+          "type": "move",
+          "x": 1106.204,
+          "y": 1492.198
+        },
+        {
+          "type": "move",
+          "x": 1095.884,
+          "y": 1490.47
+        },
+        {
+          "type": "move",
+          "x": 1085.594,
+          "y": 1488.564
+        },
+        {
+          "type": "move",
+          "x": 1075.34,
+          "y": 1486.478
+        },
+        {
+          "type": "move",
+          "x": 1065.124,
+          "y": 1484.212
+        },
+        {
+          "type": "move",
+          "x": 1054.948,
+          "y": 1481.77
+        },
+        {
+          "type": "move",
+          "x": 1044.818,
+          "y": 1479.15
+        },
+        {
+          "type": "move",
+          "x": 1034.734,
+          "y": 1476.354
+        },
+        {
+          "type": "move",
+          "x": 1024.7,
+          "y": 1473.382
+        },
+        {
+          "type": "move",
+          "x": 1014.72,
+          "y": 1470.234
+        },
+        {
+          "type": "move",
+          "x": 1004.796,
+          "y": 1466.914
+        },
+        {
+          "type": "move",
+          "x": 994.932,
+          "y": 1463.42
+        },
+        {
+          "type": "move",
+          "x": 985.13,
+          "y": 1459.756
+        },
+        {
+          "type": "move",
+          "x": 975.394,
+          "y": 1455.92
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": -20
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 965.726,
+          "y": 1451.916
+        },
+        {
+          "type": "move",
+          "x": 956.13,
+          "y": 1447.744
+        },
+        {
+          "type": "move",
+          "x": 946.606,
+          "y": 1443.404
+        },
+        {
+          "type": "move",
+          "x": 937.162,
+          "y": 1438.9
+        },
+        {
+          "type": "move",
+          "x": 927.796,
+          "y": 1434.23
+        },
+        {
+          "type": "move",
+          "x": 918.514,
+          "y": 1429.398
+        },
+        {
+          "type": "move",
+          "x": 909.318,
+          "y": 1424.404
+        },
+        {
+          "type": "move",
+          "x": 900.21,
+          "y": 1419.252
+        },
+        {
+          "type": "move",
+          "x": 891.194,
+          "y": 1413.94
+        },
+        {
+          "type": "move",
+          "x": 882.272,
+          "y": 1408.472
+        },
+        {
+          "type": "move",
+          "x": 873.446,
+          "y": 1402.85
+        },
+        {
+          "type": "move",
+          "x": 864.72,
+          "y": 1397.074
+        },
+        {
+          "type": "move",
+          "x": 856.096,
+          "y": 1391.148
+        },
+        {
+          "type": "move",
+          "x": 847.576,
+          "y": 1385.07
+        },
+        {
+          "type": "move",
+          "x": 839.164,
+          "y": 1378.846
+        },
+        {
+          "type": "move",
+          "x": 830.862,
+          "y": 1372.476
+        },
+        {
+          "type": "move",
+          "x": 822.672,
+          "y": 1365.962
+        },
+        {
+          "type": "move",
+          "x": 814.598,
+          "y": 1359.304
+        },
+        {
+          "type": "move",
+          "x": 806.64,
+          "y": 1352.508
+        },
+        {
+          "type": "move",
+          "x": 798.802,
+          "y": 1345.574
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": -20
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 791.088,
+          "y": 1338.506
+        },
+        {
+          "type": "move",
+          "x": 783.496,
+          "y": 1331.302
+        },
+        {
+          "type": "move",
+          "x": 776.032,
+          "y": 1323.968
+        },
+        {
+          "type": "move",
+          "x": 768.698,
+          "y": 1316.504
+        },
+        {
+          "type": "move",
+          "x": 761.494,
+          "y": 1308.912
+        },
+        {
+          "type": "move",
+          "x": 754.426,
+          "y": 1301.198
+        },
+        {
+          "type": "move",
+          "x": 747.492,
+          "y": 1293.36
+        },
+        {
+          "type": "move",
+          "x": 740.696,
+          "y": 1285.402
+        },
+        {
+          "type": "move",
+          "x": 734.038,
+          "y": 1277.328
+        },
+        {
+          "type": "move",
+          "x": 727.524,
+          "y": 1269.138
+        },
+        {
+          "type": "move",
+          "x": 721.154,
+          "y": 1260.836
+        },
+        {
+          "type": "move",
+          "x": 714.93,
+          "y": 1252.424
+        },
+        {
+          "type": "move",
+          "x": 708.852,
+          "y": 1243.904
+        },
+        {
+          "type": "move",
+          "x": 702.926,
+          "y": 1235.28
+        },
+        {
+          "type": "move",
+          "x": 697.15,
+          "y": 1226.554
+        },
+        {
+          "type": "move",
+          "x": 691.528,
+          "y": 1217.728
+        },
+        {
+          "type": "move",
+          "x": 686.06,
+          "y": 1208.806
+        },
+        {
+          "type": "move",
+          "x": 680.748,
+          "y": 1199.79
+        },
+        {
+          "type": "move",
+          "x": 675.596,
+          "y": 1190.682
+        },
+        {
+          "type": "move",
+          "x": 670.602,
+          "y": 1181.486
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": -20
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 665.77,
+          "y": 1172.204
+        },
+        {
+          "type": "move",
+          "x": 661.102,
+          "y": 1162.838
+        },
+        {
+          "type": "move",
+          "x": 656.596,
+          "y": 1153.394
+        },
+        {
+          "type": "move",
+          "x": 652.256,
+          "y": 1143.87
+        },
+        {
+          "type": "move",
+          "x": 648.084,
+          "y": 1134.274
+        },
+        {
+          "type": "move",
+          "x": 644.08,
+          "y": 1124.606
+        },
+        {
+          "type": "move",
+          "x": 640.244,
+          "y": 1114.87
+        },
+        {
+          "type": "move",
+          "x": 636.58,
+          "y": 1105.068
+        },
+        {
+          "type": "move",
+          "x": 633.086,
+          "y": 1095.204
+        },
+        {
+          "type": "move",
+          "x": 629.766,
+          "y": 1085.28
+        },
+        {
+          "type": "move",
+          "x": 626.618,
+          "y": 1075.3
+        },
+        {
+          "type": "move",
+          "x": 623.646,
+          "y": 1065.266
+        },
+        {
+          "type": "move",
+          "x": 620.85,
+          "y": 1055.182
+        },
+        {
+          "type": "move",
+          "x": 618.23,
+          "y": 1045.052
+        },
+        {
+          "type": "move",
+          "x": 615.788,
+          "y": 1034.876
+        },
+        {
+          "type": "move",
+          "x": 613.522,
+          "y": 1024.66
+        },
+        {
+          "type": "move",
+          "x": 611.436,
+          "y": 1014.406
+        },
+        {
+          "type": "move",
+          "x": 609.53,
+          "y": 1004.116
+        },
+        {
+          "type": "move",
+          "x": 607.802,
+          "y": 993.796
+        },
+        {
+          "type": "move",
+          "x": 606.256,
+          "y": 983.446
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": -20
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 604.89,
+          "y": 973.07
+        },
+        {
+          "type": "move",
+          "x": 603.704,
+          "y": 962.672
+        },
+        {
+          "type": "move",
+          "x": 602.702,
+          "y": 952.256
+        },
+        {
+          "type": "move",
+          "x": 601.88,
+          "y": 941.824
+        },
+        {
+          "type": "move",
+          "x": 601.242,
+          "y": 931.38
+        },
+        {
+          "type": "move",
+          "x": 600.786,
+          "y": 920.926
+        },
+        {
+          "type": "move",
+          "x": 600.512,
+          "y": 910.464
+        },
+        {
+          "type": "move",
+          "x": 600.42,
+          "y": 900
+        },
+        {
+          "type": "move",
+          "x": 600.512,
+          "y": 889.536
+        },
+        {
+          "type": "move",
+          "x": 600.786,
+          "y": 879.074
+        },
+        {
+          "type": "move",
+          "x": 601.242,
+          "y": 868.62
+        },
+        {
+          "type": "move",
+          "x": 601.88,
+          "y": 858.176
+        },
+        {
+          "type": "move",
+          "x": 602.702,
+          "y": 847.744
+        },
+        {
+          "type": "move",
+          "x": 603.704,
+          "y": 837.328
+        },
+        {
+          "type": "move",
+          "x": 604.89,
+          "y": 826.93
+        },
+        {
+          "type": "move",
+          "x": 606.256,
+          "y": 816.554
+        },
+        {
+          "type": "move",
+          "x": 607.802,
+          "y": 806.204
+        },
+        {
+          "type": "move",
+          "x": 609.53,
+          "y": 795.884
+        },
+        {
+          "type": "move",
+          "x": 611.436,
+          "y": 785.594
+        },
+        {
+          "type": "move",
+          "x": 613.522,
+          "y": 775.34
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": -20
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 615.788,
+          "y": 765.124
+        },
+        {
+          "type": "move",
+          "x": 618.23,
+          "y": 754.948
+        },
+        {
+          "type": "move",
+          "x": 620.85,
+          "y": 744.818
+        },
+        {
+          "type": "move",
+          "x": 623.646,
+          "y": 734.734
+        },
+        {
+          "type": "move",
+          "x": 626.618,
+          "y": 724.7
+        },
+        {
+          "type": "move",
+          "x": 629.766,
+          "y": 714.72
+        },
+        {
+          "type": "move",
+          "x": 633.086,
+          "y": 704.796
+        },
+        {
+          "type": "move",
+          "x": 636.58,
+          "y": 694.932
+        },
+        {
+          "type": "move",
+          "x": 640.244,
+          "y": 685.13
+        },
+        {
+          "type": "move",
+          "x": 644.08,
+          "y": 675.394
+        },
+        {
+          "type": "move",
+          "x": 648.084,
+          "y": 665.726
+        },
+        {
+          "type": "move",
+          "x": 652.256,
+          "y": 656.13
+        },
+        {
+          "type": "move",
+          "x": 656.596,
+          "y": 646.606
+        },
+        {
+          "type": "move",
+          "x": 661.102,
+          "y": 637.162
+        },
+        {
+          "type": "move",
+          "x": 665.77,
+          "y": 627.796
+        },
+        {
+          "type": "move",
+          "x": 670.602,
+          "y": 618.514
+        },
+        {
+          "type": "move",
+          "x": 675.596,
+          "y": 609.318
+        },
+        {
+          "type": "move",
+          "x": 680.748,
+          "y": 600.21
+        },
+        {
+          "type": "move",
+          "x": 686.06,
+          "y": 591.194
+        },
+        {
+          "type": "move",
+          "x": 691.528,
+          "y": 582.272
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": -20
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 697.15,
+          "y": 573.446
+        },
+        {
+          "type": "move",
+          "x": 702.926,
+          "y": 564.72
+        },
+        {
+          "type": "move",
+          "x": 708.852,
+          "y": 556.096
+        },
+        {
+          "type": "move",
+          "x": 714.93,
+          "y": 547.576
+        },
+        {
+          "type": "move",
+          "x": 721.154,
+          "y": 539.164
+        },
+        {
+          "type": "move",
+          "x": 727.524,
+          "y": 530.862
+        },
+        {
+          "type": "move",
+          "x": 734.038,
+          "y": 522.672
+        },
+        {
+          "type": "move",
+          "x": 740.696,
+          "y": 514.598
+        },
+        {
+          "type": "move",
+          "x": 747.492,
+          "y": 506.64
+        },
+        {
+          "type": "move",
+          "x": 754.426,
+          "y": 498.802
+        },
+        {
+          "type": "move",
+          "x": 761.494,
+          "y": 491.088
+        },
+        {
+          "type": "move",
+          "x": 768.698,
+          "y": 483.496
+        },
+        {
+          "type": "move",
+          "x": 776.032,
+          "y": 476.032
+        },
+        {
+          "type": "move",
+          "x": 783.496,
+          "y": 468.698
+        },
+        {
+          "type": "move",
+          "x": 791.088,
+          "y": 461.494
+        },
+        {
+          "type": "move",
+          "x": 798.802,
+          "y": 454.426
+        },
+        {
+          "type": "move",
+          "x": 806.64,
+          "y": 447.492
+        },
+        {
+          "type": "move",
+          "x": 814.598,
+          "y": 440.696
+        },
+        {
+          "type": "move",
+          "x": 822.672,
+          "y": 434.038
+        },
+        {
+          "type": "move",
+          "x": 830.862,
+          "y": 427.524
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": -20
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 839.164,
+          "y": 421.154
+        },
+        {
+          "type": "move",
+          "x": 847.576,
+          "y": 414.93
+        },
+        {
+          "type": "move",
+          "x": 856.096,
+          "y": 408.852
+        },
+        {
+          "type": "move",
+          "x": 864.72,
+          "y": 402.926
+        },
+        {
+          "type": "move",
+          "x": 873.446,
+          "y": 397.15
+        },
+        {
+          "type": "move",
+          "x": 882.272,
+          "y": 391.528
+        },
+        {
+          "type": "move",
+          "x": 891.194,
+          "y": 386.06
+        },
+        {
+          "type": "move",
+          "x": 900.21,
+          "y": 380.748
+        },
+        {
+          "type": "move",
+          "x": 909.318,
+          "y": 375.596
+        },
+        {
+          "type": "move",
+          "x": 918.514,
+          "y": 370.602
+        },
+        {
+          "type": "move",
+          "x": 927.796,
+          "y": 365.77
+        },
+        {
+          "type": "move",
+          "x": 937.162,
+          "y": 361.102
+        },
+        {
+          "type": "move",
+          "x": 946.606,
+          "y": 356.596
+        },
+        {
+          "type": "move",
+          "x": 956.13,
+          "y": 352.256
+        },
+        {
+          "type": "move",
+          "x": 965.726,
+          "y": 348.084
+        },
+        {
+          "type": "move",
+          "x": 975.394,
+          "y": 344.08
+        },
+        {
+          "type": "move",
+          "x": 985.13,
+          "y": 340.244
+        },
+        {
+          "type": "move",
+          "x": 994.932,
+          "y": 336.58
+        },
+        {
+          "type": "move",
+          "x": 1004.796,
+          "y": 333.086
+        },
+        {
+          "type": "move",
+          "x": 1014.72,
+          "y": 329.766
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": -20
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 1024.7,
+          "y": 326.618
+        },
+        {
+          "type": "move",
+          "x": 1034.734,
+          "y": 323.646
+        },
+        {
+          "type": "move",
+          "x": 1044.818,
+          "y": 320.85
+        },
+        {
+          "type": "move",
+          "x": 1054.948,
+          "y": 318.23
+        },
+        {
+          "type": "move",
+          "x": 1065.124,
+          "y": 315.788
+        },
+        {
+          "type": "move",
+          "x": 1075.34,
+          "y": 313.522
+        },
+        {
+          "type": "move",
+          "x": 1085.594,
+          "y": 311.436
+        },
+        {
+          "type": "move",
+          "x": 1095.884,
+          "y": 309.53
+        },
+        {
+          "type": "move",
+          "x": 1106.204,
+          "y": 307.802
+        },
+        {
+          "type": "move",
+          "x": 1116.554,
+          "y": 306.256
+        },
+        {
+          "type": "move",
+          "x": 1126.93,
+          "y": 304.89
+        },
+        {
+          "type": "move",
+          "x": 1137.328,
+          "y": 303.704
+        },
+        {
+          "type": "move",
+          "x": 1147.744,
+          "y": 302.702
+        },
+        {
+          "type": "move",
+          "x": 1158.176,
+          "y": 301.88
+        },
+        {
+          "type": "move",
+          "x": 1168.62,
+          "y": 301.242
+        },
+        {
+          "type": "move",
+          "x": 1179.074,
+          "y": 300.786
+        },
+        {
+          "type": "move",
+          "x": 1189.536,
+          "y": 300.512
+        },
+        {
+          "type": "move",
+          "x": 1200,
+          "y": 300.42
+        },
+        {
+          "type": "move",
+          "x": 1210.464,
+          "y": 300.512
+        },
+        {
+          "type": "move",
+          "x": 1220.926,
+          "y": 300.786
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": -20
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 1231.38,
+          "y": 301.242
+        },
+        {
+          "type": "move",
+          "x": 1241.824,
+          "y": 301.88
+        },
+        {
+          "type": "move",
+          "x": 1252.256,
+          "y": 302.702
+        },
+        {
+          "type": "move",
+          "x": 1262.672,
+          "y": 303.704
+        },
+        {
+          "type": "move",
+          "x": 1273.07,
+          "y": 304.89
+        },
+        {
+          "type": "move",
+          "x": 1283.446,
+          "y": 306.256
+        },
+        {
+          "type": "move",
+          "x": 1293.794,
+          "y": 307.802
+        },
+        {
+          "type": "move",
+          "x": 1304.116,
+          "y": 309.53
+        },
+        {
+          "type": "move",
+          "x": 1314.406,
+          "y": 311.436
+        },
+        {
+          "type": "move",
+          "x": 1324.66,
+          "y": 313.522
+        },
+        {
+          "type": "move",
+          "x": 1334.876,
+          "y": 315.788
+        },
+        {
+          "type": "move",
+          "x": 1345.052,
+          "y": 318.23
+        },
+        {
+          "type": "move",
+          "x": 1355.182,
+          "y": 320.85
+        },
+        {
+          "type": "move",
+          "x": 1365.266,
+          "y": 323.646
+        },
+        {
+          "type": "move",
+          "x": 1375.3,
+          "y": 326.618
+        },
+        {
+          "type": "move",
+          "x": 1385.28,
+          "y": 329.766
+        },
+        {
+          "type": "move",
+          "x": 1395.204,
+          "y": 333.086
+        },
+        {
+          "type": "move",
+          "x": 1405.068,
+          "y": 336.58
+        },
+        {
+          "type": "move",
+          "x": 1414.87,
+          "y": 340.244
+        },
+        {
+          "type": "move",
+          "x": 1424.606,
+          "y": 344.08
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": -20
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 1434.274,
+          "y": 348.084
+        },
+        {
+          "type": "move",
+          "x": 1443.872,
+          "y": 352.256
+        },
+        {
+          "type": "move",
+          "x": 1453.394,
+          "y": 356.596
+        },
+        {
+          "type": "move",
+          "x": 1462.838,
+          "y": 361.1
+        },
+        {
+          "type": "move",
+          "x": 1472.204,
+          "y": 365.77
+        },
+        {
+          "type": "move",
+          "x": 1481.486,
+          "y": 370.602
+        },
+        {
+          "type": "move",
+          "x": 1490.682,
+          "y": 375.596
+        },
+        {
+          "type": "move",
+          "x": 1499.79,
+          "y": 380.748
+        },
+        {
+          "type": "move",
+          "x": 1508.806,
+          "y": 386.06
+        },
+        {
+          "type": "move",
+          "x": 1517.728,
+          "y": 391.528
+        },
+        {
+          "type": "move",
+          "x": 1526.554,
+          "y": 397.15
+        },
+        {
+          "type": "move",
+          "x": 1535.28,
+          "y": 402.926
+        },
+        {
+          "type": "move",
+          "x": 1543.904,
+          "y": 408.852
+        },
+        {
+          "type": "move",
+          "x": 1552.424,
+          "y": 414.93
+        },
+        {
+          "type": "move",
+          "x": 1560.836,
+          "y": 421.154
+        },
+        {
+          "type": "move",
+          "x": 1569.138,
+          "y": 427.524
+        },
+        {
+          "type": "move",
+          "x": 1577.328,
+          "y": 434.038
+        },
+        {
+          "type": "move",
+          "x": 1585.402,
+          "y": 440.696
+        },
+        {
+          "type": "move",
+          "x": 1593.36,
+          "y": 447.492
+        },
+        {
+          "type": "move",
+          "x": 1601.198,
+          "y": 454.426
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": -20
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 1608.912,
+          "y": 461.494
+        },
+        {
+          "type": "move",
+          "x": 1616.504,
+          "y": 468.698
+        },
+        {
+          "type": "move",
+          "x": 1623.968,
+          "y": 476.032
+        },
+        {
+          "type": "move",
+          "x": 1631.302,
+          "y": 483.496
+        },
+        {
+          "type": "move",
+          "x": 1638.506,
+          "y": 491.088
+        },
+        {
+          "type": "move",
+          "x": 1645.574,
+          "y": 498.802
+        },
+        {
+          "type": "move",
+          "x": 1652.508,
+          "y": 506.64
+        },
+        {
+          "type": "move",
+          "x": 1659.304,
+          "y": 514.598
+        },
+        {
+          "type": "move",
+          "x": 1665.962,
+          "y": 522.672
+        },
+        {
+          "type": "move",
+          "x": 1672.476,
+          "y": 530.862
+        },
+        {
+          "type": "move",
+          "x": 1678.846,
+          "y": 539.164
+        },
+        {
+          "type": "move",
+          "x": 1685.07,
+          "y": 547.576
+        },
+        {
+          "type": "move",
+          "x": 1691.148,
+          "y": 556.096
+        },
+        {
+          "type": "move",
+          "x": 1697.074,
+          "y": 564.72
+        },
+        {
+          "type": "move",
+          "x": 1702.85,
+          "y": 573.446
+        },
+        {
+          "type": "move",
+          "x": 1708.472,
+          "y": 582.272
+        },
+        {
+          "type": "move",
+          "x": 1713.94,
+          "y": 591.194
+        },
+        {
+          "type": "move",
+          "x": 1719.252,
+          "y": 600.21
+        },
+        {
+          "type": "move",
+          "x": 1724.404,
+          "y": 609.318
+        },
+        {
+          "type": "move",
+          "x": 1729.398,
+          "y": 618.514
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": -20
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 1734.23,
+          "y": 627.796
+        },
+        {
+          "type": "move",
+          "x": 1738.9,
+          "y": 637.162
+        },
+        {
+          "type": "move",
+          "x": 1743.404,
+          "y": 646.606
+        },
+        {
+          "type": "move",
+          "x": 1747.744,
+          "y": 656.128
+        },
+        {
+          "type": "move",
+          "x": 1751.916,
+          "y": 665.726
+        },
+        {
+          "type": "move",
+          "x": 1755.92,
+          "y": 675.394
+        },
+        {
+          "type": "move",
+          "x": 1759.756,
+          "y": 685.13
+        },
+        {
+          "type": "move",
+          "x": 1763.42,
+          "y": 694.932
+        },
+        {
+          "type": "move",
+          "x": 1766.914,
+          "y": 704.796
+        },
+        {
+          "type": "move",
+          "x": 1770.234,
+          "y": 714.72
+        },
+        {
+          "type": "move",
+          "x": 1773.382,
+          "y": 724.7
+        },
+        {
+          "type": "move",
+          "x": 1776.354,
+          "y": 734.734
+        },
+        {
+          "type": "move",
+          "x": 1779.15,
+          "y": 744.818
+        },
+        {
+          "type": "move",
+          "x": 1781.77,
+          "y": 754.948
+        },
+        {
+          "type": "move",
+          "x": 1784.212,
+          "y": 765.124
+        },
+        {
+          "type": "move",
+          "x": 1786.478,
+          "y": 775.34
+        },
+        {
+          "type": "move",
+          "x": 1788.564,
+          "y": 785.594
+        },
+        {
+          "type": "move",
+          "x": 1790.472,
+          "y": 795.884
+        },
+        {
+          "type": "move",
+          "x": 1792.198,
+          "y": 806.204
+        },
+        {
+          "type": "move",
+          "x": 1793.744,
+          "y": 816.554
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": -20
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 1795.096,
+          "y": 826.81
+        },
+        {
+          "type": "move",
+          "feedrate": 2400
+        },
+        {
+          "type": "move",
+          "z": 8.4,
+          "feedrate": 1800
+        },
+        {
+          "type": "move",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "other"
+        },
+        {
+          "type": "move",
+          "y": 319.5,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "x": 2275.2
+        },
+        {
+          "type": "move",
+          "z": 51.2,
+          "feedrate": 800
+        },
+        {
+          "type": "move",
+          "u": 29.4
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 10
+        },
+        {
+          "type": "move",
+          "x": 40
+        },
+        {
+          "type": "move",
+          "z": -10
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 800
+        },
+        {
+          "type": "move",
+          "x": -40
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        }
+      ]
+    },
+    "grabber_open": {
+      "raw": [
+        ";G0 Z38",
+        ";G0 U6.3 ;fahre bis mitnehmer",
+        "G0 Z46.20 F800 ; go to the correct Z height",
+        "G0 U5.2 ; move grabbing axis until the jaws open",
+        "G91 ; relative coordinates",
+        "G0 Z5.2 U-5.2 ; open grabber",
+        "G90; absolute coordinates"
+      ],
+      "flattened": [
+        {
+          "type": "move",
+          "z": 46.2,
+          "feedrate": 800
+        },
+        {
+          "type": "move",
+          "u": 5.2
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        }
+      ]
+    },
+    "move_in_front_of_tools": {
+      "raw": [
+        "G0 X55 F10000; move forward to avoid tools"
+      ],
+      "flattened": [
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        }
+      ]
+    },
+    "move_to_drawingHeight_brushpen": {
+      "raw": [
+        "G90",
+        "G0 Z11 U33 F1000"
+      ],
+      "flattened": [
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "z": 11,
+          "u": 33,
+          "feedrate": 1000
+        }
+      ]
+    },
+    "move_to_drawingHeight_marker": {
+      "raw": [
+        "G90",
+        "G0 Z11 U33 F1000"
+      ],
+      "flattened": [
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "z": 11,
+          "u": 33,
+          "feedrate": 1000
+        }
+      ]
+    },
+    "move_to_drawingHeight_posca": {
+      "raw": [
+        "G90",
+        "G0 Z11 U33 F1000"
+      ],
+      "flattened": [
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "z": 11,
+          "u": 33,
+          "feedrate": 1000
+        }
+      ]
+    },
+    "move_to_drawingHeight_stabilo": {
+      "raw": [
+        "G90",
+        "G0 Z11 U33 F1000"
+      ],
+      "flattened": [
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "z": 11,
+          "u": 33,
+          "feedrate": 1000
+        }
+      ]
+    },
+    "move_to_tool_1": {
+      "raw": [
+        "G0 Y319.5 F10000",
+        "G0 X2277.5 ",
+        "G0 Z51.00",
+        "G1 U29.4 ;fahre bis mitnehmer",
+        ";open grabber",
+        "G91",
+        "G0 U5.2 F800",
+        "G90"
+      ],
+      "flattened": [
+        {
+          "type": "move",
+          "y": 319.5,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "x": 2277.5
+        },
+        {
+          "type": "move",
+          "z": 51
+        },
+        {
+          "type": "move",
+          "u": 29.4
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 800
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        }
+      ]
+    },
+    "open_grabber": {
+      "raw": [
+        "; activate jaws",
+        "G0 Z52.7 F800",
+        "G0 U29.4 ;fahre bis mitnehmer",
+        "G0 X0 F10000; move tool above tool holder",
+        "G91 ; relative coordinates",
+        "G0 Z5.2 U5.2 F800 ; open grabber",
+        "G90 ; absolute coordinates",
+        "G0 X55 F10000 ; move empty grabber away from tools",
+        "G91 ; relative coordinates",
+        "G0 Z-5.2 U-5.2 F800 ; close grabber",
+        "G90 ; absolute coordinates"
+      ],
+      "flattened": [
+        {
+          "type": "move",
+          "z": 52.7,
+          "feedrate": 800
+        },
+        {
+          "type": "move",
+          "u": 29.4
+        },
+        {
+          "type": "move",
+          "x": 0,
+          "feedrate": 10000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": 5.2,
+          "feedrate": 800
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": -5.2,
+          "feedrate": 800
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        }
+      ]
+    },
+    "place_tool": {
+      "raw": [
+        "G0 Z52.7 F1500 ;go to correct Z-heigt (different with closed grabber than with opened grabber)",
+        "G0 U5.2 F5000;fahre bis mitnehmer",
+        "G0 X0 F10000; move tool above tool holder",
+        "G0 Z46.5 F1500 ; lower grabber",
+        "G91 ; relative coordinates",
+        "G0 Z5.2 U-5.2 F1500 ; open grabber",
+        "G90 ; absolute coordinates",
+        "G0 X55 F10000 ; move empty grabber away from tools",
+        "G91 ; relative coordinates",
+        "G0 Z-5.2 U5.2 F1500 ; close grabber",
+        "G90 ; absolute coordinates"
+      ],
+      "flattened": [
+        {
+          "type": "move",
+          "z": 52.7,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 5000
+        },
+        {
+          "type": "move",
+          "x": 0,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 46.5,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        }
+      ]
+    },
+    "place_tool_1": {
+      "raw": [
+        "G29 S2 ; stop using meshcompensation; move in front of tool holder",
+        "M98 P/macros/move_in_front_of_tools",
+        "G0 Y332.5 F10000",
+        "M98 P/macros/place_tool",
+        "G29 S1 ; start using meshcompensation"
+      ],
+      "flattened": [
+        {
+          "type": "other"
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "y": 332.5,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 52.7,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 5000
+        },
+        {
+          "type": "move",
+          "x": 0,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 46.5,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "other"
+        }
+      ]
+    },
+    "place_tool_2": {
+      "raw": [
+        "G29 S2 ; stop using meshcompensation; move in front of tool holder",
+        "M98 P/macros/move_in_front_of_tools",
+        "G0 Y410.5 F10000",
+        "M98 P/macros/place_tool",
+        "G29 S1 ; start using meshcompensation"
+      ],
+      "flattened": [
+        {
+          "type": "other"
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "y": 410.5,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 52.7,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 5000
+        },
+        {
+          "type": "move",
+          "x": 0,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 46.5,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "other"
+        }
+      ]
+    },
+    "place_tool_3": {
+      "raw": [
+        "G29 S2 ; stop using meshcompensation; move in front of tool holder",
+        "M98 P/macros/move_in_front_of_tools",
+        "G0 Y489.1 F10000",
+        "M98 P/macros/place_tool",
+        "G29 S1 ; start using meshcompensation"
+      ],
+      "flattened": [
+        {
+          "type": "other"
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "y": 489.1,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 52.7,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 5000
+        },
+        {
+          "type": "move",
+          "x": 0,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 46.5,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "other"
+        }
+      ]
+    },
+    "place_tool_4": {
+      "raw": [
+        "G29 S2 ; stop using meshcompensation; move in front of tool holder",
+        "M98 P/macros/move_in_front_of_tools",
+        "G0 Y567.2 F10000",
+        "M98 P/macros/place_tool",
+        "G29 S1 ; start using meshcompensation"
+      ],
+      "flattened": [
+        {
+          "type": "other"
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "y": 567.2,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 52.7,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 5000
+        },
+        {
+          "type": "move",
+          "x": 0,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 46.5,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "other"
+        }
+      ]
+    },
+    "place_tool_5": {
+      "raw": [
+        "G29 S2 ; stop using meshcompensation; move in front of tool holder",
+        "M98 P/macros/move_in_front_of_tools",
+        "G0 Y645.0 F10000",
+        "M98 P/macros/place_tool",
+        "G29 S1 ; start using meshcompensation"
+      ],
+      "flattened": [
+        {
+          "type": "other"
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "y": 645,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 52.7,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 5000
+        },
+        {
+          "type": "move",
+          "x": 0,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 46.5,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "other"
+        }
+      ]
+    },
+    "place_tool_6": {
+      "raw": [
+        "G29 S2 ; stop using meshcompensation; move in front of tool holder",
+        "M98 P/macros/move_in_front_of_tools",
+        "G0 Y722.5 F10000",
+        "M98 P/macros/place_tool",
+        "G29 S1 ; start using meshcompensation"
+      ],
+      "flattened": [
+        {
+          "type": "other"
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "y": 722.5,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 52.7,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 5000
+        },
+        {
+          "type": "move",
+          "x": 0,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 46.5,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "other"
+        }
+      ]
+    },
+    "place_tool_7": {
+      "raw": [
+        "G29 S2 ; stop using meshcompensation; move in front of tool holder",
+        "M98 P/macros/move_in_front_of_tools",
+        "G0 Y800.6  F10000",
+        "M98 P/macros/place_tool",
+        "G29 S1 ; start using meshcompensation"
+      ],
+      "flattened": [
+        {
+          "type": "other"
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "y": 800.6,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 52.7,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 5000
+        },
+        {
+          "type": "move",
+          "x": 0,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 46.5,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "other"
+        }
+      ]
+    },
+    "place_tool_8": {
+      "raw": [
+        "G29 S2 ; stop using meshcompensation; move in front of tool holder",
+        "M98 P/macros/move_in_front_of_tools",
+        "G0 Y879.2 F10000",
+        "M98 P/macros/place_tool",
+        "G29 S1 ; start using meshcompensation"
+      ],
+      "flattened": [
+        {
+          "type": "other"
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "y": 879.2,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 52.7,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 5000
+        },
+        {
+          "type": "move",
+          "x": 0,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 46.5,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "other"
+        }
+      ]
+    },
+    "pumpen": {
+      "raw": [
+        "G1 U20",
+        "G1 U0"
+      ],
+      "flattened": [
+        {
+          "type": "move",
+          "u": 20
+        },
+        {
+          "type": "move",
+          "u": 0
+        }
+      ]
+    },
+    "strich_machen": {
+      "raw": [
+        "G0 X205 Y165 F10000",
+        "G0 Z9 U21 F2000",
+        "G1 X275 Y235 F3000",
+        "G0 Z30 F1000",
+        "G0 X300 Z30 U21 F10000"
+      ],
+      "flattened": [
+        {
+          "type": "move",
+          "x": 205,
+          "y": 165,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "z": 9,
+          "u": 21,
+          "feedrate": 2000
+        },
+        {
+          "type": "move",
+          "x": 275,
+          "y": 235,
+          "feedrate": 3000
+        },
+        {
+          "type": "move",
+          "z": 30,
+          "feedrate": 1000
+        },
+        {
+          "type": "move",
+          "x": 300,
+          "z": 30,
+          "u": 21,
+          "feedrate": 10000
+        }
+      ]
+    },
+    "take_tool": {
+      "raw": [
+        ";G0 Z38",
+        ";G0 U6.3 ;fahre bis mitnehmer",
+        "G0 Z46.20 F1500 ; go to the correct Z height",
+        "G0 U5.2 F5000; move grabbing axis until the jaws open",
+        "G91 ; relative coordinates",
+        "G0 Z5.2 U-5.2 F1500; open grabber",
+        "G90; absolute coordinates",
+        "G0 X0 F 10000;move to position",
+        "G91",
+        "G0 Z-5.2 U5.2 F1500 ; close grabber",
+        "G0 Z10 F1000;lift",
+        "G90",
+        "G0 X55 F10000 ; move away from the tools",
+        "G0 U33 ; avoid zouching pen on base after job starts"
+      ],
+      "flattened": [
+        {
+          "type": "move",
+          "z": 46.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "u": 5.2,
+          "feedrate": 5000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": 5.2,
+          "u": -5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 0
+        },
+        {
+          "type": "set_mode",
+          "isRelative": true
+        },
+        {
+          "type": "move",
+          "z": -5.2,
+          "u": 5.2,
+          "feedrate": 1500
+        },
+        {
+          "type": "move",
+          "z": 10,
+          "feedrate": 1000
+        },
+        {
+          "type": "set_mode",
+          "isRelative": false
+        },
+        {
+          "type": "move",
+          "x": 55,
+          "feedrate": 10000
+        },
+        {
+          "type": "move",
+          "u": 33
+        }
+      ]
+    }
+  }
+}

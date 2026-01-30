@@ -65,6 +65,20 @@ interface PolylineOptimizationResponse {
   optimization_method: string;
 }
 
+interface CenterlineStats {
+  num_polygons: number;
+  num_polylines: number;
+  total_length_mm: number;
+  processing_time_ms: number;
+  resolution: number;
+  min_length: number;
+}
+
+interface CenterlineResponse {
+  centerlines: Polyline[][];  // Per polygon: list of polylines
+  stats: CenterlineStats;
+}
+
 // --- Configuration ---
 
 /**
@@ -406,5 +420,124 @@ export async function getAvailablePatterns(): Promise<string[]> {
 
   } catch {
     return [];
+  }
+}
+
+/**
+ * Centerline extraction options
+ */
+export type CenterlineMethod = 'skeleton' | 'offset' | 'voronoi';
+
+export interface CenterlineOptions {
+  resolution: number;       // mm per pixel (lower = higher quality)
+  minLength: number;        // Minimum centerline length in mm
+  simplifyTolerance: number; // Douglas-Peucker tolerance in mm
+  mergeTolerance: number;   // Tolerance for merging nearby endpoints in mm
+  loopThreshold: number;    // Max gap to close as loop in mm
+  chaikinIterations: number; // Number of smoothing passes
+  minAngle: number;         // Angles below this are smoothed (degrees)
+  maxExtend: number;        // Max endpoint extension distance in mm
+  method: CenterlineMethod; // Extraction method
+  spokeFilter: number;      // Filter corner spokes shorter than this (mm), 0 = disabled
+}
+
+export const defaultCenterlineOptions: CenterlineOptions = {
+  resolution: 0.5,          // Sampling distance for Voronoi (mm)
+  minLength: 0,             // No minimum length filter by default
+  simplifyTolerance: 0.02,
+  mergeTolerance: 0.2,
+  loopThreshold: 5.0,
+  chaikinIterations: 2,
+  minAngle: 120.0,
+  maxExtend: 3.0,
+  method: 'voronoi',        // Voronoi is the recommended default
+  spokeFilter: 0,           // Disabled by default
+};
+
+/**
+ * Extract centerlines from polygons using morphological thinning.
+ *
+ * @param polygons Array of polygons with optional holes
+ * @param options Centerline extraction options
+ * @param color Color for the generated lines
+ * @returns Array of THREE.Line objects, or null if failed
+ */
+export async function extractCenterlineBackend(
+  polygons: { outer: THREE.Vector2[]; holes: THREE.Vector2[][] }[],
+  options: Partial<CenterlineOptions> = {},
+  color: number = 0xff00ff,  // Magenta for centerlines
+  timeoutSeconds: number = 60
+): Promise<{ lines: THREE.Line[]; stats: CenterlineStats } | null> {
+  const opts = { ...defaultCenterlineOptions, ...options };
+
+  try {
+    // Convert to API format
+    const apiPolygons: PolygonWithHoles[] = polygons.map(p => ({
+      outer: vectorsToPolygon(p.outer),
+      holes: p.holes.map(hole => vectorsToPolygon(hole))
+    }));
+
+    const request = {
+      polygons: apiPolygons,
+      resolution: opts.resolution,
+      min_length: opts.minLength,
+      simplify_tolerance: opts.simplifyTolerance,
+      merge_tolerance: opts.mergeTolerance,
+      loop_threshold: opts.loopThreshold,
+      chaikin_iterations: opts.chaikinIterations,
+      min_angle: opts.minAngle,
+      max_extend: opts.maxExtend,
+      method: opts.method,
+      spoke_filter: opts.spokeFilter,
+    };
+
+    const response = await fetch(`${API_BASE_URL}/api/infill/centerline`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(timeoutSeconds * 1000 + 5000),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      console.error('Centerline extraction error:', error);
+      return null;
+    }
+
+    const data: CenterlineResponse = await response.json();
+
+    // Convert all polylines to THREE.Line objects
+    const lines: THREE.Line[] = [];
+    const material = new THREE.LineDashedMaterial({
+      color,
+      dashSize: 2,
+      gapSize: 0,
+      linewidth: 1,
+    });
+
+    for (const polygonCenterlines of data.centerlines) {
+      for (const polyline of polygonCenterlines) {
+        if (polyline.points.length >= 2) {
+          const points = polyline.points.map(
+            pt => new THREE.Vector3(pt.x, pt.y, 0)
+          );
+          const geometry = new THREE.BufferGeometry().setFromPoints(points);
+          const line = new THREE.Line(geometry, material);
+          lines.push(line);
+        }
+      }
+    }
+
+    console.log(`Centerline extraction: ${data.stats.num_polylines} polylines, ${data.stats.total_length_mm}mm total`);
+
+    return { lines, stats: data.stats };
+
+  } catch (error) {
+    if (error instanceof Error && error.name === 'TimeoutError') {
+      console.warn('Centerline extraction timeout');
+    } else {
+      console.warn('Centerline extraction failed:', error);
+    }
+    return null;
   }
 }

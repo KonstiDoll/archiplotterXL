@@ -12,6 +12,7 @@ from services.path_optimizer import (
     calculate_path_statistics,
 )
 from services.geometry_utils import calculate_line_length
+from services.centerline_extractor import extract_centerlines
 
 router = APIRouter(prefix="/api/infill", tags=["infill"])
 
@@ -101,6 +102,37 @@ class PolylineOptimizationResponse(BaseModel):
     total_travel_length_mm: float
     num_pen_lifts: int
     optimization_method: str = "greedy"
+
+
+class CenterlineRequest(BaseModel):
+    """Request to extract centerlines from polygons."""
+    polygons: List[PolygonWithHoles] = Field(..., min_length=1)
+    resolution: float = Field(default=0.02, gt=0, le=1.0, description="mm per pixel (lower = higher quality)")
+    min_length: float = Field(default=1.0, ge=0, description="Minimum centerline length in mm")
+    simplify_tolerance: float = Field(default=0.02, ge=0, description="Douglas-Peucker simplification tolerance in mm")
+    merge_tolerance: float = Field(default=0.2, ge=0, le=2.0, description="Tolerance for merging nearby line endpoints in mm")
+    loop_threshold: float = Field(default=5.0, ge=0, le=20.0, description="Max gap to close as loop in mm")
+    chaikin_iterations: int = Field(default=2, ge=0, le=10, description="Number of Chaikin smoothing passes")
+    min_angle: float = Field(default=120.0, ge=0, le=180.0, description="Angles below this are smoothed (degrees)")
+    max_extend: float = Field(default=3.0, ge=0, le=20.0, description="Maximum endpoint extension distance in mm")
+    method: str = Field(default="skeleton", description="Extraction method: 'skeleton', 'voronoi' or 'offset'")
+    spoke_filter: float = Field(default=0, ge=0, le=10.0, description="Filter corner spokes shorter than this (mm), 0 = disabled")
+
+
+class CenterlineStats(BaseModel):
+    """Statistics about extracted centerlines."""
+    num_polygons: int
+    num_polylines: int
+    total_length_mm: float
+    processing_time_ms: float
+    resolution: float
+    min_length: float
+
+
+class CenterlineResponse(BaseModel):
+    """Response containing extracted centerlines."""
+    centerlines: List[List[Polyline]]  # Per polygon: list of polylines
+    stats: CenterlineStats
 
 
 # --- API Endpoints ---
@@ -428,3 +460,83 @@ async def list_patterns():
             },
         ]
     }
+
+
+@router.post("/centerline", response_model=CenterlineResponse)
+async def extract_centerline(request: CenterlineRequest):
+    """
+    Extract centerlines (medial axes) from closed polygons.
+
+    Uses morphological thinning (Zhang-Suen algorithm) to extract
+    the skeleton/centerline of shapes. This is useful for:
+    - Text rendering (draw single line instead of outline)
+    - Narrow shapes where outline would overlap
+
+    The centerline is a single-stroke representation that runs through
+    the middle of the shape.
+    """
+    total_start = time.perf_counter()
+
+    try:
+        # Convert Pydantic models to dicts
+        polygons_data = [
+            {
+                "outer": [{"x": p.x, "y": p.y} for p in poly.outer],
+                "holes": [
+                    [{"x": p.x, "y": p.y} for p in hole]
+                    for hole in poly.holes
+                ]
+            }
+            for poly in request.polygons
+        ]
+
+        # Extract centerlines
+        centerlines_raw, stats = extract_centerlines(
+            polygons=polygons_data,
+            resolution=request.resolution,
+            min_length=request.min_length,
+            simplify_tolerance=request.simplify_tolerance,
+            merge_tolerance=request.merge_tolerance,
+            loop_threshold=request.loop_threshold,
+            chaikin_iterations=request.chaikin_iterations,
+            min_angle=request.min_angle,
+            max_extend=request.max_extend,
+            method=request.method,
+            spoke_filter=request.spoke_filter,
+        )
+
+        # Convert to response format
+        # centerlines_raw: List[List[List[Tuple[float, float]]]]
+        # Per polygon -> List of polylines -> List of (x, y) tuples
+        response_centerlines: List[List[Polyline]] = []
+
+        for polygon_centerlines in centerlines_raw:
+            polygon_polylines: List[Polyline] = []
+            for polyline_coords in polygon_centerlines:
+                if len(polyline_coords) >= 2:
+                    points = [Point2D(x=pt[0], y=pt[1]) for pt in polyline_coords]
+                    polygon_polylines.append(Polyline(points=points))
+            response_centerlines.append(polygon_polylines)
+
+        total_time = (time.perf_counter() - total_start) * 1000
+
+        print(f"[CENTERLINE API] {stats['num_polylines']} polylines extracted in {total_time:.1f}ms")
+
+        return CenterlineResponse(
+            centerlines=response_centerlines,
+            stats=CenterlineStats(
+                num_polygons=stats['num_polygons'],
+                num_polylines=stats['num_polylines'],
+                total_length_mm=stats['total_length_mm'],
+                processing_time_ms=stats['processing_time_ms'],
+                resolution=stats['resolution'],
+                min_length=stats['min_length'],
+            )
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid input: {str(e)}")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Centerline extraction failed: {str(e)}")
