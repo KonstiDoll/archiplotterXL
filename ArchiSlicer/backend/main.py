@@ -1,10 +1,11 @@
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from alembic.config import Config
-from alembic import command
 
-from routers import pen_types, tool_presets, projects, infill
+from alembic import command
+from alembic.config import Config
+from routers import infill, pen_types, projects, tool_presets
 
 
 @asynccontextmanager

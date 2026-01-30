@@ -1,9 +1,36 @@
+"""
+DEPRECATED: This module is deprecated and will be removed in a future version.
+
+Use the repository pattern instead:
+    - from repositories.sqlalchemy import SQLAlchemyPenTypeRepository
+    - from repositories.sqlalchemy import SQLAlchemyToolPresetRepository
+    - from repositories.sqlalchemy import SQLAlchemyProjectRepository
+
+Or use the DI providers:
+    - from database import get_pen_type_repository
+    - from database import get_tool_preset_repository
+    - from database import get_project_repository
+"""
+
+import warnings
+
 from sqlalchemy.orm import Session
-from models import PenType, ToolPreset, Project, ProjectVersion
+
+from models import PenType, Project, ProjectVersion, ToolPreset
 from schemas import (
-    PenTypeCreate, PenTypeUpdate,
-    ToolPresetCreate, ToolPresetUpdate,
-    ProjectCreate, ProjectUpdate
+    PenTypeCreate,
+    PenTypeUpdate,
+    ProjectCreate,
+    ProjectUpdate,
+    ToolPresetCreate,
+    ToolPresetUpdate,
+)
+
+# Emit deprecation warning when module is imported
+warnings.warn(
+    "The crud module is deprecated. Use repositories.sqlalchemy instead.",
+    DeprecationWarning,
+    stacklevel=2,
 )
 
 
@@ -53,6 +80,7 @@ def delete_pen_type(db: Session, pen_type_id: str) -> bool:
 
 
 # --- Tool Preset CRUD ---
+
 
 def get_tool_presets(db: Session) -> list[ToolPreset]:
     """Get all tool presets."""
@@ -109,6 +137,7 @@ def delete_tool_preset(db: Session, preset_id: int) -> bool:
 
 # --- Project CRUD ---
 
+
 def get_projects(db: Session) -> list[Project]:
     """Get all projects (ordered by updated_at descending)."""
     return db.query(Project).order_by(Project.updated_at.desc()).all()
@@ -122,9 +151,7 @@ def get_project(db: Session, project_id: int) -> Project | None:
 def create_project(db: Session, project: ProjectCreate) -> Project:
     """Create a new project."""
     db_project = Project(
-        name=project.name,
-        description=project.description,
-        project_data=project.project_data
+        name=project.name, description=project.description, project_data=project.project_data
     )
     db.add(db_project)
     db.commit()
@@ -145,7 +172,7 @@ def update_project(db: Session, project_id: int, project: ProjectUpdate) -> Proj
             project_id=db_project.id,
             version=db_project.current_version,
             project_data=db_project.project_data,
-            message=project.version_message
+            message=project.version_message,
         )
         db.add(db_version)
         # Increment version number
@@ -178,19 +205,24 @@ def delete_project(db: Session, project_id: int) -> bool:
 
 # --- Project Version CRUD ---
 
+
 def get_project_versions(db: Session, project_id: int) -> list[ProjectVersion]:
     """Get all versions of a project (ordered by version descending)."""
-    return db.query(ProjectVersion).filter(
-        ProjectVersion.project_id == project_id
-    ).order_by(ProjectVersion.version.desc()).all()
+    return (
+        db.query(ProjectVersion)
+        .filter(ProjectVersion.project_id == project_id)
+        .order_by(ProjectVersion.version.desc())
+        .all()
+    )
 
 
 def get_project_version(db: Session, project_id: int, version: int) -> ProjectVersion | None:
     """Get a specific version of a project."""
-    return db.query(ProjectVersion).filter(
-        ProjectVersion.project_id == project_id,
-        ProjectVersion.version == version
-    ).first()
+    return (
+        db.query(ProjectVersion)
+        .filter(ProjectVersion.project_id == project_id, ProjectVersion.version == version)
+        .first()
+    )
 
 
 def restore_project_version(db: Session, project_id: int, version: int) -> Project | None:
@@ -208,7 +240,7 @@ def restore_project_version(db: Session, project_id: int, version: int) -> Proje
         project_id=db_project.id,
         version=db_project.current_version,
         project_data=db_project.project_data,
-        message=f"Vor Wiederherstellung von v{version}"
+        message=f"Vor Wiederherstellung von v{version}",
     )
     db.add(archive_version)
 

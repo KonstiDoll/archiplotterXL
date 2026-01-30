@@ -10,15 +10,19 @@ is preferable to tracing the outline twice.
 """
 
 import time
-from typing import List, Tuple, Dict, Any, Set, Literal
-import numpy as np
+from typing import Any
+
 import cv2
-from shapely.geometry import Polygon, LineString, MultiLineString, Point
+import numpy as np
+from shapely.geometry import LineString, MultiLineString, Point, Polygon
 from shapely.ops import linemerge
+
+from .smoothing import chaikin_smooth, smooth_sharp_angles
 
 # Optional: centerline library for Voronoi-based extraction
 try:
     from centerline.geometry import Centerline as VoronoiCenterline
+
     CENTERLINE_AVAILABLE = True
 except ImportError:
     CENTERLINE_AVAILABLE = False
@@ -26,7 +30,7 @@ except ImportError:
 
 
 def extract_centerlines(
-    polygons: List[Dict[str, Any]],
+    polygons: list[dict[str, Any]],
     resolution: float = 0.02,  # 50 pixels per mm for high quality
     min_length: float = 1.0,
     simplify_tolerance: float = 0.02,  # Very small - preserve curves!
@@ -37,7 +41,7 @@ def extract_centerlines(
     max_extend: float = 3.0,  # Max endpoint extension distance
     method: str = "skeleton",  # "skeleton", "voronoi" or "offset"
     spoke_filter: float = 0,  # Filter corner spokes shorter than this (mm), 0 = disabled
-) -> Tuple[List[List[List[Tuple[float, float]]]], Dict[str, Any]]:
+) -> tuple[list[list[list[tuple[float, float]]]], dict[str, Any]]:
     """
     Extract centerlines from polygons.
 
@@ -61,16 +65,16 @@ def extract_centerlines(
     """
     total_start = time.perf_counter()
 
-    all_centerlines: List[List[List[Tuple[float, float]]]] = []
+    all_centerlines: list[list[list[tuple[float, float]]]] = []
     total_polylines = 0
     total_length_mm = 0.0
 
     for poly_data in polygons:
         # Convert to Shapely polygon
-        outer_coords = [(p['x'], p['y']) for p in poly_data['outer']]
+        outer_coords = [(p["x"], p["y"]) for p in poly_data["outer"]]
         holes = []
-        for hole in poly_data.get('holes', []):
-            hole_coords = [(p['x'], p['y']) for p in hole]
+        for hole in poly_data.get("holes", []):
+            hole_coords = [(p["x"], p["y"]) for p in hole]
             if len(hole_coords) >= 3:
                 holes.append(hole_coords)
 
@@ -90,20 +94,29 @@ def extract_centerlines(
         # Extract centerlines for this polygon using selected method
         if method == "voronoi" and CENTERLINE_AVAILABLE:
             polylines = _extract_centerlines_voronoi(
-                polygon, min_length, simplify_tolerance,
-                chaikin_iterations, min_angle, resolution,
-                spoke_filter_threshold=spoke_filter
+                polygon,
+                min_length,
+                simplify_tolerance,
+                chaikin_iterations,
+                min_angle,
+                resolution,
+                spoke_filter_threshold=spoke_filter,
             )
         elif method == "offset":
             polylines = _extract_centerlines_offset(
-                polygon, min_length, simplify_tolerance,
-                chaikin_iterations, min_angle
+                polygon, min_length, simplify_tolerance, chaikin_iterations, min_angle
             )
         else:  # skeleton (default)
             polylines = _extract_single_polygon_centerlines(
-                polygon, resolution, min_length, simplify_tolerance,
-                merge_tolerance, loop_threshold, chaikin_iterations,
-                min_angle, max_extend
+                polygon,
+                resolution,
+                min_length,
+                simplify_tolerance,
+                merge_tolerance,
+                loop_threshold,
+                chaikin_iterations,
+                min_angle,
+                max_extend,
             )
 
         all_centerlines.append(polylines)
@@ -117,15 +130,17 @@ def extract_centerlines(
     elapsed_ms = (time.perf_counter() - total_start) * 1000
 
     stats = {
-        'num_polygons': len(polygons),
-        'num_polylines': total_polylines,
-        'total_length_mm': round(total_length_mm, 2),
-        'processing_time_ms': round(elapsed_ms, 2),
-        'resolution': resolution,
-        'min_length': min_length,
+        "num_polygons": len(polygons),
+        "num_polylines": total_polylines,
+        "total_length_mm": round(total_length_mm, 2),
+        "processing_time_ms": round(elapsed_ms, 2),
+        "resolution": resolution,
+        "min_length": min_length,
     }
 
-    print(f"[CENTERLINE] Extracted {total_polylines} polylines from {len(polygons)} polygons in {elapsed_ms:.1f}ms")
+    print(
+        f"[CENTERLINE] Extracted {total_polylines} polylines from {len(polygons)} polygons in {elapsed_ms:.1f}ms"
+    )
 
     return all_centerlines, stats
 
@@ -140,7 +155,7 @@ def _extract_single_polygon_centerlines(
     chaikin_iterations: int,
     min_angle: float,
     max_extend: float,
-) -> List[List[Tuple[float, float]]]:
+) -> list[list[tuple[float, float]]]:
     """
     Extract centerlines from a single polygon.
 
@@ -175,12 +190,12 @@ def _extract_single_polygon_centerlines(
     img = np.zeros((img_height, img_width), dtype=np.uint8)
 
     # Rasterize polygon
-    def world_to_pixel(x: float, y: float) -> Tuple[int, int]:
+    def world_to_pixel(x: float, y: float) -> tuple[int, int]:
         px = int((x - minx) * pixels_per_mm) + 1
         py = int((maxy - y) * pixels_per_mm) + 1  # Flip Y for image coordinates
         return (px, py)
 
-    def pixel_to_world(px: int, py: int) -> Tuple[float, float]:
+    def pixel_to_world(px: int, py: int) -> tuple[float, float]:
         x = minx + (px - 1) / pixels_per_mm
         y = maxy - (py - 1) / pixels_per_mm
         return (x, y)
@@ -202,14 +217,20 @@ def _extract_single_polygon_centerlines(
         skeleton = _morphological_skeleton(img)
 
     # Trace skeleton directly (NOT using findContours which creates double lines!)
-    polylines = _trace_skeleton_directly(skeleton, pixel_to_world, min_length, pixels_per_mm, merge_tolerance)
+    polylines = _trace_skeleton_directly(
+        skeleton, pixel_to_world, min_length, pixels_per_mm, merge_tolerance
+    )
 
     # Debug logging
-    print(f"[CENTERLINE DEBUG] Image size: {img_width}x{img_height} px, pixels_per_mm: {pixels_per_mm:.1f}")
+    print(
+        f"[CENTERLINE DEBUG] Image size: {img_width}x{img_height} px, pixels_per_mm: {pixels_per_mm:.1f}"
+    )
     print(f"[CENTERLINE DEBUG] Skeleton pixels: {np.count_nonzero(skeleton)}")
     print(f"[CENTERLINE DEBUG] Raw polylines: {len(polylines)}")
     for i, pl in enumerate(polylines[:5]):  # Log first 5
-        print(f"[CENTERLINE DEBUG]   Polyline {i}: {len(pl)} points, length: {LineString(pl).length:.2f}mm")
+        print(
+            f"[CENTERLINE DEBUG]   Polyline {i}: {len(pl)} points, length: {LineString(pl).length:.2f}mm"
+        )
 
     # Simplify polylines
     simplified = []
@@ -231,7 +252,7 @@ def _extract_single_polygon_centerlines(
     smoothed = []
     for pl in simplified:
         if len(pl) >= 3 and chaikin_iterations > 0:
-            smooth_pl = _chaikin_smooth(pl, iterations=chaikin_iterations)
+            smooth_pl = chaikin_smooth(pl, iterations=chaikin_iterations)
             smoothed.append(smooth_pl)
         else:
             smoothed.append(pl)
@@ -240,7 +261,7 @@ def _extract_single_polygon_centerlines(
     angle_smoothed = []
     for pl in smoothed:
         if len(pl) >= 3 and min_angle > 0:
-            smooth_pl = _smooth_sharp_angles(pl, min_angle_degrees=min_angle)
+            smooth_pl = smooth_sharp_angles(pl, min_angle_degrees=min_angle)
             angle_smoothed.append(smooth_pl)
         else:
             angle_smoothed.append(pl)
@@ -251,7 +272,9 @@ def _extract_single_polygon_centerlines(
         if len(pl) >= 2:
             # Pass other centerlines to avoid extending past them
             other_centerlines = [angle_smoothed[j] for j in range(len(angle_smoothed)) if j != i]
-            ext_pl = _extend_endpoints_to_boundary(pl, polygon, other_centerlines, loop_threshold=loop_threshold, max_extend=max_extend)
+            ext_pl = _extend_endpoints_to_boundary(
+                pl, polygon, other_centerlines, loop_threshold=loop_threshold, max_extend=max_extend
+            )
             extended.append(ext_pl)
         else:
             extended.append(pl)
@@ -262,7 +285,9 @@ def _extract_single_polygon_centerlines(
         orig = polylines[i] if i < len(polylines) else []
         simp = simplified[i] if i < len(simplified) else []
         smooth = smoothed[i] if i < len(smoothed) else []
-        print(f"[CENTERLINE DEBUG]   Final {i}: {len(pl)} points (raw {len(orig)} → simp {len(simp)} → smooth {len(smooth)} → ext {len(pl)})")
+        print(
+            f"[CENTERLINE DEBUG]   Final {i}: {len(pl)} points (raw {len(orig)} → simp {len(simp)} → smooth {len(smooth)} → ext {len(pl)})"
+        )
 
     return extended
 
@@ -273,7 +298,7 @@ def _extract_centerlines_offset(
     simplify_tolerance: float,
     chaikin_iterations: int,
     min_angle: float,
-) -> List[List[Tuple[float, float]]]:
+) -> list[list[tuple[float, float]]]:
     """
     Extract centerlines using iterative polygon offsetting.
 
@@ -287,8 +312,6 @@ def _extract_centerlines_offset(
     3. Track centroid/spine as polygon shrinks
     4. When polygon collapses, that path is the centerline
     """
-    from shapely.geometry import MultiPolygon, GeometryCollection
-    from shapely.ops import unary_union
 
     if not polygon.is_valid:
         polygon = polygon.buffer(0)
@@ -296,11 +319,10 @@ def _extract_centerlines_offset(
     if polygon.is_empty or polygon.area < 0.01:
         return []
 
-    polylines: List[List[Tuple[float, float]]] = []
+    polylines: list[list[tuple[float, float]]] = []
 
     # Estimate the "width" of the shape using negative buffer
     # The shape disappears when offset by half its width
-    test_offset = 0.1
     max_offset = 50.0  # Safety limit
 
     # Binary search to find collapse distance
@@ -321,7 +343,6 @@ def _extract_centerlines_offset(
         return []
 
     # Generate centerline by tracking centroids at different offset levels
-    centerline_points: List[Tuple[float, float]] = []
     num_steps = max(10, int(half_width / 0.2))  # At least 10 steps, or one per 0.2mm
 
     # For shapes with holes (like 'O', 'A', etc.), extract ring centerlines
@@ -349,11 +370,11 @@ def _extract_centerlines_offset(
 
                 # Chaikin smoothing
                 if len(coords) >= 3 and chaikin_iterations > 0:
-                    coords = _chaikin_smooth(coords, iterations=chaikin_iterations)
+                    coords = chaikin_smooth(coords, iterations=chaikin_iterations)
 
                 # Angle smoothing
                 if len(coords) >= 3 and min_angle > 0:
-                    coords = _smooth_sharp_angles(coords, min_angle_degrees=min_angle)
+                    coords = smooth_sharp_angles(coords, min_angle_degrees=min_angle)
 
                 if len(coords) >= 2:
                     result.append(coords)
@@ -370,7 +391,7 @@ def _extract_centerlines_voronoi(
     min_angle: float,
     interpolation_distance: float = 0.5,
     spoke_filter_threshold: float = 1.5,
-) -> List[List[Tuple[float, float]]]:
+) -> list[list[tuple[float, float]]]:
     """
     Extract centerlines using Voronoi-based medial axis.
 
@@ -408,7 +429,9 @@ def _extract_centerlines_voronoi(
         # Use smaller interpolation for smaller shapes (more detail)
         interp_dist = max(0.1, min(interpolation_distance, diag / 50))
 
-        print(f"[CENTERLINE VORONOI] Processing polygon, area={polygon.area:.2f}, interp_dist={interp_dist:.2f}")
+        print(
+            f"[CENTERLINE VORONOI] Processing polygon, area={polygon.area:.2f}, interp_dist={interp_dist:.2f}"
+        )
 
         # Generate Voronoi-based centerline
         cl = VoronoiCenterline(polygon, interpolation_distance=interp_dist)
@@ -422,11 +445,11 @@ def _extract_centerlines_voronoi(
         merged = linemerge(geom)
 
         # Convert to list of polylines (no min_length filter yet)
-        polylines: List[List[Tuple[float, float]]] = []
+        polylines: list[list[tuple[float, float]]] = []
 
-        if merged.geom_type == 'LineString':
+        if merged.geom_type == "LineString":
             polylines.append(list(merged.coords))
-        elif merged.geom_type == 'MultiLineString':
+        elif merged.geom_type == "MultiLineString":
             for line in merged.geoms:
                 polylines.append(list(line.coords))
 
@@ -444,11 +467,11 @@ def _extract_centerlines_voronoi(
 
                 # Chaikin smoothing
                 if len(coords) >= 3 and chaikin_iterations > 0:
-                    coords = _chaikin_smooth(coords, iterations=chaikin_iterations)
+                    coords = chaikin_smooth(coords, iterations=chaikin_iterations)
 
                 # Angle smoothing
                 if len(coords) >= 3 and min_angle > 0:
-                    coords = _smooth_sharp_angles(coords, min_angle_degrees=min_angle)
+                    coords = smooth_sharp_angles(coords, min_angle_degrees=min_angle)
 
                 if len(coords) >= 2:
                     smoothed_polylines.append(coords)
@@ -475,7 +498,9 @@ def _extract_centerlines_voronoi(
                 # For CCW polygon, negative cross = convex corner
                 # For CW polygon, positive cross = convex corner
                 # Check both to be safe
-                corners.append((Point(p1), abs(cross) > 0.01))  # Store point and if it's a sharp corner
+                corners.append(
+                    (Point(p1), abs(cross) > 0.01)
+                )  # Store point and if it's a sharp corner
             return [c[0] for c in corners if c[1]]
 
         convex_corners = get_convex_corners(polygon)
@@ -483,10 +508,7 @@ def _extract_centerlines_voronoi(
 
         def is_near_corner(pt):
             """Check if point is near any convex corner."""
-            for corner in convex_corners:
-                if pt.distance(corner) < corner_tolerance:
-                    return True
-            return False
+            return any(pt.distance(corner) < corner_tolerance for corner in convex_corners)
 
         def is_endpoint_connected(pt, all_lines, exclude_idx):
             """Check if a point connects to other lines (not just the excluded one)."""
@@ -495,7 +517,10 @@ def _extract_centerlines_voronoi(
                     continue
                 other_start = Point(other_pl[0])
                 other_end = Point(other_pl[-1])
-                if pt.distance(other_start) < connection_tolerance or pt.distance(other_end) < connection_tolerance:
+                if (
+                    pt.distance(other_start) < connection_tolerance
+                    or pt.distance(other_end) < connection_tolerance
+                ):
                     return True
             return False
 
@@ -522,14 +547,15 @@ def _extract_centerlines_voronoi(
                 # A spoke is a short line where:
                 # - One end is at a convex corner AND that end is not connected to other lines
                 # - It's short enough to be an artifact
-                is_corner_spoke = (
-                    line.length < spoke_threshold and
-                    ((start_at_corner and not start_connected) or
-                     (end_at_corner and not end_connected))
+                is_corner_spoke = line.length < spoke_threshold and (
+                    (start_at_corner and not start_connected)
+                    or (end_at_corner and not end_connected)
                 )
 
                 if is_corner_spoke:
-                    print(f"[CENTERLINE VORONOI]   Removing spoke: length={line.length:.2f}mm, start_corner={start_at_corner}, end_corner={end_at_corner}")
+                    print(
+                        f"[CENTERLINE VORONOI]   Removing spoke: length={line.length:.2f}mm, start_corner={start_at_corner}, end_corner={end_at_corner}"
+                    )
                     removed += 1
                     continue
 
@@ -543,9 +569,11 @@ def _extract_centerlines_voronoi(
 
         if spoke_filter_threshold > 0:
             filtered_polylines, total_removed = filter_spokes(filtered_polylines)
-            print(f"[CENTERLINE VORONOI] Filtered {total_removed} spokes (from {len(convex_corners)} corners)")
+            print(
+                f"[CENTERLINE VORONOI] Filtered {total_removed} spokes (from {len(convex_corners)} corners)"
+            )
         else:
-            print(f"[CENTERLINE VORONOI] Spoke filter disabled")
+            print("[CENTERLINE VORONOI] Spoke filter disabled")
 
         # === STEP 3: Apply min_length filter ===
         result = []
@@ -561,15 +589,14 @@ def _extract_centerlines_voronoi(
     except Exception as e:
         print(f"[CENTERLINE VORONOI] Error: {e}")
         import traceback
+
         traceback.print_exc()
         return []
 
 
 def _extract_polygon_spine(
-    polygon: Polygon,
-    half_width: float,
-    num_steps: int
-) -> List[Tuple[float, float]]:
+    polygon: Polygon, half_width: float, num_steps: int
+) -> list[tuple[float, float]]:
     """
     Extract spine of a simple polygon by tracking centroids during shrinking.
     """
@@ -614,10 +641,8 @@ def _extract_polygon_spine(
 
 
 def _extract_ring_centerline(
-    outer_ring,
-    inner_ring,
-    half_width: float
-) -> List[Tuple[float, float]]:
+    outer_ring, inner_ring, half_width: float
+) -> list[tuple[float, float]]:
     """
     Extract centerline between outer boundary and a hole.
 
@@ -687,7 +712,7 @@ def _trace_skeleton_directly(
     min_length: float,
     pixels_per_mm: float,
     merge_tolerance: float,
-) -> List[List[Tuple[float, float]]]:
+) -> list[list[tuple[float, float]]]:
     """
     Directly trace skeleton by following connected pixels.
     This is the correct method for skeletons - NOT findContours!
@@ -698,12 +723,12 @@ def _trace_skeleton_directly(
         return []
 
     polylines = []
-    visited: Set[Tuple[int, int]] = set()
+    visited: set[tuple[int, int]] = set()
 
     # 8-connected neighbors (ordered for smoother tracing)
     neighbors = [(-1, 0), (0, 1), (1, 0), (0, -1), (-1, -1), (-1, 1), (1, 1), (1, -1)]
 
-    def get_unvisited_neighbors(pt: Tuple[int, int]) -> List[Tuple[int, int]]:
+    def get_unvisited_neighbors(pt: tuple[int, int]) -> list[tuple[int, int]]:
         """Get unvisited neighbors that are skeleton pixels."""
         result = []
         for dy, dx in neighbors:
@@ -712,7 +737,7 @@ def _trace_skeleton_directly(
                 result.append(neighbor)
         return result
 
-    def count_neighbors(pt: Tuple[int, int]) -> int:
+    def count_neighbors(pt: tuple[int, int]) -> int:
         """Count total neighbors (for endpoint/junction detection)."""
         return sum(1 for dy, dx in neighbors if (pt[0] + dy, pt[1] + dx) in skeleton_points)
 
@@ -732,7 +757,7 @@ def _trace_skeleton_directly(
     if not start_points:
         start_points = [next(iter(skeleton_points))]
 
-    def trace_path(start: Tuple[int, int]) -> List[Tuple[int, int]]:
+    def trace_path(start: tuple[int, int]) -> list[tuple[int, int]]:
         """Trace a path from a starting point."""
         path = [start]
         visited.add(start)
@@ -751,11 +776,12 @@ def _trace_skeleton_directly(
                 dy = current[0] - prev[0]
 
                 # Score neighbors by how well they continue the direction
-                def direction_score(neighbor):
-                    ndx = neighbor[1] - current[1]
-                    ndy = neighbor[0] - current[0]
+                # Capture loop variables as defaults to avoid B023
+                def direction_score(neighbor, _current=current, _dx=dx, _dy=dy):
+                    ndx = neighbor[1] - _current[1]
+                    ndy = neighbor[0] - _current[0]
                     # Dot product (higher = more aligned)
-                    return dx * ndx + dy * ndy
+                    return _dx * ndx + _dy * ndy
 
                 unvisited.sort(key=direction_score, reverse=True)
 
@@ -813,9 +839,8 @@ def _trace_skeleton_directly(
 
 
 def _merge_nearby_polylines(
-    polylines: List[List[Tuple[float, float]]],
-    tolerance: float = 0.5
-) -> List[List[Tuple[float, float]]]:
+    polylines: list[list[tuple[float, float]]], tolerance: float = 0.5
+) -> list[list[tuple[float, float]]]:
     """
     Merge polylines that have endpoints within tolerance distance.
 
@@ -845,7 +870,7 @@ def _merge_nearby_polylines(
                 j_start, j_end = seg_j[0], seg_j[-1]
 
                 def dist(p1, p2):
-                    return np.sqrt((p1[0]-p2[0])**2 + (p1[1]-p2[1])**2)
+                    return np.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
 
                 # Try to connect
                 new_seg = None
@@ -873,110 +898,14 @@ def _merge_nearby_polylines(
     return segments
 
 
-def _smooth_sharp_angles(
-    coords: List[Tuple[float, float]],
-    min_angle_degrees: float = 120.0
-) -> List[Tuple[float, float]]:
-    """
-    Smooth out sharp angles in a polyline by averaging with neighbors.
-
-    Sharp angles (< min_angle_degrees) often occur at skeleton junctions
-    and look unnatural. This smooths them by moving the point towards
-    the midpoint of its neighbors.
-    """
-    import math
-
-    if len(coords) < 3:
-        return coords
-
-    result = list(coords)
-
-    def angle_at_point(p0, p1, p2):
-        """Calculate angle at p1 in degrees (0-180)."""
-        v1 = (p0[0] - p1[0], p0[1] - p1[1])
-        v2 = (p2[0] - p1[0], p2[1] - p1[1])
-
-        len1 = math.sqrt(v1[0]**2 + v1[1]**2)
-        len2 = math.sqrt(v2[0]**2 + v2[1]**2)
-
-        if len1 < 1e-6 or len2 < 1e-6:
-            return 180.0
-
-        dot = v1[0]*v2[0] + v1[1]*v2[1]
-        cos_angle = max(-1, min(1, dot / (len1 * len2)))
-        return math.degrees(math.acos(cos_angle))
-
-    # Multiple passes to smooth progressively
-    for _ in range(3):
-        changed = False
-        new_result = [result[0]]  # Keep first point
-
-        for i in range(1, len(result) - 1):
-            p0, p1, p2 = result[i-1], result[i], result[i+1]
-            angle = angle_at_point(p0, p1, p2)
-
-            if angle < min_angle_degrees:
-                # Sharp angle - move point towards midpoint of neighbors
-                mid = ((p0[0] + p2[0]) / 2, (p0[1] + p2[1]) / 2)
-                # Blend: 70% towards midpoint
-                smoothed = (
-                    p1[0] * 0.3 + mid[0] * 0.7,
-                    p1[1] * 0.3 + mid[1] * 0.7
-                )
-                new_result.append(smoothed)
-                changed = True
-            else:
-                new_result.append(p1)
-
-        new_result.append(result[-1])  # Keep last point
-        result = new_result
-
-        if not changed:
-            break
-
-    return result
-
-
-def _chaikin_smooth(
-    coords: List[Tuple[float, float]],
-    iterations: int = 2
-) -> List[Tuple[float, float]]:
-    """
-    Apply Chaikin's corner cutting algorithm to smooth a polyline.
-
-    This removes the staircase effect from pixel-traced paths by
-    iteratively cutting corners with 1/4 and 3/4 interpolation points.
-    """
-    result = list(coords)
-
-    for _ in range(iterations):
-        if len(result) < 3:
-            return result
-
-        new_coords = [result[0]]  # Keep first point
-
-        for i in range(len(result) - 1):
-            p0, p1 = result[i], result[i + 1]
-            # Q = 3/4 * P0 + 1/4 * P1
-            q = (0.75 * p0[0] + 0.25 * p1[0], 0.75 * p0[1] + 0.25 * p1[1])
-            # R = 1/4 * P0 + 3/4 * P1
-            r = (0.25 * p0[0] + 0.75 * p1[0], 0.25 * p0[1] + 0.75 * p1[1])
-            new_coords.extend([q, r])
-
-        new_coords.append(result[-1])  # Keep last point
-        result = new_coords
-
-    return result
-
-
 def _extend_endpoints_to_boundary(
-    coords: List[Tuple[float, float]],
+    coords: list[tuple[float, float]],
     polygon: Polygon,
-    other_centerlines: List[List[Tuple[float, float]]] = None,
+    other_centerlines: list[list[tuple[float, float]]] = None,
     max_extension: float = 50.0,  # Maximum ray length for searching
     loop_threshold: float = 5.0,  # Max gap to close as loop
     max_extend: float = 3.0,  # Actual max extension distance
-) -> List[Tuple[float, float]]:
+) -> list[tuple[float, float]]:
     """
     Extend centerline endpoints to reach the polygon boundary or another centerline.
 
@@ -985,7 +914,8 @@ def _extend_endpoints_to_boundary(
     - Another centerline (preferred - creates T-junction)
     - The polygon boundary (fallback)
     """
-    from shapely.geometry import Point, LineString as ShapelyLine
+    from shapely.geometry import LineString as ShapelyLine
+    from shapely.geometry import Point
 
     if len(coords) < 2:
         return coords
@@ -996,14 +926,14 @@ def _extend_endpoints_to_boundary(
     # Check if this is a nearly-closed loop (start and end points close together)
     start_pt = result[0]
     end_pt = result[-1]
-    dist_start_end = np.sqrt((end_pt[0] - start_pt[0])**2 + (end_pt[1] - start_pt[1])**2)
+    dist_start_end = np.sqrt((end_pt[0] - start_pt[0]) ** 2 + (end_pt[1] - start_pt[1]) ** 2)
 
     # Calculate total polyline length
     total_length = 0.0
     for i in range(len(result) - 1):
-        dx = result[i+1][0] - result[i][0]
-        dy = result[i+1][1] - result[i][1]
-        total_length += np.sqrt(dx*dx + dy*dy)
+        dx = result[i + 1][0] - result[i][0]
+        dy = result[i + 1][1] - result[i][1]
+        total_length += np.sqrt(dx * dx + dy * dy)
 
     # Dynamic threshold: close loop if gap is small relative to total length
     # - Absolute max: 5mm gap
@@ -1011,9 +941,9 @@ def _extend_endpoints_to_boundary(
     # - Minimum points: 4 (to form a valid loop)
     gap_ratio = dist_start_end / total_length if total_length > 0 else 1.0
     is_nearly_closed = (
-        len(result) >= 4 and
-        dist_start_end < loop_threshold and  # Max gap from parameter
-        gap_ratio < 0.15  # Gap is less than 15% of total length
+        len(result) >= 4
+        and dist_start_end < loop_threshold  # Max gap from parameter
+        and gap_ratio < 0.15  # Gap is less than 15% of total length
     )
 
     if is_nearly_closed:
@@ -1021,7 +951,9 @@ def _extend_endpoints_to_boundary(
         midpoint = ((start_pt[0] + end_pt[0]) / 2, (start_pt[1] + end_pt[1]) / 2)
         result[0] = midpoint
         result[-1] = midpoint
-        print(f"[CENTERLINE DEBUG] Closed loop detected (gap={dist_start_end:.2f}mm, {gap_ratio*100:.1f}% of {total_length:.1f}mm)")
+        print(
+            f"[CENTERLINE DEBUG] Closed loop detected (gap={dist_start_end:.2f}mm, {gap_ratio * 100:.1f}% of {total_length:.1f}mm)"
+        )
         return result
 
     # Convert other centerlines to Shapely LineStrings
@@ -1032,10 +964,8 @@ def _extend_endpoints_to_boundary(
                 other_lines.append(ShapelyLine(cl))
 
     def get_closest_intersection_point(
-        extension_line: ShapelyLine,
-        endpoint: Tuple[float, float],
-        geometry
-    ) -> Tuple[float, float] | None:
+        extension_line: ShapelyLine, endpoint: tuple[float, float], geometry
+    ) -> tuple[float, float] | None:
         """Extract closest intersection point from any geometry type."""
         intersection = extension_line.intersection(geometry)
 
@@ -1044,28 +974,28 @@ def _extend_endpoints_to_boundary(
 
         endpoint_pt = Point(endpoint)
 
-        if intersection.geom_type == 'Point':
+        if intersection.geom_type == "Point":
             return (intersection.x, intersection.y)
-        elif intersection.geom_type == 'MultiPoint':
+        elif intersection.geom_type == "MultiPoint":
             closest = min(intersection.geoms, key=lambda p: endpoint_pt.distance(p))
             return (closest.x, closest.y)
-        elif intersection.geom_type == 'LineString':
+        elif intersection.geom_type == "LineString":
             # Take closest point on the line
             closest_pt = intersection.interpolate(intersection.project(endpoint_pt))
             return (closest_pt.x, closest_pt.y)
-        elif intersection.geom_type == 'MultiLineString':
+        elif intersection.geom_type == "MultiLineString":
             all_points = []
             for geom in intersection.geoms:
                 closest_pt = geom.interpolate(geom.project(endpoint_pt))
                 all_points.append((closest_pt.x, closest_pt.y))
             if all_points:
                 return min(all_points, key=lambda p: endpoint_pt.distance(Point(p)))
-        elif intersection.geom_type == 'GeometryCollection':
+        elif intersection.geom_type == "GeometryCollection":
             all_points = []
             for geom in intersection.geoms:
-                if geom.geom_type == 'Point':
+                if geom.geom_type == "Point":
                     all_points.append((geom.x, geom.y))
-                elif geom.geom_type == 'LineString':
+                elif geom.geom_type == "LineString":
                     closest_pt = geom.interpolate(geom.project(endpoint_pt))
                     all_points.append((closest_pt.x, closest_pt.y))
             if all_points:
@@ -1073,8 +1003,9 @@ def _extend_endpoints_to_boundary(
 
         return None
 
-    def extend_point(endpoint: Tuple[float, float],
-                     direction_point: Tuple[float, float]) -> Tuple[float, float]:
+    def extend_point(
+        endpoint: tuple[float, float], direction_point: tuple[float, float]
+    ) -> tuple[float, float]:
         """Extend a single endpoint towards boundary or other centerline."""
         endpoint_pt = Point(endpoint)
 
@@ -1091,10 +1022,7 @@ def _extend_endpoints_to_boundary(
         dy /= length
 
         # Create extension ray
-        far_point = (
-            endpoint[0] + dx * max_extension,
-            endpoint[1] + dy * max_extension
-        )
+        far_point = (endpoint[0] + dx * max_extension, endpoint[1] + dy * max_extension)
 
         extension_line = ShapelyLine([endpoint, far_point])
 
@@ -1107,14 +1035,14 @@ def _extend_endpoints_to_boundary(
             if pt:
                 dist = endpoint_pt.distance(Point(pt))
                 if dist > 0.01:  # Avoid self-intersection at shared points
-                    candidates.append((pt, dist, 'centerline'))
+                    candidates.append((pt, dist, "centerline"))
 
         # Check intersection with polygon boundary
         pt = get_closest_intersection_point(extension_line, endpoint, boundary)
         if pt:
             dist = endpoint_pt.distance(Point(pt))
             if dist > 0.01:
-                candidates.append((pt, dist, 'boundary'))
+                candidates.append((pt, dist, "boundary"))
 
         if not candidates:
             return endpoint
@@ -1124,7 +1052,9 @@ def _extend_endpoints_to_boundary(
 
         if closest[1] > max_extend:
             # Intersection too far away - don't extend
-            print(f"[CENTERLINE DEBUG] Skipping extension, closest intersection too far ({closest[1]:.1f}mm > {max_extend}mm)")
+            print(
+                f"[CENTERLINE DEBUG] Skipping extension, closest intersection too far ({closest[1]:.1f}mm > {max_extend}mm)"
+            )
             return endpoint
 
         return closest[0]

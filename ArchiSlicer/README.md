@@ -134,15 +134,14 @@ npm run dev
 # Navigate to backend directory
 cd backend
 
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # or `venv\Scripts\activate` on Windows
+# Install dependencies with uv (recommended)
+uv sync --extra dev --extra test
 
-# Install dependencies
-pip install -r requirements.txt
+# Or with pip (alternative)
+pip install -e ".[dev,test]"
 
 # Start development server
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 # Access at http://localhost:8000
 ```
@@ -279,8 +278,14 @@ ArchiSlicer is designed for machines with the following capabilities:
 
 - **Framework:** FastAPI 0.109.0
 - **Server:** Uvicorn 0.25.0
-- **Language:** Python 3.11
-- **Image Processing:** OpenCV, Pillow, NumPy (for Phase 2)
+- **Language:** Python 3.10+
+- **Database:** PostgreSQL + SQLAlchemy 2.0 + Alembic
+- **Validation:** Pydantic 2.5
+- **Geometry Processing:** Shapely, NumPy, SciPy
+- **Path Optimization:** Google OR-Tools (TSP solver)
+- **Centerline Extraction:** OpenCV, centerline library
+- **Package Manager:** uv (with pyproject.toml)
+- **Linting:** ruff + pre-commit hooks
 
 ### Project Structure
 
@@ -310,9 +315,28 @@ ArchiSlicer/
 │   └── tailwind.config.js
 │
 ├── backend/                    # FastAPI application
-│   ├── main.py                 # API endpoints
-│   ├── requirements.txt        # Python dependencies
-│   └── Makefile
+│   ├── main.py                 # App entry point
+│   ├── database.py             # DB connection + DI providers
+│   ├── models.py               # SQLAlchemy models
+│   ├── schemas.py              # Pydantic schemas
+│   ├── routers/                # API endpoints
+│   │   ├── pen_types.py        # Pen type CRUD
+│   │   ├── tool_presets.py     # Tool preset CRUD
+│   │   ├── projects.py         # Project CRUD + versioning
+│   │   └── infill.py           # Infill generation + optimization
+│   ├── repositories/           # Data access layer (Repository Pattern)
+│   │   ├── __init__.py         # Protocol definitions
+│   │   ├── sqlalchemy.py       # SQLAlchemy implementations
+│   │   └── memory.py           # In-memory (for testing)
+│   ├── services/               # Business logic
+│   │   ├── infill/             # Infill pattern generation
+│   │   ├── optimization/       # TSP path optimization
+│   │   ├── centerline/         # Centerline extraction
+│   │   └── geometry/           # Geometry utilities
+│   ├── alembic/                # Database migrations
+│   ├── tests/                  # pytest tests
+│   ├── pyproject.toml          # Dependencies + ruff config
+│   └── .pre-commit-config.yaml # Pre-commit hooks
 │
 └── README.md                   # This file
 ```
@@ -399,15 +423,33 @@ docker build -t archislicer-backend:latest -f ../backend/Dockerfile .
 cd frontend
 npm run test
 
-# Backend tests (if configured)
+# Backend tests
 cd backend
-pytest
+uv run pytest tests/ -v
+
+# With coverage
+uv run pytest tests/ --cov=. --cov-report=html
 ```
 
 ### Code Style
 
 - **Frontend:** ESLint + Prettier (configured in Vite)
-- **Backend:** Black + Flake8 (recommended)
+- **Backend:** ruff (linting + formatting) with pre-commit hooks
+
+```bash
+# Install pre-commit hooks (run once)
+cd backend
+uv run pre-commit install
+
+# Run linter manually
+uv run ruff check . --fix
+
+# Run formatter
+uv run ruff format .
+
+# Run all pre-commit hooks
+uv run pre-commit run --all-files
+```
 
 ---
 

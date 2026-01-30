@@ -1,12 +1,11 @@
 """TSP-based path optimization for minimizing pen lifts and travel distance."""
 
 import time
-from typing import List, Tuple, Optional
-import numpy as np
-from ortools.constraint_solver import routing_enums_pb2
-from ortools.constraint_solver import pywrapcp
 
-from .geometry_utils import Point2D, LineSegment, Polyline
+import numpy as np
+from ortools.constraint_solver import pywrapcp, routing_enums_pb2
+
+from services.geometry import LineSegment, Point2D, Polyline
 
 
 def calculate_distance(p1: Point2D, p2: Point2D) -> float:
@@ -15,10 +14,8 @@ def calculate_distance(p1: Point2D, p2: Point2D) -> float:
 
 
 def optimize_drawing_path(
-    segments: List[LineSegment],
-    start_point: Optional[Point2D] = None,
-    time_limit_seconds: int = 300
-) -> Tuple[List[LineSegment], dict]:
+    segments: list[LineSegment], start_point: Point2D | None = None, time_limit_seconds: int = 300
+) -> tuple[list[LineSegment], dict]:
     """
     Optimize drawing order using TSP solver.
 
@@ -51,7 +48,7 @@ def optimize_drawing_path(
     if len(segments) == 1:
         seg = segments[0]
         drawing_length = calculate_distance(seg[0], seg[1])
-        print(f"  [TSP] Single segment, no optimization needed")
+        print("  [TSP] Single segment, no optimization needed")
         return segments, {
             "total_drawing_length_mm": drawing_length,
             "total_travel_length_mm": 0,
@@ -67,9 +64,8 @@ def optimize_drawing_path(
 
 
 def _greedy_optimize(
-    segments: List[LineSegment],
-    start_point: Optional[Point2D] = None
-) -> Tuple[List[LineSegment], dict]:
+    segments: list[LineSegment], start_point: Point2D | None = None
+) -> tuple[list[LineSegment], dict]:
     """
     Simple greedy nearest-neighbor optimization.
 
@@ -81,13 +77,10 @@ def _greedy_optimize(
         return [], {"total_drawing_length_mm": 0, "total_travel_length_mm": 0, "num_pen_lifts": 0}
 
     remaining = list(segments)
-    ordered: List[LineSegment] = []
+    ordered: list[LineSegment] = []
 
     # Start from given point or first segment
-    if start_point is not None:
-        current_pos = start_point
-    else:
-        current_pos = remaining[0][0]
+    current_pos = start_point if start_point is not None else remaining[0][0]
 
     total_drawing = 0.0
     total_travel = 0.0
@@ -137,10 +130,8 @@ def _greedy_optimize(
 
 
 def _ortools_optimize(
-    segments: List[LineSegment],
-    start_point: Optional[Point2D] = None,
-    time_limit_seconds: int = 300
-) -> Tuple[List[LineSegment], dict]:
+    segments: list[LineSegment], start_point: Point2D | None = None, time_limit_seconds: int = 300
+) -> tuple[list[LineSegment], dict]:
     """
     Use OR-Tools to solve the path optimization as a TSP variant.
 
@@ -162,7 +153,7 @@ def _ortools_optimize(
     # Node 2i+2 = segment i end
 
     t0 = time.perf_counter()
-    nodes: List[Point2D] = []
+    nodes: list[Point2D] = []
 
     # Add depot
     if start_point is not None:
@@ -217,9 +208,7 @@ def _ortools_optimize(
         routing.AddPickupAndDelivery(start_index, end_index)
 
         # Constrain that pickup comes before delivery (or exactly after)
-        routing.solver().Add(
-            routing.VehicleVar(start_index) == routing.VehicleVar(end_index)
-        )
+        routing.solver().Add(routing.VehicleVar(start_index) == routing.VehicleVar(end_index))
 
         # The segment drawing distance should be counted correctly
         # We want to draw the segment, so start_index must come directly before end_index
@@ -250,7 +239,9 @@ def _ortools_optimize(
     # This prevents running for the full time when improvements are minimal
     search_parameters.solution_limit = 500
 
-    print(f"  [TSP] Solving with OR-Tools: {n_segments} segments, time_limit={adaptive_time_limit}s, solution_limit=500")
+    print(
+        f"  [TSP] Solving with OR-Tools: {n_segments} segments, time_limit={adaptive_time_limit}s, solution_limit=500"
+    )
     time_setup = (time.perf_counter() - t0) * 1000
 
     # Solve
@@ -307,7 +298,7 @@ def _ortools_optimize(
 
         # If OR-Tools solution doesn't cover all segments, fall back to greedy
         if len(ordered_segments) != n_segments:
-            print(f"  [TSP] OR-Tools incomplete, falling back to greedy")
+            print("  [TSP] OR-Tools incomplete, falling back to greedy")
             return _greedy_optimize(segments, start_point)
 
         time_total = (time.perf_counter() - total_start) * 1000
@@ -316,13 +307,15 @@ def _ortools_optimize(
         print(f"    model_setup:    {time_setup:7.2f} ms")
         print(f"    solver:         {time_solve:7.2f} ms")
         print(f"    TOTAL:          {time_total:7.2f} ms")
-        print(f"  [TSP RESULT] OR-Tools: travel={total_travel:.1f}mm, drawing={total_drawing:.1f}mm, pen_lifts={len(ordered_segments)-1}")
+        print(
+            f"  [TSP RESULT] OR-Tools: travel={total_travel:.1f}mm, drawing={total_drawing:.1f}mm, pen_lifts={len(ordered_segments) - 1}"
+        )
 
         # Compare with greedy for debugging
         greedy_result, greedy_stats = _greedy_optimize(segments, start_point)
         print(f"  [TSP COMPARE] Greedy: travel={greedy_stats['total_travel_length_mm']:.1f}mm")
-        if greedy_stats['total_travel_length_mm'] < total_travel:
-            print(f"  [TSP WARNING] Greedy is better than OR-Tools! Using greedy instead.")
+        if greedy_stats["total_travel_length_mm"] < total_travel:
+            print("  [TSP WARNING] Greedy is better than OR-Tools! Using greedy instead.")
             return greedy_result, greedy_stats
 
         return ordered_segments, {
@@ -340,8 +333,7 @@ def _ortools_optimize(
 
 
 def calculate_path_statistics(
-    segments: List[LineSegment],
-    start_point: Optional[Point2D] = None
+    segments: list[LineSegment], start_point: Point2D | None = None
 ) -> dict:
     """
     Calculate statistics for a given path order without optimizing.
@@ -358,10 +350,7 @@ def calculate_path_statistics(
     total_drawing = 0.0
     total_travel = 0.0
 
-    if start_point is not None:
-        current_pos = start_point
-    else:
-        current_pos = segments[0][0]
+    current_pos = start_point if start_point is not None else segments[0][0]
 
     for i, seg in enumerate(segments):
         if i == 0:
@@ -380,10 +369,8 @@ def calculate_path_statistics(
 
 
 def optimize_polyline_path(
-    polylines: List[Polyline],
-    start_point: Optional[Point2D] = None,
-    time_limit_seconds: int = 300
-) -> Tuple[List[Polyline], dict]:
+    polylines: list[Polyline], start_point: Point2D | None = None, time_limit_seconds: int = 300
+) -> tuple[list[Polyline], dict]:
     """
     Optimize drawing order of polylines (continuous paths).
 
@@ -415,8 +402,7 @@ def optimize_polyline_path(
     if len(polylines) == 1:
         polyline = polylines[0]
         drawing_length = sum(
-            calculate_distance(polyline[i], polyline[i + 1])
-            for i in range(len(polyline) - 1)
+            calculate_distance(polyline[i], polyline[i + 1]) for i in range(len(polyline) - 1)
         )
         return polylines, {
             "total_drawing_length_mm": drawing_length,
@@ -430,9 +416,8 @@ def optimize_polyline_path(
 
 
 def _greedy_optimize_polylines(
-    polylines: List[Polyline],
-    start_point: Optional[Point2D] = None
-) -> Tuple[List[Polyline], dict]:
+    polylines: list[Polyline], start_point: Point2D | None = None
+) -> tuple[list[Polyline], dict]:
     """
     Greedy nearest-neighbor optimization for polylines.
 
@@ -458,13 +443,10 @@ def _greedy_optimize_polylines(
         return dist < 0.001  # Tolerance for floating point
 
     remaining = list(polylines)
-    ordered: List[Polyline] = []
+    ordered: list[Polyline] = []
 
     # Start from given point or first polyline start
-    if start_point is not None:
-        current_pos = start_point
-    else:
-        current_pos = remaining[0][0]
+    current_pos = start_point if start_point is not None else remaining[0][0]
 
     total_drawing = 0.0
     total_travel = 0.0
@@ -507,7 +489,7 @@ def _greedy_optimize_polylines(
             # Rotate closed polyline to start from best point
             if best_start_idx > 0:
                 # Rotate: move points before best_start_idx to the end
-                polyline = polyline[best_start_idx:] + polyline[1:best_start_idx + 1]
+                polyline = polyline[best_start_idx:] + polyline[1 : best_start_idx + 1]
         else:
             # Reverse open polyline if needed
             if best_start_idx == -1:
@@ -523,7 +505,9 @@ def _greedy_optimize_polylines(
         ordered.append(polyline)
 
     elapsed = (time.perf_counter() - t0) * 1000
-    print(f"  [TSP TIMING] greedy polyline optimization: {elapsed:.2f} ms for {len(polylines)} polylines")
+    print(
+        f"  [TSP TIMING] greedy polyline optimization: {elapsed:.2f} ms for {len(polylines)} polylines"
+    )
 
     return ordered, {
         "total_drawing_length_mm": total_drawing,

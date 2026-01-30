@@ -1,4 +1,5 @@
 """Seed script to populate default pen types."""
+
 from database import SessionLocal
 from models import PenType
 

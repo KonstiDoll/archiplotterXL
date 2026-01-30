@@ -1,5 +1,6 @@
-from sqlalchemy import Column, String, Float, Integer, JSON, Text, DateTime
+from sqlalchemy import JSON, Column, DateTime, Float, Integer, String, Text
 from sqlalchemy.sql import func
+
 from database import Base
 
 
@@ -16,6 +17,7 @@ class PenType(Base):
         pump_height: Z height to move to for pump action (mm)
         width: Pen width in mm (for contour offset calculation)
     """
+
     __tablename__ = "pen_types"
 
     id = Column(String, primary_key=True, index=True)
@@ -36,6 +38,7 @@ class ToolPreset(Base):
         name: Human-readable preset name (e.g., "Posca Regenbogen", "Fineliner SW")
         tool_configs: JSON array of 9 tool configurations, each with penType and color
     """
+
     __tablename__ = "tool_presets"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -58,6 +61,7 @@ class Project(Base):
         created_at: Creation timestamp
         updated_at: Last update timestamp
     """
+
     __tablename__ = "projects"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -82,6 +86,7 @@ class ProjectVersion(Base):
         message: Optional version message describing changes
         created_at: When this version was created
     """
+
     __tablename__ = "project_versions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)

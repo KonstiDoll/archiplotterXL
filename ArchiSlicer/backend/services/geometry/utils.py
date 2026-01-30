@@ -1,18 +1,15 @@
 """Geometry utilities using Shapely for polygon operations."""
 
-from typing import List, Tuple
-from shapely.geometry import Polygon, LineString, Point
-from shapely.ops import unary_union
-from shapely.validation import make_valid
 import numpy as np
+from shapely.geometry import LineString, Polygon
+from shapely.validation import make_valid
+
+Point2D = tuple[float, float]
+LineSegment = tuple[Point2D, Point2D]
+Polyline = list[Point2D]  # Ordered sequence of connected points
 
 
-Point2D = Tuple[float, float]
-LineSegment = Tuple[Point2D, Point2D]
-Polyline = List[Point2D]  # Ordered sequence of connected points
-
-
-def points_to_shapely_polygon(points: List[dict]) -> Polygon:
+def points_to_shapely_polygon(points: list[dict]) -> Polygon:
     """
     Convert API point list to Shapely Polygon.
 
@@ -49,10 +46,7 @@ def points_to_shapely_polygon(points: List[dict]) -> Polygon:
     return polygon
 
 
-def polygon_with_holes_to_shapely(
-    outer: List[dict],
-    holes: List[List[dict]]
-) -> Polygon:
+def polygon_with_holes_to_shapely(outer: list[dict], holes: list[list[dict]]) -> Polygon:
     """
     Convert outer boundary and holes to Shapely Polygon.
 
@@ -120,10 +114,8 @@ def offset_polygon(polygon: Polygon, distance: float):
 
 
 def clip_line_to_polygon(
-    line_start: Point2D,
-    line_end: Point2D,
-    polygon: Polygon
-) -> List[LineSegment]:
+    line_start: Point2D, line_end: Point2D, polygon: Polygon
+) -> list[LineSegment]:
     """
     Clip line segment to polygon boundary.
 
@@ -150,18 +142,14 @@ def clip_line_to_polygon(
     if clipped.geom_type == "LineString":
         coords = list(clipped.coords)
         for i in range(len(coords) - 1):
-            segments.append((
-                (coords[i][0], coords[i][1]),
-                (coords[i + 1][0], coords[i + 1][1])
-            ))
+            segments.append(((coords[i][0], coords[i][1]), (coords[i + 1][0], coords[i + 1][1])))
     elif clipped.geom_type == "MultiLineString":
         for line_seg in clipped.geoms:
             coords = list(line_seg.coords)
             for i in range(len(coords) - 1):
-                segments.append((
-                    (coords[i][0], coords[i][1]),
-                    (coords[i + 1][0], coords[i + 1][1])
-                ))
+                segments.append(
+                    ((coords[i][0], coords[i][1]), (coords[i + 1][0], coords[i + 1][1]))
+                )
     elif clipped.geom_type == "Point":
         # Single point intersection - skip
         pass
@@ -171,15 +159,14 @@ def clip_line_to_polygon(
             if geom.geom_type == "LineString":
                 coords = list(geom.coords)
                 for i in range(len(coords) - 1):
-                    segments.append((
-                        (coords[i][0], coords[i][1]),
-                        (coords[i + 1][0], coords[i + 1][1])
-                    ))
+                    segments.append(
+                        ((coords[i][0], coords[i][1]), (coords[i + 1][0], coords[i + 1][1]))
+                    )
 
     return segments
 
 
-def get_polygon_bounds(polygon: Polygon) -> Tuple[float, float, float, float]:
+def get_polygon_bounds(polygon: Polygon) -> tuple[float, float, float, float]:
     """
     Get bounding box of polygon.
 
@@ -189,7 +176,7 @@ def get_polygon_bounds(polygon: Polygon) -> Tuple[float, float, float, float]:
     return polygon.bounds
 
 
-def calculate_line_length(segments: List[LineSegment]) -> float:
+def calculate_line_length(segments: list[LineSegment]) -> float:
     """
     Calculate total length of line segments.
 

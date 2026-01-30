@@ -1,5 +1,4 @@
 """Tests for pen types API endpoints."""
-import pytest
 
 
 class TestPenTypesAPI:

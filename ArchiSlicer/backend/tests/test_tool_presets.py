@@ -1,4 +1,5 @@
 """Tests for tool presets API endpoints."""
+
 import pytest
 
 
@@ -22,7 +23,7 @@ class TestToolPresetsAPI:
 
     def test_list_presets_empty(self, client):
         """Test listing presets when database is empty."""
-        response = client.get("/tool-presets/")
+        response = client.get("/api/tool-presets/")
         assert response.status_code == 200
         assert response.json() == []
 
@@ -33,7 +34,7 @@ class TestToolPresetsAPI:
             "tool_configs": sample_tool_configs,
         }
 
-        response = client.post("/tool-presets/", json=preset_data)
+        response = client.post("/api/tool-presets/", json=preset_data)
         assert response.status_code == 201
 
         data = response.json()
@@ -52,7 +53,7 @@ class TestToolPresetsAPI:
             ],
         }
 
-        response = client.post("/tool-presets/", json=preset_data)
+        response = client.post("/api/tool-presets/", json=preset_data)
         assert response.status_code == 201
         assert len(response.json()["tool_configs"]) == 1
 
@@ -63,11 +64,11 @@ class TestToolPresetsAPI:
             "tool_configs": sample_tool_configs,
         }
 
-        response = client.post("/tool-presets/", json=preset_data)
+        response = client.post("/api/tool-presets/", json=preset_data)
         assert response.status_code == 201
 
         # Try to create again with same name
-        response = client.post("/tool-presets/", json=preset_data)
+        response = client.post("/api/tool-presets/", json=preset_data)
         assert response.status_code == 400
         assert "already exists" in response.json()["detail"]
 
@@ -78,18 +79,18 @@ class TestToolPresetsAPI:
             "name": "Get Test",
             "tool_configs": sample_tool_configs,
         }
-        create_response = client.post("/tool-presets/", json=preset_data)
+        create_response = client.post("/api/tool-presets/", json=preset_data)
         preset_id = create_response.json()["id"]
 
         # Get it
-        response = client.get(f"/tool-presets/{preset_id}")
+        response = client.get(f"/api/tool-presets/{preset_id}")
         assert response.status_code == 200
         assert response.json()["name"] == "Get Test"
         assert response.json()["id"] == preset_id
 
     def test_get_preset_not_found(self, client):
         """Test getting a non-existent preset returns 404."""
-        response = client.get("/tool-presets/99999")
+        response = client.get("/api/tool-presets/99999")
         assert response.status_code == 404
 
     def test_update_preset_name(self, client, sample_tool_configs):
@@ -99,11 +100,11 @@ class TestToolPresetsAPI:
             "name": "Original Name",
             "tool_configs": sample_tool_configs,
         }
-        create_response = client.post("/tool-presets/", json=preset_data)
+        create_response = client.post("/api/tool-presets/", json=preset_data)
         preset_id = create_response.json()["id"]
 
         # Update name only
-        response = client.put(f"/tool-presets/{preset_id}", json={"name": "Updated Name"})
+        response = client.put(f"/api/tool-presets/{preset_id}", json={"name": "Updated Name"})
         assert response.status_code == 200
         assert response.json()["name"] == "Updated Name"
         # Tool configs should remain unchanged
@@ -116,7 +117,7 @@ class TestToolPresetsAPI:
             "name": "Config Update Test",
             "tool_configs": sample_tool_configs,
         }
-        create_response = client.post("/tool-presets/", json=preset_data)
+        create_response = client.post("/api/tool-presets/", json=preset_data)
         preset_id = create_response.json()["id"]
 
         # Update configs
@@ -124,7 +125,7 @@ class TestToolPresetsAPI:
             {"penType": "brushpen", "color": "#123456"},
             {"penType": "brushpen", "color": "#654321"},
         ]
-        response = client.put(f"/tool-presets/{preset_id}", json={"tool_configs": new_configs})
+        response = client.put(f"/api/tool-presets/{preset_id}", json={"tool_configs": new_configs})
         assert response.status_code == 200
         assert len(response.json()["tool_configs"]) == 2
         assert response.json()["tool_configs"][0]["penType"] == "brushpen"
@@ -132,18 +133,22 @@ class TestToolPresetsAPI:
     def test_update_preset_name_conflict(self, client, sample_tool_configs):
         """Test updating preset to a name that already exists fails."""
         # Create two presets
-        client.post("/tool-presets/", json={"name": "First", "tool_configs": sample_tool_configs})
-        create_response = client.post("/tool-presets/", json={"name": "Second", "tool_configs": sample_tool_configs})
+        client.post(
+            "/api/tool-presets/", json={"name": "First", "tool_configs": sample_tool_configs}
+        )
+        create_response = client.post(
+            "/api/tool-presets/", json={"name": "Second", "tool_configs": sample_tool_configs}
+        )
         second_id = create_response.json()["id"]
 
         # Try to rename second to first
-        response = client.put(f"/tool-presets/{second_id}", json={"name": "First"})
+        response = client.put(f"/api/tool-presets/{second_id}", json={"name": "First"})
         assert response.status_code == 400
         assert "already exists" in response.json()["detail"]
 
     def test_update_preset_not_found(self, client):
         """Test updating a non-existent preset returns 404."""
-        response = client.put("/tool-presets/99999", json={"name": "Test"})
+        response = client.put("/api/tool-presets/99999", json={"name": "Test"})
         assert response.status_code == 404
 
     def test_delete_preset(self, client, sample_tool_configs):
@@ -153,20 +158,20 @@ class TestToolPresetsAPI:
             "name": "To Delete",
             "tool_configs": sample_tool_configs,
         }
-        create_response = client.post("/tool-presets/", json=preset_data)
+        create_response = client.post("/api/tool-presets/", json=preset_data)
         preset_id = create_response.json()["id"]
 
         # Delete it
-        response = client.delete(f"/tool-presets/{preset_id}")
+        response = client.delete(f"/api/tool-presets/{preset_id}")
         assert response.status_code == 204
 
         # Verify it's gone
-        response = client.get(f"/tool-presets/{preset_id}")
+        response = client.get(f"/api/tool-presets/{preset_id}")
         assert response.status_code == 404
 
     def test_delete_preset_not_found(self, client):
         """Test deleting a non-existent preset returns 404."""
-        response = client.delete("/tool-presets/99999")
+        response = client.delete("/api/tool-presets/99999")
         assert response.status_code == 404
 
     def test_list_multiple_presets(self, client, sample_tool_configs):
@@ -177,9 +182,9 @@ class TestToolPresetsAPI:
                 "name": f"Preset {i}",
                 "tool_configs": sample_tool_configs,
             }
-            client.post("/tool-presets/", json=preset_data)
+            client.post("/api/tool-presets/", json=preset_data)
 
-        response = client.get("/tool-presets/")
+        response = client.get("/api/tool-presets/")
         assert response.status_code == 200
         assert len(response.json()) == 3
 
@@ -194,7 +199,7 @@ class TestToolPresetsAPI:
             "tool_configs": configs,
         }
 
-        response = client.post("/tool-presets/", json=preset_data)
+        response = client.post("/api/tool-presets/", json=preset_data)
         assert response.status_code == 201
 
         data = response.json()
