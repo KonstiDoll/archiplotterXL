@@ -6,6 +6,7 @@ import { optimizePathBackend, extractCenterlineBackend, CenterlineOptions, defau
 import { PathAnalysisResult, PathRole, getEffectiveRole, analyzePathRelationshipsWithColors, extractPolygonsWithColorsFromGroup } from './utils/geometry/path-analysis';
 import type { ProjectData, SerializedSVGItem, SerializedColorGroup, SerializedInfillLine } from './utils/project_services';
 import { deserializeInfillGroup } from './utils/project_services';
+import { applyContourOffset } from './utils/gcode_services';
 
 // Drawing Mode für Kontur-Offset
 export type DrawingMode = 'center' | 'inside' | 'outside';
@@ -48,6 +49,7 @@ export interface ColorGroup {
   // Kontur-Offset Einstellungen
   drawingMode: DrawingMode;   // 'center' | 'inside' | 'outside' - wo relativ zur Linie gezeichnet wird
   customOffset?: number;      // Optional: benutzerdefinierter Offset in mm (überschreibt penWidth/2)
+  offsetContourGroup?: THREE.Group;  // Generierte Offset-Kontur (wenn nicht 'center')
   // Infill-Einstellungen pro Farbe
   infillEnabled: boolean;           // Infill an/aus für diese Farbe
   infillToolNumber: number;         // Tool für Infill (kann anders sein als Kontur-Tool)
@@ -892,6 +894,156 @@ export const useMainStore = defineStore('main', {
           const colorGroup = item.colorGroups[colorIndex];
           colorGroup.centerlineOptions = { ...colorGroup.centerlineOptions, ...options };
           console.log(`Centerline-Optionen für Farbe ${colorGroup.color} aktualisiert:`, options);
+        }
+      }
+    },
+
+    // Offset-Kontur für eine Farbgruppe generieren
+    generateOffsetContour(svgIndex: number, colorIndex: number, penWidth: number) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          const colorGroup = item.colorGroups[colorIndex];
+          const drawingMode = colorGroup.drawingMode || 'center';
+
+          // Bei 'center' keine Offset-Kontur nötig
+          if (drawingMode === 'center') {
+            this.deleteOffsetContour(svgIndex, colorIndex);
+            return;
+          }
+
+          // Alte Offset-Kontur entfernen
+          if (colorGroup.offsetContourGroup) {
+            item.geometry.remove(colorGroup.offsetContourGroup);
+            colorGroup.offsetContourGroup = undefined;
+          }
+
+          // Finde alle Linien dieser Farbe
+          const contourLines: THREE.Line[] = [];
+          const targetColor = colorGroup.color.toLowerCase();
+          item.geometry.traverse((obj) => {
+            if (obj instanceof THREE.Line) {
+              const lineColor = (obj.userData?.effectiveColor || '').toLowerCase();
+              if (lineColor === targetColor) {
+                contourLines.push(obj);
+              }
+            }
+          });
+
+          if (contourLines.length === 0) {
+            console.log(`Keine Konturen für Farbe ${colorGroup.color} gefunden`);
+            return;
+          }
+
+          // Offset berechnen
+          const customOffset = colorGroup.customOffset;
+
+          // Neue Gruppe für Offset-Konturen
+          const offsetGroup = new THREE.Group();
+          offsetGroup.name = `OffsetContour_${colorGroup.color.replace('#', '')}`;
+
+          // Offset-Farbe: etwas heller/dunkler als Original für Unterscheidung
+          const offsetColor = drawingMode === 'inside' ? 0x00ff88 : 0xff8800; // Grün für innen, Orange für außen
+
+          // Helper: Finde die Rolle einer Linie basierend auf pathAnalysis
+          const getLineRole = (lineGeo: THREE.Line): PathRole => {
+            if (!item.pathAnalysis) return 'outer';
+
+            // Extrahiere Bounds der Linie
+            const positions = lineGeo.geometry.attributes.position.array;
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            for (let i = 0; i < positions.length; i += 3) {
+              minX = Math.min(minX, positions[i]);
+              maxX = Math.max(maxX, positions[i]);
+              minY = Math.min(minY, positions[i + 1]);
+              maxY = Math.max(maxY, positions[i + 1]);
+            }
+
+            // Finde passenden Path anhand der Bounds (mit Toleranz)
+            const tolerance = 0.5;
+            for (const path of item.pathAnalysis.paths) {
+              if (Math.abs(path.bounds.minX - minX) < tolerance &&
+                  Math.abs(path.bounds.maxX - maxX) < tolerance &&
+                  Math.abs(path.bounds.minY - minY) < tolerance &&
+                  Math.abs(path.bounds.maxY - maxY) < tolerance) {
+                return getEffectiveRole(path);
+              }
+            }
+            return 'outer'; // Default
+          };
+
+          let totalLines = 0;
+          let holesInverted = 0;
+          contourLines.forEach((lineGeo) => {
+            // Bestimme die Rolle dieser Linie
+            const role = getLineRole(lineGeo);
+            const isHole = role === 'hole';
+
+            // Für Holes: Offset-Richtung invertieren
+            // "inside" bei einem Hole bedeutet "außen am Hole" (= innen in der Form)
+            const effectiveMode: DrawingMode = isHole
+              ? (drawingMode === 'inside' ? 'outside' : 'inside')
+              : drawingMode;
+
+            if (isHole) holesInverted++;
+
+            const offsetPolygons = applyContourOffset(lineGeo, effectiveMode, penWidth, customOffset);
+
+            offsetPolygons.forEach((polygon) => {
+              if (polygon.length < 2) return;
+
+              // Erstelle THREE.Line aus den Offset-Punkten
+              const points = polygon.map(p => new THREE.Vector3(p.x, p.y, 0.1)); // Leicht erhöht für Sichtbarkeit
+              // Schließe das Polygon wenn nötig
+              if (points.length > 2 && points[0].distanceTo(points[points.length - 1]) > 0.01) {
+                points.push(points[0].clone());
+              }
+
+              const geometry = new THREE.BufferGeometry().setFromPoints(points);
+              const material = new THREE.LineBasicMaterial({ color: offsetColor, linewidth: 2 });
+              const line = new THREE.Line(geometry, material);
+              line.userData = {
+                isOffsetContour: true,
+                originalColor: colorGroup.color,
+                drawingMode: drawingMode,
+                isHole: isHole
+              };
+              offsetGroup.add(line);
+              totalLines++;
+            });
+          });
+
+          if (holesInverted > 0) {
+            console.log(`Offset-Kontur: ${holesInverted} Holes mit invertierter Richtung`);
+          }
+
+          if (totalLines > 0) {
+            colorGroup.offsetContourGroup = markRaw(offsetGroup);
+            item.geometry.add(offsetGroup);
+            console.log(`Offset-Kontur für ${colorGroup.color}: ${totalLines} Linien (${drawingMode}, ${customOffset ?? penWidth / 2}mm)`);
+
+            // Trigger scene update
+            this.svgItems = [...this.svgItems];
+          }
+        }
+      }
+    },
+
+    // Offset-Kontur für eine Farbgruppe löschen
+    deleteOffsetContour(svgIndex: number, colorIndex: number) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          const colorGroup = item.colorGroups[colorIndex];
+
+          if (colorGroup.offsetContourGroup) {
+            item.geometry.remove(colorGroup.offsetContourGroup);
+            colorGroup.offsetContourGroup = undefined;
+            console.log(`Offset-Kontur für Farbe ${colorGroup.color} gelöscht`);
+
+            // Trigger scene update
+            this.svgItems = [...this.svgItems];
+          }
         }
       }
     },

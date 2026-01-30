@@ -162,6 +162,7 @@
                             @update-outline-offset="store.updateColorInfillOptions(itemIndex, colorIdx, { outlineOffset: $event })"
                             @update-drawing-mode="store.setColorDrawingMode(itemIndex, colorIdx, $event)"
                             @update-custom-offset="store.setColorCustomOffset(itemIndex, colorIdx, $event)"
+                            @generate-offset-contour="store.generateOffsetContour(itemIndex, colorIdx, getPenWidthForColor(colorGroup))"
                             @move-up="store.moveColorUp(itemIndex, colorIdx)"
                             @move-down="store.moveColorDown(itemIndex, colorIdx)"
                             @toggle-centerline="store.toggleColorCenterline(itemIndex, colorIdx)"
