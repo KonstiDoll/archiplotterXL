@@ -1774,3 +1774,133 @@ function isPointInPolygon(point: THREE.Vector2, polygon: THREE.Vector2[]): boole
 
     return inside;
 }
+
+// Drawing Mode Type (für Kontur-Offset Preview)
+export type DrawingMode = 'center' | 'inside' | 'outside';
+
+/**
+ * Generiert eine Preview für den Kontur-Offset.
+ * Zeigt gestrichelte Linien an der Position, wo tatsächlich gezeichnet wird.
+ *
+ * @param lineGeoGroup - Die Gruppe mit den Original-Linien
+ * @param color - Die Farbe für die Preview-Linien (hex string)
+ * @param mode - 'inside' oder 'outside' (center hat keine Preview)
+ * @param penWidth - Stiftbreite in mm
+ * @param customOffset - Optional: benutzerdefinierter Offset
+ * @returns THREE.Group mit den Preview-Linien
+ */
+export function generateOffsetPreview(
+    lineGeoGroup: THREE.Group,
+    color: string,
+    mode: DrawingMode,
+    penWidth: number,
+    customOffset?: number
+): THREE.Group {
+    const previewGroup = new THREE.Group();
+    previewGroup.name = `OffsetPreview_${color.replace('#', '')}`;
+
+    // Keine Preview bei center mode
+    if (mode === 'center') {
+        return previewGroup;
+    }
+
+    // Berechne Offset
+    const offset = customOffset ?? (penWidth / 2);
+    const delta = mode === 'inside' ? -offset : offset;
+
+    // Hellere/transparentere Version der Originalfarbe
+    const previewColor = new THREE.Color(color);
+    previewColor.lerp(new THREE.Color(0xffffff), 0.3); // Aufhellen
+
+    // Gestrichelte Linie Material
+    const material = new THREE.LineDashedMaterial({
+        color: previewColor,
+        dashSize: 2,
+        gapSize: 1,
+        linewidth: 1,
+        transparent: true,
+        opacity: 0.7
+    });
+
+    // Verarbeite alle Linien in der Gruppe mit passender Farbe
+    lineGeoGroup.children.forEach((child) => {
+        if (!(child instanceof THREE.Line)) return;
+        if (child.name.startsWith('Infill_')) return;
+        if (child.name.startsWith('OffsetPreview_')) return;
+
+        // Prüfe Farbe
+        const lineColor = (child.userData?.effectiveColor || '#000000').toLowerCase();
+        if (lineColor !== color.toLowerCase()) return;
+
+        // Extrahiere Punkte
+        const positions = child.geometry.attributes.position.array;
+        const polygon: THREE.Vector2[] = [];
+        for (let i = 0; i < positions.length; i += 3) {
+            polygon.push(new THREE.Vector2(positions[i], positions[i + 1]));
+        }
+
+        // Prüfe ob geschlossen
+        const isClosed = polygon.length > 2 &&
+            polygon[0].distanceTo(polygon[polygon.length - 1]) < 0.01;
+
+        if (!isClosed || polygon.length < 3) return;
+
+        // Entferne duplizierten Endpunkt
+        const polygonForOffset = polygon[0].distanceTo(polygon[polygon.length - 1]) < 0.01
+            ? polygon.slice(0, -1)
+            : polygon;
+
+        try {
+            const offsetPolygons = offsetPolygon(polygonForOffset, delta, 'miter');
+
+            offsetPolygons.forEach((offsetPoly, idx) => {
+                if (offsetPoly.length < 2) return;
+
+                // Schließe das Polygon
+                const closedPoly = [...offsetPoly, offsetPoly[0].clone()];
+
+                // Erstelle Geometrie
+                const points = closedPoly.map(p => new THREE.Vector3(p.x, p.y, 0.1)); // Leicht erhöht für Sichtbarkeit
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+
+                // Erstelle die gestrichelte Linie
+                const line = new THREE.Line(geometry, material.clone());
+                line.computeLineDistances(); // Wichtig für gestrichelte Linien!
+                line.name = `OffsetPreview_${color.replace('#', '')}_${idx}`;
+                line.userData = {
+                    isOffsetPreview: true,
+                    sourceColor: color,
+                    offsetMode: mode,
+                    offsetAmount: offset
+                };
+
+                previewGroup.add(line);
+            });
+        } catch (e) {
+            console.warn(`Offset preview für ${child.name} fehlgeschlagen:`, e);
+        }
+    });
+
+    return previewGroup;
+}
+
+/**
+ * Entfernt alle Offset-Preview-Gruppen aus einer Geometrie-Gruppe.
+ */
+export function removeOffsetPreviews(lineGeoGroup: THREE.Group): void {
+    const toRemove: THREE.Object3D[] = [];
+
+    lineGeoGroup.children.forEach((child) => {
+        if (child.name.startsWith('OffsetPreview_')) {
+            toRemove.push(child);
+        }
+    });
+
+    toRemove.forEach((child) => {
+        lineGeoGroup.remove(child);
+    });
+
+    if (toRemove.length > 0) {
+        console.log(`${toRemove.length} Offset-Preview-Gruppen entfernt`);
+    }
+}

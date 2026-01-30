@@ -10,6 +10,7 @@ class PenTypeBase(BaseModel):
     pen_down: float
     pump_distance_threshold: float = 0
     pump_height: float = 50
+    width: float = 0.5  # Stiftbreite in mm
 
 
 class PenTypeCreate(PenTypeBase):
@@ -24,6 +25,7 @@ class PenTypeUpdate(BaseModel):
     pen_down: float | None = None
     pump_distance_threshold: float | None = None
     pump_height: float | None = None
+    width: float | None = None
 
 
 class PenTypeResponse(PenTypeBase):

@@ -14,6 +14,7 @@ class PenType(Base):
         pen_down: Z height when pen is drawing (mm)
         pump_distance_threshold: Drawing distance after which to pump (mm), 0 = disabled
         pump_height: Z height to move to for pump action (mm)
+        width: Pen width in mm (for contour offset calculation)
     """
     __tablename__ = "pen_types"
 
@@ -23,6 +24,7 @@ class PenType(Base):
     pen_down = Column(Float, nullable=False)
     pump_distance_threshold = Column(Float, nullable=False, default=0)
     pump_height = Column(Float, nullable=False, default=50)
+    width = Column(Float, nullable=False, default=0.5)  # Stiftbreite in mm
 
 
 class ToolPreset(Base):

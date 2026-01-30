@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { ref, reactive } from 'vue';
+import { offsetPolygon } from './geometry/clipper-utils';
+
+// Drawing Mode Type (für Kontur-Offset)
+export type DrawingMode = 'center' | 'inside' | 'outside';
 
 // API base URL - use env var for dev, empty for production (relative URLs)
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -12,6 +16,7 @@ export type PenType = {
     penDown: number;
     pumpDistanceThreshold: number;  // mm, 0 = disabled
     pumpHeight: number;             // mm
+    width: number;                  // Stiftbreite in mm (für Kontur-Offset)
 }
 
 // Tool-Konfiguration (pro Tool 1-9)
@@ -36,11 +41,11 @@ M400                 ; Warten bis alle Bewegungen fertig
 
 // Fallback pen types (used when API is unavailable)
 const fallbackPenTypes: { [key: string]: PenType } = {
-    'stabilo':   { id: 'stabilo',   displayName: 'Stabilo Point 88', penDown: 13, penUp: 33, pumpDistanceThreshold: 0, pumpHeight: 50 },
-    'posca':     { id: 'posca',     displayName: 'POSCA Marker',     penDown: 13, penUp: 33, pumpDistanceThreshold: 0, pumpHeight: 50 },
-    'fineliner': { id: 'fineliner', displayName: 'Fineliner',        penDown: 15, penUp: 35, pumpDistanceThreshold: 0, pumpHeight: 50 },
-    'brushpen':  { id: 'brushpen',  displayName: 'Brushpen',         penDown: 8,  penUp: 33, pumpDistanceThreshold: 0, pumpHeight: 50 },
-    'marker':    { id: 'marker',    displayName: 'Marker (dick)',    penDown: 11, penUp: 36, pumpDistanceThreshold: 0, pumpHeight: 50 },
+    'stabilo':   { id: 'stabilo',   displayName: 'Stabilo Point 88', penDown: 13, penUp: 33, pumpDistanceThreshold: 0, pumpHeight: 50, width: 0.4 },
+    'posca':     { id: 'posca',     displayName: 'POSCA Marker',     penDown: 13, penUp: 33, pumpDistanceThreshold: 0, pumpHeight: 50, width: 1.5 },
+    'fineliner': { id: 'fineliner', displayName: 'Fineliner',        penDown: 15, penUp: 35, pumpDistanceThreshold: 0, pumpHeight: 50, width: 0.3 },
+    'brushpen':  { id: 'brushpen',  displayName: 'Brushpen',         penDown: 8,  penUp: 33, pumpDistanceThreshold: 0, pumpHeight: 50, width: 2.0 },
+    'marker':    { id: 'marker',    displayName: 'Marker (dick)',    penDown: 11, penUp: 36, pumpDistanceThreshold: 0, pumpHeight: 50, width: 3.0 },
 };
 
 // Reactive pen types store (loaded from API)
@@ -73,6 +78,7 @@ export async function fetchPenTypes(): Promise<void> {
                 penDown: pt.pen_down,
                 pumpDistanceThreshold: pt.pump_distance_threshold,
                 pumpHeight: pt.pump_height,
+                width: pt.width ?? 0.5,
             };
         });
 
@@ -101,6 +107,7 @@ export async function createPenType(penType: Omit<PenType, 'id'> & { id: string 
             pen_down: penType.penDown,
             pump_distance_threshold: penType.pumpDistanceThreshold,
             pump_height: penType.pumpHeight,
+            width: penType.width,
         }),
     });
 
@@ -120,6 +127,7 @@ export async function updatePenType(id: string, updates: Partial<PenType>): Prom
     if (updates.penDown !== undefined) body.pen_down = updates.penDown;
     if (updates.pumpDistanceThreshold !== undefined) body.pump_distance_threshold = updates.pumpDistanceThreshold;
     if (updates.pumpHeight !== undefined) body.pump_height = updates.pumpHeight;
+    if (updates.width !== undefined) body.width = updates.width;
 
     const response = await fetch(`${API_BASE_URL}/api/pen-types/${id}`, {
         method: 'PUT',
@@ -263,6 +271,87 @@ function calculateLineLength(positions: ArrayLike<number>): number {
         length += Math.sqrt(dx * dx + dy * dy);
     }
     return length;
+}
+
+/**
+ * Apply contour offset to a line geometry based on drawing mode.
+ * Returns offset coordinates or original if no offset needed.
+ *
+ * @param lineGeo - The THREE.Line to offset
+ * @param mode - Drawing mode: 'center', 'inside', 'outside'
+ * @param penWidth - Pen width in mm
+ * @param customOffset - Optional custom offset (overrides penWidth/2)
+ * @returns Array of offset polygons (may be multiple if polygon splits, or empty if completely shrunk)
+ */
+export function applyContourOffset(
+    lineGeo: THREE.Line,
+    mode: DrawingMode,
+    penWidth: number,
+    customOffset?: number
+): THREE.Vector2[][] {
+    // Center mode = no offset
+    if (mode === 'center') {
+        const positions = lineGeo.geometry.attributes.position.array;
+        const polygon: THREE.Vector2[] = [];
+        for (let i = 0; i < positions.length; i += 3) {
+            polygon.push(new THREE.Vector2(positions[i], positions[i + 1]));
+        }
+        return [polygon];
+    }
+
+    // Calculate offset amount
+    const offset = customOffset ?? (penWidth / 2);
+
+    // Inside = negative offset (shrink), Outside = positive offset (expand)
+    const delta = mode === 'inside' ? -offset : offset;
+
+    // Extract points from the line
+    const positions = lineGeo.geometry.attributes.position.array;
+    const polygon: THREE.Vector2[] = [];
+    for (let i = 0; i < positions.length; i += 3) {
+        polygon.push(new THREE.Vector2(positions[i], positions[i + 1]));
+    }
+
+    // Check if polygon is closed (first and last point are same or very close)
+    const isClosed = polygon.length > 2 &&
+        polygon[0].distanceTo(polygon[polygon.length - 1]) < 0.01;
+
+    // For closed polygons, apply polygon offset
+    if (isClosed) {
+        // Remove last point if it's a duplicate (for offset calculation)
+        const polygonForOffset = polygon[0].distanceTo(polygon[polygon.length - 1]) < 0.01
+            ? polygon.slice(0, -1)
+            : polygon;
+
+        if (polygonForOffset.length < 3) {
+            return [polygon]; // Not enough points for offset
+        }
+
+        try {
+            const offsetPolygons = offsetPolygon(polygonForOffset, delta, 'miter');
+
+            // If offset produced no result (completely shrunk), return empty
+            if (offsetPolygons.length === 0) {
+                console.log(`Kontur ${lineGeo.name} bei ${offset}mm Innen-Offset verschwunden`);
+                return [];
+            }
+
+            // Close each offset polygon (add first point at end)
+            return offsetPolygons.map(p => {
+                if (p.length > 0 && p[0].distanceTo(p[p.length - 1]) > 0.01) {
+                    return [...p, p[0].clone()];
+                }
+                return p;
+            });
+        } catch (e) {
+            console.warn(`Offset für ${lineGeo.name} fehlgeschlagen:`, e);
+            return [polygon]; // Return original on error
+        }
+    }
+
+    // For open lines, apply simple parallel offset
+    // (simplified: just return original for now - open paths are rare for contours)
+    return [polygon];
 }
 
 // Generate pump G-code
@@ -511,6 +600,8 @@ interface ColorToolMapping {
     visible: boolean;
     showOutlines?: boolean;     // NEU: false = nur Infill, keine Konturen (default: true)
     useFileDefaults?: boolean;  // Falls true, wird fileToolNumber verwendet
+    drawingMode?: DrawingMode;  // 'center' | 'inside' | 'outside'
+    customOffset?: number;      // Optional: benutzerdefinierter Offset (überschreibt penWidth/2)
 }
 
 // Neue Funktion für Multi-Color G-Code
@@ -826,6 +917,8 @@ interface ColorGroupWithInfill {
         outlineOffset: number;
     };
     useFileDefaults?: boolean;  // Falls true, werden file-level Tools verwendet
+    drawingMode?: DrawingMode;  // 'center' | 'inside' | 'outside'
+    customOffset?: number;      // Optional: benutzerdefinierter Offset (überschreibt penWidth/2)
 }
 
 /**
@@ -932,18 +1025,35 @@ export function createGcodeWithColorInfill(
             };
 
             gCode += moveUUp;
+
+            // Kontur-Offset ermitteln
+            const drawingMode = colorGroup.drawingMode || 'center';
+            const penWidth = penTypeConfig.width ?? 0.5;
+            const customOffset = colorGroup.customOffset;
+
+            if (drawingMode !== 'center') {
+                gCode += `; Kontur-Offset: ${drawingMode} (${customOffset ?? penWidth / 2}mm)\n`;
+            }
             gCode += `; Konturen (${contourLines.length} Linien) mit Tool #${contourTool}\n`;
 
             contourLines.forEach((lineGeo) => {
-                // Pass pumpCtx to enable pumping DURING drawing (important for polylines!)
-                const { gcode: gcodeLine } = createGcodeFromLine(lineGeo, moveUDown, customFeedrate, offsetX, offsetY, contourPumpCtx);
-                gCode += gcodeLine;
+                // Apply contour offset if needed
+                const offsetPolygons = applyContourOffset(lineGeo, drawingMode, penWidth, customOffset);
 
-                // Check if we need to pump at the END of this line (after drawing finished)
-                gCode += checkAndGeneratePump(contourPumpCtx);
+                // Draw each resulting polygon (may be multiple if polygon splits, or empty if shrunk away)
+                offsetPolygons.forEach((polygon) => {
+                    if (polygon.length < 2) return; // Skip degenerate polygons
 
-                // Now lift pen
-                gCode += moveUUp;
+                    // Use createGcodeFromPoints for offset polygons
+                    const { gcode: gcodeLine } = createGcodeFromPoints(polygon, moveUDown, customFeedrate, offsetX, offsetY, contourPumpCtx);
+                    gCode += gcodeLine;
+
+                    // Check if we need to pump at the END of this line (after drawing finished)
+                    gCode += checkAndGeneratePump(contourPumpCtx);
+
+                    // Now lift pen
+                    gCode += moveUUp;
+                });
             });
         } else if (contourLines.length > 0 && colorGroup.showOutlines === false) {
             gCode += `; Konturen für ${colorGroup.color} ausgeblendet (${contourLines.length} Linien übersprungen)\n`;
@@ -1018,6 +1128,59 @@ interface PumpContext {
     pumpDistanceThreshold: number;  // 0 = disabled
     pumpHeight: number;  // relative Z travel distance for pumping (moves down then back up)
     penUp?: number;  // Optional pen up position for pumping during infill
+}
+
+/**
+ * Create G-code from an array of Vector2 points (for offset contours)
+ */
+function createGcodeFromPoints(
+    points: THREE.Vector2[],
+    moveUDown: string,
+    customFeedrate: number = 3000,
+    offsetX: number = 0,
+    offsetY: number = 0,
+    pumpCtx?: PumpContext
+): { gcode: string; lineLength: number } {
+    let gcode = '';
+    let first = true;
+    let speed = travelSpeed;
+    let lineLength = 0;
+
+    for (let index = 0; index < points.length; index++) {
+        const slicerX = points[index].x + offsetX;
+        const slicerY = points[index].y + offsetY;
+
+        // Transformation zum Maschinen-System: X↔Y tauschen
+        const machineX = slicerY.toFixed(2);
+        const machineY = slicerX.toFixed(2);
+
+        const gcodeLine = `G1 X${machineX} Y${machineY} F${speed}\n`;
+        gcode += gcodeLine;
+
+        if (first) {
+            gcode += moveUDown;
+            first = false;
+            speed = customFeedrate;
+        } else if (pumpCtx) {
+            const prevX = points[index - 1].x + offsetX;
+            const prevY = points[index - 1].y + offsetY;
+            const segmentLength = Math.sqrt(
+                Math.pow(slicerX - prevX, 2) +
+                Math.pow(slicerY - prevY, 2)
+            );
+            lineLength += segmentLength;
+
+            if (pumpCtx.pumpDistanceThreshold > 0) {
+                pumpCtx.accumulatedDistance += segmentLength;
+                if (pumpCtx.accumulatedDistance >= pumpCtx.pumpDistanceThreshold) {
+                    pumpCtx.accumulatedDistance = 0;
+                    gcode += generatePumpGcode(pumpCtx.pumpHeight);
+                }
+            }
+        }
+    }
+
+    return { gcode, lineLength };
 }
 
 // Helper function for creating G-code from a single line

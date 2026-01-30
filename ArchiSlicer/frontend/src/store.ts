@@ -7,6 +7,9 @@ import { PathAnalysisResult, PathRole, getEffectiveRole, analyzePathRelationship
 import type { ProjectData, SerializedSVGItem, SerializedColorGroup, SerializedInfillLine } from './utils/project_services';
 import { deserializeInfillGroup } from './utils/project_services';
 
+// Drawing Mode für Kontur-Offset
+export type DrawingMode = 'center' | 'inside' | 'outside';
+
 // Interface für Infill-Statistiken
 export interface InfillStats {
   totalLengthMm: number;      // Gesamte Zeichnungslänge
@@ -35,6 +38,9 @@ export interface ColorGroup {
   visible: boolean;        // Sichtbarkeit in Vorschau
   showOutlines: boolean;   // Konturen anzeigen (false = nur Infill, keine Konturen)
   useFileDefaults: boolean; // Wenn true, werden File-Level Settings als Fallback verwendet
+  // Kontur-Offset Einstellungen
+  drawingMode: DrawingMode;   // 'center' | 'inside' | 'outside' - wo relativ zur Linie gezeichnet wird
+  customOffset?: number;      // Optional: benutzerdefinierter Offset in mm (überschreibt penWidth/2)
   // Infill-Einstellungen pro Farbe
   infillEnabled: boolean;           // Infill an/aus für diese Farbe
   infillToolNumber: number;         // Tool für Infill (kann anders sein als Kontur-Tool)
@@ -346,6 +352,9 @@ export const useMainStore = defineStore('main', {
           visible: true,
           showOutlines: true,  // Konturen standardmäßig sichtbar
           useFileDefaults: true,  // Initial immer File-Defaults verwenden
+          // Kontur-Offset Defaults
+          drawingMode: 'center' as DrawingMode,  // Standard: Mitte der Linie
+          customOffset: undefined,
           // Infill-Defaults - erben von Datei
           infillEnabled: false,
           infillToolNumber: defaultInfillTool,  // Erbe Infill-Tool von der Datei
@@ -435,6 +444,30 @@ export const useMainStore = defineStore('main', {
       if (index >= 0 && index < this.svgItems.length) {
         this.svgItems[index].colorGroups = [];
         this.svgItems[index].isAnalyzed = false;
+      }
+    },
+
+    // ===== Kontur-Offset Actions =====
+
+    // Drawing Mode für eine Farbgruppe setzen
+    setColorDrawingMode(svgIndex: number, colorIndex: number, mode: DrawingMode) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          item.colorGroups[colorIndex].drawingMode = mode;
+          console.log(`Drawing mode für ${item.colorGroups[colorIndex].color} auf "${mode}" gesetzt`);
+        }
+      }
+    },
+
+    // Custom Offset für eine Farbgruppe setzen
+    setColorCustomOffset(svgIndex: number, colorIndex: number, offset: number | undefined) {
+      if (svgIndex >= 0 && svgIndex < this.svgItems.length) {
+        const item = this.svgItems[svgIndex];
+        if (colorIndex >= 0 && colorIndex < item.colorGroups.length) {
+          item.colorGroups[colorIndex].customOffset = offset;
+          console.log(`Custom offset für ${item.colorGroups[colorIndex].color} auf ${offset ?? 'auto'} gesetzt`);
+        }
       }
     },
 
@@ -1170,6 +1203,8 @@ export const useMainStore = defineStore('main', {
               visible: cg.visible,
               showOutlines: cg.showOutlines ?? true, // Default to true for backwards compatibility
               useFileDefaults: cg.useFileDefaults ?? false, // Default to false for backwards compatibility
+              drawingMode: (cg as any).drawingMode ?? 'center',  // Default to center for backwards compatibility
+              customOffset: (cg as any).customOffset,
               infillEnabled: cg.infillEnabled,
               infillToolNumber: cg.infillToolNumber,
               infillOptions: { ...cg.infillOptions },

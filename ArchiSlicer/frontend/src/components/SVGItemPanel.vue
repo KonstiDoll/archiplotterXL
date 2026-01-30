@@ -145,6 +145,7 @@
                             :is-optimizing="store.infillOptimizing?.svgIndex === itemIndex && store.infillOptimizing?.colorIndex === colorIdx"
                             :is-first="colorIdx === 0"
                             :is-last="colorIdx === item.colorGroups.length - 1"
+                            :pen-width="getPenWidthForColor(colorGroup)"
                             @toggle-visibility="store.toggleColorVisibility(itemIndex, colorIdx)"
                             @toggle-outlines="store.toggleColorOutlines(itemIndex, colorIdx)"
                             @toggle-use-defaults="store.toggleColorUseFileDefaults(itemIndex, colorIdx)"
@@ -158,6 +159,8 @@
                             @update-density="store.updateColorInfillOptions(itemIndex, colorIdx, { density: $event })"
                             @update-angle="store.updateColorInfillOptions(itemIndex, colorIdx, { angle: $event })"
                             @update-outline-offset="store.updateColorInfillOptions(itemIndex, colorIdx, { outlineOffset: $event })"
+                            @update-drawing-mode="store.setColorDrawingMode(itemIndex, colorIdx, $event)"
+                            @update-custom-offset="store.setColorCustomOffset(itemIndex, colorIdx, $event)"
                             @move-up="store.moveColorUp(itemIndex, colorIdx)"
                             @move-down="store.moveColorDown(itemIndex, colorIdx)"
                         />
@@ -405,6 +408,7 @@ import { InfillPatternType, patternDensityRanges } from '../utils/threejs_servic
 import { useMainStore, type ColorGroup, type InfillStats } from '../store';
 import type { PathAnalysisResult, PathInfo, PathRole } from '../utils/geometry/path-analysis';
 import { getEffectiveRole } from '../utils/geometry/path-analysis';
+import { penTypes } from '../utils/gcode_services';
 import ToolSelect from './ToolSelect.vue';
 import ColorRow from './ColorRow.vue';
 
@@ -497,6 +501,18 @@ const allColorsVisible = computed(() => {
     if (!props.item.isAnalyzed || props.item.colorGroups.length === 0) return true;
     return props.item.colorGroups.every(cg => cg.visible);
 });
+
+// Get pen width for a color group (considers file defaults)
+function getPenWidthForColor(colorGroup: ColorGroup): number {
+    const effectiveTool = colorGroup.useFileDefaults
+        ? props.item.toolNumber
+        : colorGroup.toolNumber;
+    const toolConfig = props.toolConfigs[effectiveTool - 1];
+    if (toolConfig && penTypes[toolConfig.penType]) {
+        return penTypes[toolConfig.penType].width ?? 0.5;
+    }
+    return 0.5; // Default fallback
+}
 
 // Helper function to get path role
 function getPathRole(path: PathInfo): PathRole {

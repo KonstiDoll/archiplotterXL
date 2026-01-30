@@ -50,6 +50,9 @@ export interface SerializedInfillLine {
   color: number; // Hex color as number (e.g., 0x00ff00)
 }
 
+// Drawing Mode Type (für Kontur-Offset)
+export type DrawingMode = 'center' | 'inside' | 'outside';
+
 // Serializable version of ColorGroup (with infill line data)
 export interface SerializedColorGroup {
   color: string;
@@ -58,6 +61,8 @@ export interface SerializedColorGroup {
   visible: boolean;
   showOutlines?: boolean; // Optional for backwards compatibility (default: true)
   useFileDefaults?: boolean; // Optional for backwards compatibility
+  drawingMode?: DrawingMode; // Optional for backwards compatibility (default: 'center')
+  customOffset?: number;    // Optional custom offset in mm
   infillEnabled: boolean;
   infillToolNumber: number;
   infillOptions: InfillOptions;
@@ -151,6 +156,9 @@ function serializeColorGroup(colorGroup: ColorGroup): SerializedColorGroup {
     lineCount: colorGroup.lineCount,
     visible: colorGroup.visible,
     showOutlines: colorGroup.showOutlines,
+    useFileDefaults: colorGroup.useFileDefaults,
+    drawingMode: colorGroup.drawingMode,
+    customOffset: colorGroup.customOffset,
     infillEnabled: colorGroup.infillEnabled,
     infillToolNumber: colorGroup.infillToolNumber,
     infillOptions: { ...colorGroup.infillOptions },

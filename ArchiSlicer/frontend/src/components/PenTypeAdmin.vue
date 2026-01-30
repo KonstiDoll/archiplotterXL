@@ -41,6 +41,12 @@
                     type="number"
                     placeholder="Pump Höhe"
                     class="px-2 py-1 text-xs bg-slate-600 text-white rounded border border-slate-500" />
+                <input
+                    v-model.number="newPenType.width"
+                    type="number"
+                    step="0.1"
+                    placeholder="Breite (mm)"
+                    class="px-2 py-1 text-xs bg-slate-600 text-white rounded border border-slate-500" />
             </div>
             <button
                 @click="handleCreate"
@@ -80,6 +86,7 @@
                     <div class="mt-1 text-xs text-slate-400 grid grid-cols-2 gap-x-4">
                         <span>Pen Up: {{ penType.penUp }}mm</span>
                         <span>Pen Down: {{ penType.penDown }}mm</span>
+                        <span>Breite: {{ penType.width }}mm</span>
                         <span>Pump: {{ penType.pumpDistanceThreshold > 0 ? `alle ${penType.pumpDistanceThreshold}mm` : 'aus' }}</span>
                         <span v-if="penType.pumpDistanceThreshold > 0">Z Hub: {{ penType.pumpHeight }}mm</span>
                     </div>
@@ -121,6 +128,14 @@
                             <input
                                 v-model.number="editForm.pumpHeight"
                                 type="number"
+                                class="w-16 px-1 py-1 text-xs bg-slate-600 text-white rounded border border-slate-500 text-right" />
+                        </div>
+                        <div class="flex items-center justify-between col-span-2">
+                            <label class="text-slate-400 text-xs">Breite:</label>
+                            <input
+                                v-model.number="editForm.width"
+                                type="number"
+                                step="0.1"
                                 class="w-16 px-1 py-1 text-xs bg-slate-600 text-white rounded border border-slate-500 text-right" />
                         </div>
                     </div>
@@ -189,6 +204,7 @@ const newPenType = ref({
     penDown: 13,
     pumpDistanceThreshold: 0,
     pumpHeight: 50,
+    width: 0.5,
 });
 
 // Edit form
@@ -198,6 +214,7 @@ const editForm = ref({
     penDown: 0,
     pumpDistanceThreshold: 0,
     pumpHeight: 50,
+    width: 0.5,
 });
 
 // Computed
@@ -213,6 +230,7 @@ function startEdit(penType: PenType) {
         penDown: penType.penDown,
         pumpDistanceThreshold: penType.pumpDistanceThreshold,
         pumpHeight: penType.pumpHeight,
+        width: penType.width ?? 0.5,
     };
 }
 
@@ -234,6 +252,7 @@ async function handleCreate() {
             penDown: newPenType.value.penDown,
             pumpDistanceThreshold: newPenType.value.pumpDistanceThreshold,
             pumpHeight: newPenType.value.pumpHeight,
+            width: newPenType.value.width,
         });
 
         // Reset form
@@ -244,6 +263,7 @@ async function handleCreate() {
             penDown: 13,
             pumpDistanceThreshold: 0,
             pumpHeight: 50,
+            width: 0.5,
         };
         showAddForm.value = false;
     } catch (e) {

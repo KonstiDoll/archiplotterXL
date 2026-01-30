@@ -10,6 +10,7 @@ DEFAULT_PEN_TYPES = [
         "pen_down": 13,
         "pump_distance_threshold": 0,
         "pump_height": 50,
+        "width": 0.4,
     },
     {
         "id": "posca",
@@ -18,6 +19,7 @@ DEFAULT_PEN_TYPES = [
         "pen_down": 13,
         "pump_distance_threshold": 0,
         "pump_height": 50,
+        "width": 1.5,
     },
     {
         "id": "fineliner",
@@ -26,6 +28,7 @@ DEFAULT_PEN_TYPES = [
         "pen_down": 15,
         "pump_distance_threshold": 0,
         "pump_height": 50,
+        "width": 0.3,
     },
     {
         "id": "brushpen",
@@ -34,6 +37,7 @@ DEFAULT_PEN_TYPES = [
         "pen_down": 8,
         "pump_distance_threshold": 0,
         "pump_height": 50,
+        "width": 2.0,
     },
     {
         "id": "marker",
@@ -42,6 +46,7 @@ DEFAULT_PEN_TYPES = [
         "pen_down": 11,
         "pump_distance_threshold": 0,
         "pump_height": 50,
+        "width": 3.0,
     },
 ]
 

@@ -232,6 +232,51 @@
                         <span class="text-xs text-slate-400">mm</span>
                     </div>
                 </div>
+
+                <!-- Contour Offset Section (separate from infill) -->
+                <div class="pt-2 mt-2 border-t border-slate-600">
+                    <div class="flex items-center space-x-2">
+                        <label class="w-14 text-xs text-slate-400">Kontur:</label>
+                        <select :value="colorGroup.drawingMode"
+                            @change="$emit('update-drawing-mode', ($event.target as HTMLSelectElement).value as DrawingMode)"
+                            class="flex-grow p-1 text-xs border border-slate-600 rounded bg-slate-600 text-white">
+                            <option v-for="mode in drawingModes" :key="mode.value" :value="mode.value">
+                                {{ mode.label }}
+                            </option>
+                        </select>
+                        <span v-if="colorGroup.drawingMode !== 'center'" class="text-xs text-slate-400">
+                            {{ effectiveOffset.toFixed(1) }}mm
+                        </span>
+                    </div>
+
+                    <!-- Custom Offset (nur wenn nicht 'center') -->
+                    <div v-if="colorGroup.drawingMode !== 'center'" class="flex items-center space-x-2 mt-2">
+                        <label class="w-14 text-xs text-slate-400">Offset:</label>
+                        <button @click="toggleCustomOffset"
+                            class="px-2 py-0.5 text-xs rounded transition-colors"
+                            :class="useCustomOffset
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-slate-600 text-slate-300 hover:bg-slate-500'">
+                            {{ useCustomOffset ? 'Custom' : 'Auto' }}
+                        </button>
+                        <template v-if="useCustomOffset">
+                            <input type="range"
+                                :value="colorGroup.customOffset ?? penWidth / 2"
+                                @input="$emit('update-custom-offset', Number(($event.target as HTMLInputElement).value))"
+                                min="0" max="5" step="0.1"
+                                class="flex-grow h-1 bg-slate-600 rounded appearance-none cursor-pointer" />
+                            <input type="number"
+                                :value="colorGroup.customOffset ?? penWidth / 2"
+                                @change="$emit('update-custom-offset', Number(($event.target as HTMLInputElement).value))"
+                                min="0" max="10" step="0.1"
+                                class="w-14 px-1 py-0.5 text-xs text-right text-slate-300 bg-slate-600 border border-slate-500 rounded" />
+                            <span class="text-xs text-slate-400">mm</span>
+                        </template>
+                        <span v-else class="text-xs text-slate-500">
+                            (Stiftbreite/2 = {{ (penWidth / 2).toFixed(2) }}mm)
+                        </span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -239,7 +284,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import type { ColorGroup } from '../store';
+import type { ColorGroup, DrawingMode } from '../store';
 import { InfillPatternType } from '../utils/threejs_services';
 import ToolSelect from './ToolSelect.vue';
 
@@ -259,6 +304,7 @@ const props = defineProps<{
     isOptimizing: boolean;
     isFirst: boolean;
     isLast: boolean;
+    penWidth: number;  // Stiftbreite des aktuellen Tools in mm
 }>();
 
 const emit = defineEmits<{
@@ -275,6 +321,8 @@ const emit = defineEmits<{
     (e: 'update-density', value: number): void;
     (e: 'update-angle', value: number): void;
     (e: 'update-outline-offset', value: number): void;
+    (e: 'update-drawing-mode', value: DrawingMode): void;
+    (e: 'update-custom-offset', value: number | undefined): void;
     (e: 'move-up'): void;
     (e: 'move-down'): void;
 }>();
@@ -292,6 +340,24 @@ const patternTypes = [
     { value: InfillPatternType.CROSSHATCH, label: 'Kreuzschraffur' },
     { value: InfillPatternType.ZIGZAG, label: 'Zickzack' },
 ];
+
+// Drawing modes for contour offset
+const drawingModes = [
+    { value: 'center' as DrawingMode, label: 'Mitte' },
+    { value: 'inside' as DrawingMode, label: 'Innen' },
+    { value: 'outside' as DrawingMode, label: 'Außen' },
+];
+
+// Use custom offset toggle
+const useCustomOffset = ref(props.colorGroup.customOffset !== undefined);
+
+// Computed effective offset (auto = penWidth / 2)
+const effectiveOffset = computed(() => {
+    if (props.colorGroup.customOffset !== undefined) {
+        return props.colorGroup.customOffset;
+    }
+    return props.penWidth / 2;
+});
 
 // Effective tool (file or custom)
 const effectiveTool = computed(() => {
@@ -322,6 +388,18 @@ function handleInfillToolChange(newTool: number) {
     // If currently using defaults, disable them when user makes a custom change
     if (props.colorGroup.useFileDefaults) {
         emit('toggle-use-defaults');
+    }
+}
+
+// Toggle custom offset on/off
+function toggleCustomOffset() {
+    useCustomOffset.value = !useCustomOffset.value;
+    if (useCustomOffset.value) {
+        // Aktivieren: Starte mit pen width / 2 als Standardwert
+        emit('update-custom-offset', props.penWidth / 2);
+    } else {
+        // Deaktivieren: Auf undefined setzen (Auto-Modus)
+        emit('update-custom-offset', undefined);
     }
 }
 </script>
