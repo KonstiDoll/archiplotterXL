@@ -12,41 +12,68 @@
         <!-- Add new pen type form -->
         <div v-if="showAddForm" class="mb-4 p-3 bg-slate-700 rounded">
             <h4 class="text-white text-xs font-medium mb-2">Neuer Stifttyp</h4>
-            <div class="grid grid-cols-2 gap-2 mb-2">
-                <input
-                    v-model="newPenType.id"
-                    placeholder="ID (z.B. mypen)"
-                    class="px-2 py-1 text-xs bg-slate-600 text-white rounded border border-slate-500" />
-                <input
-                    v-model="newPenType.displayName"
-                    placeholder="Name"
-                    class="px-2 py-1 text-xs bg-slate-600 text-white rounded border border-slate-500" />
-                <input
-                    v-model.number="newPenType.penUp"
-                    type="number"
-                    placeholder="Pen Up"
-                    class="px-2 py-1 text-xs bg-slate-600 text-white rounded border border-slate-500" />
-                <input
-                    v-model.number="newPenType.penDown"
-                    type="number"
-                    placeholder="Pen Down"
-                    class="px-2 py-1 text-xs bg-slate-600 text-white rounded border border-slate-500" />
-                <input
-                    v-model.number="newPenType.pumpDistanceThreshold"
-                    type="number"
-                    placeholder="Pump Distanz (0=aus)"
-                    class="px-2 py-1 text-xs bg-slate-600 text-white rounded border border-slate-500" />
-                <input
-                    v-model.number="newPenType.pumpHeight"
-                    type="number"
-                    placeholder="Pump Höhe"
-                    class="px-2 py-1 text-xs bg-slate-600 text-white rounded border border-slate-500" />
-                <input
-                    v-model.number="newPenType.width"
-                    type="number"
-                    step="0.1"
-                    placeholder="Breite (mm)"
-                    class="px-2 py-1 text-xs bg-slate-600 text-white rounded border border-slate-500" />
+            <div class="space-y-2 mb-2">
+                <!-- ID und Name -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="flex items-center gap-1">
+                        <label class="text-slate-400 text-xs shrink-0">ID:</label>
+                        <input
+                            v-model="newPenType.id"
+                            placeholder="z.B. mypen"
+                            class="flex-1 px-2 py-1 text-xs bg-slate-600 text-white rounded border border-slate-500" />
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <label class="text-slate-400 text-xs shrink-0">Name:</label>
+                        <input
+                            v-model="newPenType.displayName"
+                            placeholder="Anzeigename"
+                            class="flex-1 px-2 py-1 text-xs bg-slate-600 text-white rounded border border-slate-500" />
+                    </div>
+                </div>
+                <!-- Pen Up/Down -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="flex items-center justify-between">
+                        <label class="text-slate-400 text-xs">Pen Up:</label>
+                        <input
+                            v-model.number="newPenType.penUp"
+                            type="number"
+                            class="w-16 px-1 py-1 text-xs bg-slate-600 text-white rounded border border-slate-500 text-right" />
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label class="text-slate-400 text-xs">Pen Down:</label>
+                        <input
+                            v-model.number="newPenType.penDown"
+                            type="number"
+                            class="w-16 px-1 py-1 text-xs bg-slate-600 text-white rounded border border-slate-500 text-right" />
+                    </div>
+                </div>
+                <!-- Pump Settings -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="flex items-center justify-between">
+                        <label class="text-slate-400 text-xs">Pump Distanz:</label>
+                        <input
+                            v-model.number="newPenType.pumpDistanceThreshold"
+                            type="number"
+                            class="w-16 px-1 py-1 text-xs bg-slate-600 text-white rounded border border-slate-500 text-right" />
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <label class="text-slate-400 text-xs">Z Hub:</label>
+                        <input
+                            v-model.number="newPenType.pumpHeight"
+                            type="number"
+                            class="w-16 px-1 py-1 text-xs bg-slate-600 text-white rounded border border-slate-500 text-right" />
+                    </div>
+                </div>
+                <!-- Width -->
+                <div class="flex items-center justify-between">
+                    <label class="text-slate-400 text-xs">Breite:</label>
+                    <input
+                        v-model.number="newPenType.width"
+                        type="number"
+                        step="0.1"
+                        class="w-16 px-1 py-1 text-xs bg-slate-600 text-white rounded border border-slate-500 text-right" />
+                </div>
+                <div class="text-slate-500 text-[10px] text-right">alle Werte in mm (Pump Distanz 0 = aus)</div>
             </div>
             <button
                 @click="handleCreate"

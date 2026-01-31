@@ -182,9 +182,14 @@ function initThree() {
   threeRenderer.setPixelRatio(window.devicePixelRatio);
   container.appendChild(threeRenderer.domElement);
 
-  // Controls
+  // Controls (same as main view: left=pan, right=rotate)
   controls = new OrbitControls(camera, threeRenderer.domElement);
   controls.target.set(932, 605, 0); // Look at center of workpiece
+  controls.mouseButtons = {
+    LEFT: THREE.MOUSE.PAN,
+    MIDDLE: THREE.MOUSE.DOLLY,
+    RIGHT: THREE.MOUSE.ROTATE,
+  };
   controls.enableRotate = true; // Allow rotation/tilting
   controls.enablePan = true;
   controls.enableZoom = true;
@@ -334,18 +339,19 @@ function updatePenPosition() {
   // Animate pen height based on pen state and pump action
   let targetZ: number;
   if (isPumping) {
-    // Pump animation: down in first half (0-50%), up in second half (50-100%)
-    // Goes from 40 (up) -> -5 (below surface for pump) -> 40 (up)
-    const pumpDepth = -5; // Below surface for pumping
-    const upHeight = 40;
+    // Pump animation: pen is DOWN (at drawing height), then pushes deeper, then back
+    // The pump presses the pen into the paper by moving Z down, then back up
+    // Visual: starts at 5 (drawing height) -> goes to -5 (pressed in) -> back to 5
+    const drawingHeight = 5;   // Pen is touching paper
+    const pumpDepth = -5;      // Pushed into paper during pump
     if (pumpProgress < 0.5) {
-      // Going down: 0->0.5 maps to upHeight->pumpDepth
+      // Going down: 0->0.5 maps to drawingHeight->pumpDepth
       const downProgress = pumpProgress * 2; // 0->1
-      targetZ = upHeight + (pumpDepth - upHeight) * downProgress;
+      targetZ = drawingHeight + (pumpDepth - drawingHeight) * downProgress;
     } else {
-      // Going up: 0.5->1 maps to pumpDepth->upHeight
+      // Going up: 0.5->1 maps to pumpDepth->drawingHeight
       const upProgress = (pumpProgress - 0.5) * 2; // 0->1
-      targetZ = pumpDepth + (upHeight - pumpDepth) * upProgress;
+      targetZ = pumpDepth + (drawingHeight - pumpDepth) * upProgress;
     }
     // Direct position for pump (no smoothing for accurate animation)
     penMesh.position.z = targetZ;

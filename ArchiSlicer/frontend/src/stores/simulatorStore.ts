@@ -340,9 +340,12 @@ export const useSimulatorStore = defineStore('simulator', {
         }
       }
 
-      // Jump to next feature
+      // Jump to next feature, or to end if on last feature
       if (currentIndex < features.length - 1) {
         this.seekTo(features[currentIndex + 1].startTime);
+      } else {
+        // On last feature: jump to end of simulation
+        this.seekTo(this.parsedGCode.totalDuration);
       }
     },
 

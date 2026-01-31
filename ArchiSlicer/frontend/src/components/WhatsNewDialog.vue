@@ -65,6 +65,22 @@ interface Release {
 
 const changelog: Release[] = [
     {
+        version: '0.12.0',
+        date: '01.02.2026',
+        title: 'Simulator Verbesserungen',
+        changes: [
+            'Beschleunigungsbasierte Zeitberechnung: Trapez-/Dreieckprofile für realistische Laufzeiten',
+            'Maschinendynamik aus config.g: Beschleunigung, Max-Speed, Jerk für X/Y/Z/U',
+            'Fix: Pump-Animation startet jetzt korrekt von Zeichenhöhe (nicht aus der Luft)',
+            'Fix: Pumpen wird nur einmal visualisiert (nicht mehr doppelt)',
+            '"Nächstes Feature" springt zum Ende wenn kein weiteres Feature kommt',
+            'Gleiche Maussteuerung wie Hauptansicht: Links=Verschieben, Rechts=Drehen',
+            'Workpiece-Koordinaten werden als Maschinenkoordinaten (X,Y) angezeigt',
+            'Stifttyp-Admin: Labels statt Platzhalter für bessere Lesbarkeit',
+            'Materialstärke-Beschreibung direkt unter dem Eingabefeld',
+        ]
+    },
+    {
         version: '0.11.0',
         date: '30.01.2026',
         title: 'Kontur-Offset (Innen/Außen Zeichnen)',

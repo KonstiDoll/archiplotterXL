@@ -33,7 +33,7 @@
                     class="flex-grow p-1 text-sm border border-slate-600 rounded bg-slate-700 text-white">
                     <option value="">Ursprung (0, 0)</option>
                     <option v-for="ws in store.workpieceStarts" :key="ws.id" :value="ws.id">
-                        {{ ws.name }} ({{ ws.x }}, {{ ws.y }})
+                        {{ ws.name }} (X{{ ws.y }}, Y{{ ws.x }})
                     </option>
                 </select>
             </div>

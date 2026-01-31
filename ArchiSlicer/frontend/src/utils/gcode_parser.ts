@@ -30,6 +30,55 @@ const PEN_DOWN_THRESHOLD = 20;
 // Default feedrate
 const DEFAULT_DRAWING_FEEDRATE = 3000;
 
+// Machine dynamics from config.g (M201, M203, M566)
+const MACHINE_DYNAMICS = {
+  // Acceleration in mm/s² (M201)
+  accelX: 200,
+  accelY: 200,
+  accelZ: 45,
+  accelU: 1000,
+  // Max speed in mm/min (M203)
+  maxSpeedX: 20000,
+  maxSpeedY: 20000,
+  maxSpeedZ: 1000,
+  maxSpeedU: 20000,
+  // Jerk / instantaneous speed change in mm/min (M566)
+  jerkX: 800,
+  jerkY: 800,
+  jerkZ: 100,
+  jerkU: 600,
+};
+
+/**
+ * Calculate move duration considering acceleration
+ * Uses trapezoidal velocity profile (or triangular for short moves)
+ */
+function calculateMoveTime(distance: number, feedrate: number, acceleration: number): number {
+  if (distance <= 0 || feedrate <= 0) return 0;
+
+  // Convert feedrate from mm/min to mm/s
+  const targetVelocity = feedrate / 60;
+
+  // Distance needed to accelerate to full speed: d = v² / (2a)
+  const accelDistance = (targetVelocity * targetVelocity) / (2 * acceleration);
+
+  let timeSeconds: number;
+
+  if (distance < 2 * accelDistance) {
+    // Triangular profile: can't reach full speed
+    // t = 2 * sqrt(d / a)
+    timeSeconds = 2 * Math.sqrt(distance / acceleration);
+  } else {
+    // Trapezoidal profile: accelerate, cruise, decelerate
+    const accelTime = targetVelocity / acceleration;  // Time to accelerate
+    const cruiseDistance = distance - 2 * accelDistance;
+    const cruiseTime = cruiseDistance / targetVelocity;
+    timeSeconds = 2 * accelTime + cruiseTime;
+  }
+
+  return timeSeconds * 1000; // Convert to milliseconds
+}
+
 // Macro data (loaded from public/macros.json)
 interface MacroInstruction {
   type: string;
@@ -154,6 +203,7 @@ export async function parseGCode(gcode: string): Promise<ParsedGCode> {
 
   // Pump detection state
   let inPumpSequence = false;
+  let pumpDownSeen = false; // Track if we've seen the down move (first Z move is pump)
 
   // Feature tracking
   const features: import('../types/simulator').Feature[] = [];
@@ -193,19 +243,32 @@ export async function parseGCode(gcode: string): Promise<ParsedGCode> {
       // Assign feature index to instruction
       instruction.featureIndex = currentFeatureIndex >= 0 ? currentFeatureIndex : undefined;
       // Handle pump sequence detection (G91 followed by Z moves, then G90)
+      // A pump consists of: G91, Z-down, Z+up, G90
+      // We only mark the first Z move (down, negative) as a 'pump' instruction
+      // The second Z move (up, positive) is just a position restoration, skip it
       if (instruction.type === 'set_mode') {
         if (instruction.rawLine.includes('G91')) {
           inPumpSequence = true;
+          pumpDownSeen = false; // Reset for new pump sequence
         } else if (instruction.rawLine.includes('G90') && inPumpSequence) {
           inPumpSequence = false;
+          pumpDownSeen = false;
         }
       }
 
-      // Detect pump action (Z moves in relative mode)
+      // Detect pump action (only the first Z move in relative mode = down move)
       if (inPumpSequence && instruction.type === 'move' && instruction.z !== undefined) {
-        instruction.type = 'pump';
-        instruction.pumpHeight = Math.abs(instruction.z);
-        pumpCount++;
+        if (!pumpDownSeen && instruction.z < 0) {
+          // First Z move (negative = down): this is the pump action
+          instruction.type = 'pump';
+          instruction.pumpHeight = Math.abs(instruction.z);
+          pumpCount++;
+          pumpDownSeen = true;
+        } else {
+          // Second Z move (positive = up): skip this instruction entirely
+          // It's just restoring position, not a separate action
+          continue;
+        }
       }
 
       // Update machine state and calculate timing
@@ -613,6 +676,7 @@ function parseM98(
 
 /**
  * Calculate the duration of an instruction in milliseconds
+ * Considers machine acceleration for realistic time estimates
  */
 function calculateDuration(
   instruction: GCodeInstruction,
@@ -623,11 +687,18 @@ function calculateDuration(
   }
 
   if (instruction.type === 'pump') {
-    return 500; // Pump action takes ~0.5 seconds
+    // Pump: Z moves down and up with Z acceleration
+    const pumpHeight = instruction.pumpHeight ?? 50;
+    const pumpFeedrate = 6000; // From G-code generator
+    // Two moves: down and up
+    return 2 * calculateMoveTime(pumpHeight, pumpFeedrate, MACHINE_DYNAMICS.accelZ);
   }
 
   if (instruction.type === 'pen_up' || instruction.type === 'pen_down') {
-    return 100; // Pen movements are quick
+    // U axis move with U acceleration
+    const uDistance = Math.abs((instruction.u ?? 33) - state.position.u);
+    const uFeedrate = instruction.feedrate ?? 6000;
+    return calculateMoveTime(uDistance, uFeedrate, MACHINE_DYNAMICS.accelU);
   }
 
   if (instruction.type === 'move') {
@@ -649,9 +720,10 @@ function calculateDuration(
     // Get feedrate (mm/min)
     const feedrate = instruction.feedrate ?? state.feedrate ?? DEFAULT_DRAWING_FEEDRATE;
 
-    // Calculate time: distance (mm) / feedrate (mm/min) * 60000 (ms/min)
-    if (feedrate > 0 && distance > 0) {
-      return (distance / feedrate) * 60000;
+    if (distance > 0 && feedrate > 0) {
+      // Use the lower of X/Y acceleration (they're the same: 200 mm/s²)
+      const acceleration = Math.min(MACHINE_DYNAMICS.accelX, MACHINE_DYNAMICS.accelY);
+      return calculateMoveTime(distance, feedrate, acceleration);
     }
   }
 

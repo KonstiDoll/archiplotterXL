@@ -89,12 +89,17 @@
                 <h3 class="text-white text-sm font-semibold mb-3 text-center">Globale Einstellungen</h3>
 
                 <!-- Materialstärke -->
-                <div class="flex items-center p-2 bg-slate-700 rounded">
-                    <span class="text-white text-xs mr-2">Materialstärke:</span>
-                    <input type="number" :value="globalDrawingHeight"
-                        @change="$emit('update-drawing-height', Number(($event.target as HTMLInputElement).value))"
-                        class="p-1 w-16 border rounded text-sm bg-white" min="0" max="50" step="0.5" />
-                    <span class="text-white text-xs ml-1">mm</span>
+                <div class="p-2 bg-slate-700 rounded">
+                    <div class="flex items-center">
+                        <span class="text-white text-xs mr-2">Materialstärke:</span>
+                        <input type="number" :value="globalDrawingHeight"
+                            @change="$emit('update-drawing-height', Number(($event.target as HTMLInputElement).value))"
+                            class="p-1 w-16 border rounded text-sm bg-white" min="0" max="50" step="0.5" />
+                        <span class="text-white text-xs ml-1">mm</span>
+                    </div>
+                    <div class="mt-1 text-xs text-slate-400">
+                        Hebt Z um diesen Wert an (für dickeres Material)
+                    </div>
                 </div>
 
                 <!-- Default DPI -->
@@ -136,10 +141,6 @@
                             class="w-8 h-8 rounded border border-slate-500 cursor-pointer bg-transparent" />
                         <span class="text-slate-400 text-xs ml-2">{{ customBackgroundColor }}</span>
                     </div>
-                </div>
-
-                <div class="mt-2 text-xs text-slate-400 p-2 bg-slate-700/50 rounded">
-                    Hebt Z um diesen Wert an (für dickeres Material)
                 </div>
             </div>
         </div>
