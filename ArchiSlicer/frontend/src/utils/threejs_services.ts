@@ -277,9 +277,10 @@ function preprocessSvgStyles(svgContent: string): string {
     return serializer.serializeToString(doc);
 }
 
-export function getThreejsObjectFromSvg(svgContent: string, _offsetX: number = 0, dpi: number = 96): Promise<THREE.Group> {
+export function getThreejsObjectFromSvg(svgContent: string, _offsetX: number = 0, dpi: number = 96, circleSegments: number = 64): Promise<THREE.Group> {
     console.log("--- SVG Analyse Start ---");
     console.log(`DPI: ${dpi} (Skalierungsfaktor px→mm: ${(25.4 / dpi).toFixed(4)})`);
+    console.log(`Kurven-Auflösung (divisions): ${circleSegments}`);
     // _offsetX parameter is kept for compatibility but not used anymore
 
     // Pre-process SVG to resolve CSS class styles
@@ -370,7 +371,7 @@ export function getThreejsObjectFromSvg(svgContent: string, _offsetX: number = 0
 
         shapePath.subPaths.forEach((subPath: any) => {
             // Get points from the subPath
-            const points: THREE.Vector2[] = subPath.getPoints();
+            const points: THREE.Vector2[] = subPath.getPoints(circleSegments);
 
             // Create a geometry from the points
             const geometry = new THREE.BufferGeometry().setFromPoints(points);

@@ -26,6 +26,7 @@ export interface ProjectData {
   createdAt: string;
   updatedAt: string;
   defaultDpi: number;
+  circleSegments?: number;  // v1.4: Kurven-Auflösung beim SVG-Import (optional für Backwards-Kompat)
   workpieceStarts: WorkpieceStart[];
   svgItems: SerializedSVGItem[];
   // v1.2: Background settings (optional for backwards compatibility)

@@ -111,6 +111,20 @@
                     <span class="text-slate-400 text-xs ml-2">(für neue Imports)</span>
                 </div>
 
+                <!-- Kurven-Auflösung (Kreise & Bögen) -->
+                <div class="p-2 bg-slate-700 rounded mt-2">
+                    <div class="flex items-center">
+                        <span class="text-white text-xs mr-2">Kurven-Auflösung:</span>
+                        <input type="number" :value="store.circleSegments"
+                            @change="store.setCircleSegments(Number(($event.target as HTMLInputElement).value))"
+                            class="p-1 w-16 border rounded text-sm bg-white" min="3" max="512" step="1" />
+                        <span class="text-slate-400 text-xs ml-2">Segmente</span>
+                    </div>
+                    <div class="mt-1 text-xs text-slate-400">
+                        Höhere Werte = glattere Kreise/Bögen (gilt für neue & bestehende Imports)
+                    </div>
+                </div>
+
                 <!-- Kamera-Kippen -->
                 <div class="flex items-center justify-between p-2 bg-slate-700 rounded mt-2">
                     <span class="text-white text-xs">Kamera kippen erlauben</span>
@@ -271,7 +285,7 @@ const loadSVGFile = async (file: File) => {
     reader.onload = async (event) => {
         if (event.target) {
             const contents = event.target.result as string;
-            const lineGeoGroup = await getThreejsObjectFromSvg(contents, 0, store.defaultDpi);
+            const lineGeoGroup = await getThreejsObjectFromSvg(contents, 0, store.defaultDpi, store.circleSegments);
             const currentToolConfig = props.toolConfigs[props.activeToolIndex - 1];
 
             store.addSVGItem(

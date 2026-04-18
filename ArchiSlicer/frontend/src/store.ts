@@ -120,6 +120,8 @@ export const useMainStore = defineStore('main', {
     ] as WorkpieceStart[],
     // Default DPI für neue SVG-Imports
     defaultDpi: 72,
+    // Kurven-Auflösung für SVG-Import (Three.js divisions; EllipseCurve erzeugt 2x Punkte)
+    circleSegments: 64,
     // Kamera-Kippen erlauben (Default: false für 2D-Arbeit)
     cameraTiltEnabled: false,
     // Loading states für async Operationen
@@ -311,7 +313,7 @@ export const useMainStore = defineStore('main', {
           console.log(`DPI für "${item.fileName}" geändert: ${oldDpi} → ${newDpi} - parse SVG neu...`);
 
           // Neues Geometrie-Objekt mit neuer DPI erstellen
-          const newGeometry = await getThreejsObjectFromSvg(item.svgContent, 0, newDpi);
+          const newGeometry = await getThreejsObjectFromSvg(item.svgContent, 0, newDpi, this.circleSegments);
 
           // Altes Infill entfernen (wird durch DPI-Änderung ungültig)
           if (item.infillGroup) {
@@ -341,6 +343,28 @@ export const useMainStore = defineStore('main', {
     setDefaultDpi(dpi: number) {
       this.defaultDpi = dpi;
       console.log(`Default DPI auf ${dpi} gesetzt`);
+    },
+
+    // Kurven-Auflösung für SVG-Import setzen und alle bereits geladenen SVGs neu parsen
+    async setCircleSegments(segments: number) {
+      const clamped = Math.max(3, Math.min(512, Math.round(segments)));
+      if (this.circleSegments === clamped) return;
+      this.circleSegments = clamped;
+      console.log(`Kurven-Auflösung auf ${clamped} gesetzt`);
+
+      // Alle bestehenden SVGs mit neuer Auflösung neu parsen
+      for (let i = 0; i < this.svgItems.length; i++) {
+        const item = this.svgItems[i];
+        if (!item.svgContent) continue;
+        const newGeometry = await getThreejsObjectFromSvg(item.svgContent, 0, item.dpi, clamped);
+        if (item.infillGroup) {
+          item.geometry.remove(item.infillGroup);
+          item.infillGroup = undefined;
+        }
+        item.geometry = markRaw(newGeometry);
+        item.isPathAnalyzed = false;
+        this.analyzePathRelationshipsAction(i);
+      }
     },
 
     // Kamera-Kippen aktivieren/deaktivieren
@@ -1526,6 +1550,7 @@ export const useMainStore = defineStore('main', {
         createdAt: now,
         updatedAt: now,
         defaultDpi: this.defaultDpi,
+        circleSegments: this.circleSegments,
         workpieceStarts: this.workpieceStarts.map(ws => ({ ...ws })),
         svgItems: serializedItems,
         // v1.2: Background settings
@@ -1553,6 +1578,9 @@ export const useMainStore = defineStore('main', {
       // Restore default DPI
       this.defaultDpi = projectData.defaultDpi || 72;
 
+      // Restore Kurven-Auflösung (Default 64 für Backwards-Kompat zu älteren Projekten)
+      this.circleSegments = projectData.circleSegments || 64;
+
       // v1.3: Restore G-Code export mode
       this.gcodeExportMode = projectData.gcodeExportMode || 'tool';
 
@@ -1563,7 +1591,8 @@ export const useMainStore = defineStore('main', {
           const geometry = await getThreejsObjectFromSvg(
             serialized.svgContent,
             0, // offset
-            serialized.dpi
+            serialized.dpi,
+            this.circleSegments
           );
 
           // Restore file-level infill geometry if present
@@ -1681,6 +1710,7 @@ export const useMainStore = defineStore('main', {
         { id: 'default_start_1', name: 'Start 1', x: 100, y: 100 }
       ];
       this.defaultDpi = 72;
+      this.circleSegments = 64;
       console.log('Project cleared');
     }
   }
